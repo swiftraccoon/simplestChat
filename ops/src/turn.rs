@@ -8,6 +8,9 @@
 //! already runs, through the bounded application replacement.
 
 mod activate;
+mod preparation;
+#[cfg(test)]
+mod preparation_tests;
 mod publish;
 mod relay;
 mod settings;
@@ -333,10 +336,47 @@ fn complaint(fault: &Fault) -> String {
     format!("Relay operation failed ({kind}); inspect private evidence.\n")
 }
 
+/// Run `turn check-listeners IPV4` or `turn prepare-secret`, the two steps
+/// that come before the relay has any configuration, or return nothing for
+/// any other command line. Neither takes the workload lock or keeps
+/// evidence. The address check opens and closes sockets only; the secret
+/// step prints `created` or `retained`. A refusal prints its fixed words.
+fn prepare(arguments: &[OsString]) -> Option<ExitCode> {
+    let words: Option<Vec<&str>> = arguments.iter().map(|word| word.to_str()).collect();
+    let outcome = match words?.as_slice() {
+        ["check-listeners", address] => preparation::public(address)
+            .and_then(|address| {
+                let listeners = &preparation::LISTENERS;
+                preparation::free(address, listeners, &mut preparation::bound)
+            })
+            .map(|()| String::new()),
+        ["prepare-secret"] => {
+            rustix::process::umask(rustix::fs::Mode::from_raw_mode(0o077));
+            let path = std::path::Path::new(preparation::RELAY_FILE);
+            let prepared = preparation::prepare(path, 0);
+            prepared.map(|done| format!("{}\n", done.word()))
+        }
+        _ => return None,
+    };
+    Some(match outcome {
+        Ok(said) if said.is_empty() || emit(std::io::stdout(), &said) => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
+        Err(fault) => {
+            let _ = emit(std::io::stderr(), &preparation::said(&fault));
+            ExitCode::FAILURE
+        }
+    })
+}
+
 /// Run `turn prepare-certificate|refresh-certificate|enable-metrics|activate`
-/// on the prepared host. A syntax error returns 2 before any effect; what a
-/// transaction has to say is printed also when it failed.
+/// on the prepared host, or `turn check-listeners IPV4|prepare-secret`
+/// before the relay has a configuration. A syntax
+/// error returns 2 before any effect; what a transaction has to say is
+/// printed also when it failed.
 pub fn run(arguments: &[OsString]) -> ExitCode {
+    if let Some(code) = prepare(arguments) {
+        return code;
+    }
     let Some(request) = parse(arguments) else {
         return ExitCode::from(2);
     };

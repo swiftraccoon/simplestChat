@@ -6,13 +6,16 @@
 //! cancelled, which stays a failed reboot. No image is built or pulled, no
 //! container is created or replaced, and nothing is migrated.
 
+mod compose;
+#[cfg(test)]
+mod compose_tests;
 mod profile;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use profile::image_identity;
 
-use crate::host::command::Interruptible;
+use crate::host::command::{Interruptible, Local};
 use crate::host::evidence::Evidence;
 use crate::host::fault::{
     DIRECTORY, Fault, KEY, Numbered, Result, VALUE, digest, field, file, object, protected,
@@ -872,10 +875,44 @@ fn complaint(fault: &Fault) -> String {
     format!("Reboot operation failed ({kind}); inspect retained private evidence.\n")
 }
 
-/// Run `reboot prepare|resume|cancel` on the prepared host. A syntax error
-/// returns 2 before any effect; the outcome line is printed whenever the
-/// transaction got far enough to have one, also when it failed.
+/// Run `reboot compare-compose CANDIDATE VERSION`, or return nothing for any
+/// other command line. `CANDIDATE` is the absolute path of the downloaded
+/// Compose executable and `VERSION` the version selected for it; the
+/// comparison changes nothing, takes no lock and prints one fixed line.
+fn compare_compose(arguments: &[OsString]) -> Option<ExitCode> {
+    let [action, candidate, version] = arguments else {
+        return None;
+    };
+    if action != "compare-compose" {
+        return None;
+    }
+    let candidate = candidate
+        .to_str()
+        .filter(|path| Path::new(path).is_absolute());
+    let version = version.to_str().filter(|version| !version.is_empty());
+    let (Some(candidate), Some(version)) = (candidate, version) else {
+        return Some(ExitCode::from(2));
+    };
+    Some(match compose::compare(&Local, candidate, version) {
+        Ok(()) if emit(std::io::stdout(), &format!("{}\n", compose::PRESERVED)) => {
+            ExitCode::SUCCESS
+        }
+        Ok(()) => ExitCode::FAILURE,
+        Err(refusal) => {
+            let _ = emit(std::io::stderr(), &format!("{refusal}\n"));
+            ExitCode::FAILURE
+        }
+    })
+}
+
+/// Run `reboot prepare|resume|cancel` on the prepared host, or `reboot
+/// compare-compose` before a runtime upgrade. A syntax error returns 2
+/// before any effect; the outcome line is printed whenever the transaction
+/// got far enough to have one, also when it failed.
 pub fn run(arguments: &[OsString]) -> ExitCode {
+    if let Some(code) = compare_compose(arguments) {
+        return code;
+    }
     let Some(action) = parse(arguments) else {
         return ExitCode::from(2);
     };

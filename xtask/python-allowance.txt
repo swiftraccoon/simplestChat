@@ -1,6 +1,5 @@
-total 1574
+total 1458
 772	build/vps_ops_bootstrap.py
 99	ops/ansible/files/release_json.py
-116	ops/ansible/tests/test_runtime_components.py
 75	ops/ansible/tests/test_support.py
 512	ops/ansible/tests/test_vps_ops_bootstrap.py

@@ -192,7 +192,7 @@ fn an_address_is_public_where_the_recorded_interpreter_said_so() {
     for vector in addresses {
         let text = vector["address"].as_str().unwrap();
         let address: Ipv4Addr = text.parse().unwrap();
-        assert_eq!(global(address), vector["global"], "{text}");
+        assert_eq!(global_ipv4(address), vector["global"], "{text}");
         let admitted = public(text).is_ok();
         assert_eq!(admitted, vector["global"] == true, "{text}");
         reachable += usize::from(admitted);

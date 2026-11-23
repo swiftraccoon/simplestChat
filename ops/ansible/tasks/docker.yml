@@ -63,40 +63,71 @@
   no_log: true
   tags: [always]
 
-- name: Verify that existing Docker service and socket definitions remain local
+- name: Read the existing Docker service and socket definitions
   ansible.builtin.command: &scbench_docker_unit_inspection
     argv:
-      - /usr/bin/python3
-      - -c
-      - |
-        import subprocess
-        import sys
-
-        expected_command = "/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock"
-        for unit in ("docker.service", "docker.socket"):
-            result = subprocess.run(
-                ["/usr/bin/systemctl", "show", unit, "--property=LoadState",
-                 "--property=FragmentPath", "--property=DropInPaths",
-                 "--property=ExecStart", "--property=Listen"],
-                check=False, capture_output=True, text=True, timeout=15,
-            )
-            fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
-            if fields.get("LoadState") == "not-found" and result.returncode in (0, 1, 4):
-                continue
-            if result.returncode != 0 or fields.get("LoadState") != "loaded":
-                sys.exit(f"Cannot inspect {unit}; its current listener configuration is unknown.")
-            permitted_paths = (f"/usr/lib/systemd/system/{unit}", f"/lib/systemd/system/{unit}")
-            if fields.get("FragmentPath") not in permitted_paths or fields.get("DropInPaths"):
-                sys.exit(f"Custom {unit} configuration requires review; no changes were made.")
-            if unit == "docker.service":
-                command = fields.get("ExecStart", "")
-                if f"argv[]={expected_command} ;" not in command or command.count("argv[]=") != 1:
-                    sys.exit("Docker must use its packaged Unix-socket command without extra host options.")
-            elif fields.get("Listen") not in ("/run/docker.sock (Stream)", "/var/run/docker.sock (Stream)"):
-                sys.exit("Docker socket must listen only on its local Unix socket.")
-        print("Docker service definitions have no custom API listener.")
+      - /usr/bin/systemctl
+      - show
+      - "{{ item }}"
+      - --property=LoadState
+      - --property=FragmentPath
+      - --property=DropInPaths
+      - --property=ExecStart
+      - --property=Listen
+  loop: [docker.service, docker.socket]
+  register: scbench_docker_units
   changed_when: false
+  failed_when: false
   check_mode: false
+  timeout: 15
+  tags: [always]
+
+# An absent unit is accepted. A present one must be loaded from its packaged
+# file without drop-ins. The service must print one command, the packaged
+# daemon command, whose only host option is its `-H fd://`; every listener line
+# of the socket must be the local Unix socket, whatever order systemctl prints
+# them in. The first rule a unit breaks names the refusal.
+- name: Verify that existing Docker service and socket definitions remain local
+  ansible.builtin.assert: &scbench_docker_unit_rules
+    that:
+      - scbench_unit_inspectable
+      - scbench_unit_packaged
+      - scbench_unit_local
+    fail_msg: >-
+      {{ ('Cannot inspect ' ~ item.item ~ '; its current listener configuration is unknown.')
+         if not scbench_unit_inspectable else
+         ('Custom ' ~ item.item ~ ' configuration requires review; no changes were made.')
+         if not scbench_unit_packaged else
+         'Docker must use its packaged Unix-socket command without extra host options.'
+         if item.item == 'docker.service' else
+         'Docker socket must listen only on its local Unix socket.' }}
+    success_msg: Docker service definitions have no custom API listener.
+  vars: &scbench_docker_unit_facts
+    scbench_unit: "{{ dict(item.stdout_lines | select('search', '=') | map('split', '=', 1)) }}"
+    scbench_unit_absent: "{{ scbench_unit.get('LoadState') == 'not-found' and item.rc in [0, 1, 4] }}"
+    scbench_unit_inspectable: "{{ scbench_unit_absent or (item.rc == 0 and scbench_unit.get('LoadState') == 'loaded') }}"
+    scbench_unit_packaged: >-
+      {{ scbench_unit_absent
+         or (scbench_unit.get('FragmentPath') in ['/usr/lib/systemd/system/' ~ item.item, '/lib/systemd/system/' ~ item.item]
+             and not scbench_unit.get('DropInPaths')) }}
+    # Every command and listener line counts, a line without a value too. Any
+    # word that can set a daemon host (`-H`, `--host`, a shorthand cluster
+    # holding `H`) is collected, wherever it stands in the printed command.
+    scbench_unit_commands: "{{ item.stdout_lines | select('match', 'ExecStart(=|$)') | list }}"
+    scbench_unit_listeners: "{{ item.stdout_lines | select('match', 'Listen(=|$)') | list }}"
+    scbench_unit_hosts: "{{ (scbench_unit_commands | join(' ')).split() | select('match', '--host($|=)|-[^-]*H') | list }}"
+    scbench_unit_local: >-
+      {{ scbench_unit_absent
+         or ((scbench_unit_commands | length == 1
+              and 'argv[]=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock ;' in scbench_unit_commands[0]
+              and scbench_unit_commands[0].count('argv[]=') == 1
+              and scbench_unit_hosts == ['-H'])
+             if item.item == 'docker.service' else
+             (scbench_unit_listeners | length > 0
+              and scbench_unit_listeners | reject('in', ['Listen=/run/docker.sock (Stream)', 'Listen=/var/run/docker.sock (Stream)']) | list == [])) }}
+  loop: "{{ scbench_docker_units.results }}"
+  loop_control:
+    label: "{{ item.item }}"
   tags: [always]
 
 - name: Create the root-controlled apt signing-key directory
@@ -155,10 +186,21 @@
 - name: Install authenticated upstream runtime components beyond the package channel
   ansible.builtin.import_tasks: runtime-binaries.yml
 
-- name: Verify the packaged service and socket before enabling Docker
+- name: Read the packaged service and socket definitions before enabling Docker
   ansible.builtin.command: *scbench_docker_unit_inspection
+  loop: [docker.service, docker.socket]
+  register: scbench_docker_units
   changed_when: false
+  failed_when: false
   check_mode: false
+  timeout: 15
+
+- name: Verify the packaged service and socket before enabling Docker
+  ansible.builtin.assert: *scbench_docker_unit_rules
+  vars: *scbench_docker_unit_facts
+  loop: "{{ scbench_docker_units.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
 - name: Enable Docker using its local Unix socket without daemon policy overrides
   ansible.builtin.systemd_service:

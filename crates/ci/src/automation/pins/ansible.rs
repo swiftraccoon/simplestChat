@@ -116,8 +116,14 @@ pub(super) fn play(tasks: &Value, variables: &Value, vars_files: &[&str]) -> Scr
 /// Run one generated playbook against `inventory`, with `options` added to
 /// Ansible's command line, and require it to succeed.
 fn run(book: &Value, inventory: &str, options: &[&str], scratch: &Scratch) {
+    run_from(scratch.path(), book, inventory, options, scratch);
+}
+
+/// Run one generated playbook written into `directory`, which is then the
+/// play's `playbook_dir`, as `run` does.
+fn run_from(directory: &Path, book: &Value, inventory: &str, options: &[&str], scratch: &Scratch) {
     // JSON is YAML, so the generated play needs no YAML writer.
-    let path = scratch.path().join("play.json");
+    let path = directory.join("play.json");
     std::fs::write(&path, serde_json::to_vec(book).unwrap()).unwrap();
     let mut arguments: Vec<&OsStr> = vec!["-i".as_ref(), inventory.as_ref()];
     arguments.extend(options.iter().map(OsStr::new));
@@ -220,6 +226,104 @@ pub(super) fn asserted_on(
         verdicts
     };
     hosts.iter().map(verdicts).collect()
+}
+
+/// What one case made of a task sequence that Ansible ran as written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Verdict {
+    /// Every task passed or was skipped.
+    Passed,
+    /// The task at this position was the first to fail, with the message
+    /// of its result, or of its first failed item for a loop.
+    Failed(usize, String),
+}
+
+/// Run `tasks` as written, one host per case whose variables the case
+/// supplies, and report each case's verdict in the order of `cases`. Each
+/// task's result is registered and its failure ignored, so a case whose
+/// first failure is found still reports the tasks after it; only the first
+/// counts, as a run stops at it. Hosts keep their own facts, so no case
+/// sees another's. The tasks must be ones that run on the controller and
+/// never connect, such as assertions and facts; a task that registers its
+/// result keeps that name.
+pub(super) fn first_failures(tasks: &[Value], cases: &[Value]) -> Vec<Verdict> {
+    let scratch = Scratch::new();
+    first_failures_from(scratch.path(), tasks, cases, &scratch)
+}
+
+/// Run as [`first_failures`] does, with the playbook written into
+/// `directory`, the play's `playbook_dir`; tasks may then also run modules
+/// on the controller through `delegate_to: localhost`.
+pub(super) fn first_failures_from(
+    directory: &Path,
+    tasks: &[Value],
+    cases: &[Value],
+    scratch: &Scratch,
+) -> Vec<Verdict> {
+    let mut steps = Vec::new();
+    let mut registered = Vec::new();
+    for (index, task) in tasks.iter().enumerate() {
+        let mut step = task.as_object().unwrap().clone();
+        // A task that registers its result keeps its name, which later
+        // tasks read; any other one is registered for its verdict alone.
+        let name = step.get("register").and_then(Value::as_str);
+        let name = name.map_or_else(|| format!("outcome_{index}"), str::to_owned);
+        step.insert("register".into(), name.clone().into());
+        step.insert("ignore_errors".into(), true.into());
+        steps.push(Value::Object(step));
+        registered.push(name);
+    }
+    let outcomes = registered.iter().map(|result| {
+        format!(
+            "{{'failed': {result} is failed, 'messages': ({result}.results | default([{result}]))\
+             | selectattr('failed', 'defined') | selectattr('failed') | map(attribute='msg') \
+             | list}}"
+        )
+    });
+    let outcomes = outcomes.collect::<Vec<_>>().join(", ");
+    steps.push(json!({
+        "ansible.builtin.copy": {
+            "content": format!("{{{{ [{outcomes}] | to_json }}}}"),
+            "dest": scratch.path().join("{{ inventory_hostname }}.json"),
+            "mode": "0600",
+        },
+        "check_mode": false,
+        "delegate_to": "localhost",
+        "vars": {
+            "ansible_connection": "local",
+            "ansible_python_interpreter": "{{ ansible_playbook_python }}",
+        },
+    }));
+    let hosts: serde_json::Map<String, Value> = cases
+        .iter()
+        .enumerate()
+        .map(|(index, case)| (format!("case_{index}"), case.clone()))
+        .collect();
+    let inventory = scratch.path().join("inventory.json");
+    let hosts = json!({"all": {"hosts": hosts}});
+    std::fs::write(&inventory, serde_json::to_vec(&hosts).unwrap()).unwrap();
+    let book = json!([{"hosts": "all", "gather_facts": false, "tasks": steps}]);
+    run_from(
+        directory,
+        &book,
+        inventory.to_str().unwrap(),
+        &["--forks", "16"],
+        scratch,
+    );
+    let verdict = |index: usize| {
+        let path = scratch.path().join(format!("case_{index}.json"));
+        let outcomes: Vec<Value> = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(outcomes.len(), tasks.len());
+        let failed = outcomes
+            .iter()
+            .position(|outcome| outcome["failed"] == true);
+        failed.map_or(Verdict::Passed, |position| {
+            let messages = outcomes[position]["messages"].as_array().unwrap();
+            let message = messages.first().and_then(Value::as_str).unwrap_or_default();
+            Verdict::Failed(position, message.to_owned())
+        })
+    };
+    (0..cases.len()).map(verdict).collect()
 }
 
 /// Evaluate each expression against each case's variables. The result is one

@@ -1,0 +1,2665 @@
+{
+ "comment": "Answers of the Python programs that tasks of ops/ansible ran inline at revision dbfec38e, recorded before their removal by a scratch recorder that was never committed. Each test names how its program was run; every case is bound to the SHA-256 of its canonical JSON description (sorted keys, no blanks, UTF-8). programs names each program's playbook, task and the SHA-256 of its source text.",
+ "interpreter": "CPython 3.13.18",
+ "programs": [
+  {
+   "sha256": "0980e7b9e38c5096f7af5dbf966ff53539614529eed3e75e798e963fcbee3188",
+   "source": "turn.yml",
+   "task": "Generate a dedicated shared relay secret once"
+  },
+  {
+   "sha256": "ffa152e4f22cad89999576712deca9ce4a68cc1314a8c39fb2286a0b72d6e39b",
+   "source": "turn.yml",
+   "task": "Validate a local public IPv4 address and free relay listeners"
+  }
+ ],
+ "tests": {
+  "every_recorded_relay_address_is_judged_and_bound_as_the_program_did": {
+   "cases": [
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "8.8.8.8",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "8.8.8.8",
+      "taken": -1
+     },
+     "input": "ef6314313d366bdc1a4bdd15eb4f3032588e5a31fc72e76da1f0f328419437b0"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "1.1.1.1",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "1.1.1.1",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "1.1.1.1",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "1.1.1.1",
+      "taken": -1
+     },
+     "input": "a1adfbb22a23c9d493bd0a0144c24b136338de43add8a297bcc8de181570220f"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "203.0.113.5",
+      "taken": -1
+     },
+     "input": "26a42dbd0fef409381ced9d8c393ecfedf9736061e8b7cc054c7aa767760e4ce"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.51.100.7",
+      "taken": -1
+     },
+     "input": "4a5e8542df96ead3f68c7b564cf74677111498efc00fb1c58ccf4c0466d9edbd"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.2.10",
+      "taken": -1
+     },
+     "input": "ccd54d7d28d802b16825579d852c40d21e8dd3e7fcb9c047c8f2501aed3eca21"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "100.64.0.1",
+      "taken": -1
+     },
+     "input": "3ba96fd0f9ff346ff9c6d8f656ecce1c86467bf189a558e156e1839b67463624"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "100.127.255.255",
+      "taken": -1
+     },
+     "input": "0c727fc6a91c9ccb4acbdf3705550873320330bd429f9e56ce1e700e13ab5f08"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "100.63.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "100.63.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "100.63.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "100.63.255.255",
+      "taken": -1
+     },
+     "input": "15ec212604ed6ddee89d999185b908836e844e4ba2fc5473e4faec5db3e0453b"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "100.128.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "100.128.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "100.128.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "100.128.0.0",
+      "taken": -1
+     },
+     "input": "55c162b82e8aeba60ac5bcdd165ba438628af91acc241591c12b789464bfd656"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.8",
+      "taken": -1
+     },
+     "input": "d41971615753d416903b439d7f50e9ea4971f6b921ca7108b4d44005397b735a"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.0.0.9",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.0.9",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.0.9",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.9",
+      "taken": -1
+     },
+     "input": "fcb163cce5c3db4c86e3f43e47a230cca7c17a43098b88e2a674c856b7e35de6"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.0.0.10",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.0.10",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.0.10",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.10",
+      "taken": -1
+     },
+     "input": "b42fa5883f6310ec9574e7be8134a25b94deb38929d210213cd53cf42d5976af"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.11",
+      "taken": -1
+     },
+     "input": "9d144843381d4f8070c7340ccc3e072ef4cf306007e7f545914d7c496440719d"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.170",
+      "taken": -1
+     },
+     "input": "0eff0e0140e3ae864aa7442ab2697bf578d1f765dae3091bc2929b074e2b69ac"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.171",
+      "taken": -1
+     },
+     "input": "9a2e30dc3488323b129ef45ae38096b97c18837729b5a781afa22f1dc31daed2"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.0.172",
+      "taken": -1
+     },
+     "input": "39c6d1a992a02a0a4fc0bbb819b8475daac87e499c4b58753e6d44f8a67b1239"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.0.1.1",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.1.1",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.1.1",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.1.1",
+      "taken": -1
+     },
+     "input": "1f7b312653c6f08547de7e71e2769cb65f998b804bd5c6c01b0ce7f0f41926cb"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "224.0.0.1",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "224.0.0.1",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "224.0.0.1",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "224.0.0.1",
+      "taken": -1
+     },
+     "input": "0a4fa6979a649bfc2de5172b259c330a3f2f4483fd3870ef103652f2c3319ea0"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "239.255.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "239.255.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "239.255.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "239.255.255.255",
+      "taken": -1
+     },
+     "input": "c17e867bb02f7e88d993dc6b119e82813352a9653b640476b615f69b054a8167"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "240.0.0.1",
+      "taken": -1
+     },
+     "input": "fc7996b5241297fdf52e22fce77f78d454ff13460b13dce7524d99b420830481"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "255.255.255.254",
+      "taken": -1
+     },
+     "input": "ebcc7bef3e416f4f1cde4a90dc3c1bba0cc06745d4190829d7e62d26ea202801"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "255.255.255.255",
+      "taken": -1
+     },
+     "input": "82f6e63588ae6386781fb414253fd74c20a37f2d013231a705222e05e9366806"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "0.0.0.0",
+      "taken": -1
+     },
+     "input": "628d780240c86b11c527cc5d90fc87b18e38e3aa05d6c2ea1d093198b4fb5893"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "0.255.255.255",
+      "taken": -1
+     },
+     "input": "36887625f71fb0de1a4d338ea251aeef27a60e7539e275d3dc527e02e8eed921"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "1.0.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "1.0.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "1.0.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "1.0.0.0",
+      "taken": -1
+     },
+     "input": "f6b691f876e6d51b45dfae4863e2ec22010415182e3018d03fb04f792553a03f"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "127.0.0.1",
+      "taken": -1
+     },
+     "input": "470965e112a8bcb875dd521f153a0dcf7ff2b16af363f2db445ec70b1d97b6ea"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "126.255.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "126.255.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "126.255.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "126.255.255.255",
+      "taken": -1
+     },
+     "input": "e0039752d7239a935fc7d0be0de7cd5579da73498339f8113236bef45dac5523"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "128.0.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "128.0.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "128.0.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "128.0.0.0",
+      "taken": -1
+     },
+     "input": "5b99708e78d9e371b5beb6d1d044a497070744755fbd95a21bbf9e446c4ea274"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "10.0.0.1",
+      "taken": -1
+     },
+     "input": "ba1f1b97b41446ab864239f260a0d061e5a76ed77ad206e2d6c0a1f0f44de9e9"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "9.255.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "9.255.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "9.255.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "9.255.255.255",
+      "taken": -1
+     },
+     "input": "ada8a1e148ad89375b77fee6c20261b5ca096d2bf7fc3d74733baf61b409109f"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "11.0.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "11.0.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "11.0.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "11.0.0.0",
+      "taken": -1
+     },
+     "input": "df259bc7fc134a4ced141a4480892c6ee2c29944c46938f96b8e3d8694f4e050"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "172.16.0.1",
+      "taken": -1
+     },
+     "input": "b4518b710dd11be56b854f5679648d8b8c2db9d1c9aa27ccd4b4f4922c004837"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "172.31.255.255",
+      "taken": -1
+     },
+     "input": "422544eb71d16e6f12ed937e10f230912bbd923bf2e0e710cb2e5ea33bf7c5fe"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "172.15.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "172.15.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "172.15.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "172.15.255.255",
+      "taken": -1
+     },
+     "input": "075c1a93965a505347519cc68bfaa3546f983dab71bc444d8e28c750a581f25a"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "172.32.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "172.32.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "172.32.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "172.32.0.0",
+      "taken": -1
+     },
+     "input": "fedd1704d4eb4d810b50ed5391c5e7149d15ba3c1bd20b53829487cb5085fcad"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "169.254.1.1",
+      "taken": -1
+     },
+     "input": "cee56b825a910061a2a4a3d78c284fa6a559a9723c9a200bb981ea3d90a87afa"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "169.253.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "169.253.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "169.253.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "169.253.255.255",
+      "taken": -1
+     },
+     "input": "5497ad3770517c6cc81e454751113b97ad3232a48c47ef0b475a4809d265a8fa"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "169.255.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "169.255.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "169.255.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "169.255.0.0",
+      "taken": -1
+     },
+     "input": "7a283d7d867abf09bb231ebc1d9fa464b116b9205a46db9da0633f1c2dc4a0b5"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.168.1.1",
+      "taken": -1
+     },
+     "input": "a0c6d353c58e53974ac2bad3fa58b2428eb1f20255fbc79f6ae6522a94382a29"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.167.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.167.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.167.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.167.255.255",
+      "taken": -1
+     },
+     "input": "710c4fd35ed937007511455095ffd6bb857ad1f60d133f4f0280881a4ee65805"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.169.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.169.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.169.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.169.0.0",
+      "taken": -1
+     },
+     "input": "1dce0cce9aa65ba0556ea0ac70f016645299a02ce3c910b5f34e8bf32dcaffa1"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.18.0.1",
+      "taken": -1
+     },
+     "input": "2629922ae3e445d8deb486853644b9b9df0bb2e66680c2e6c9d53023dd9a89ad"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stderr": "A local public IPv4 address is required\n",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.19.255.255",
+      "taken": -1
+     },
+     "input": "be2b9007d3a23480d9ab13ceb1bcfe6a0c8442ff677db2e82722cf5e01e5ed8c"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "198.17.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.17.255.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.17.255.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.17.255.255",
+      "taken": -1
+     },
+     "input": "5774c5ed9ed712a62049307ab92693bcdd8e169000e61c95e15749e54cbd903b"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "198.20.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.20.0.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.20.0.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.20.0.0",
+      "taken": -1
+     },
+     "input": "edbe56e22aa361ca145e9665a2486e58871b173e4fd29295b8b3833567e538b8"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "198.51.99.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.51.99.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.51.99.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.51.99.255",
+      "taken": -1
+     },
+     "input": "527084cb78bcfa522a2b4c0a583e3d8ac1b84b1ea19fc093120348bf79c9b428"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "198.51.101.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.51.101.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "198.51.101.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "198.51.101.0",
+      "taken": -1
+     },
+     "input": "34c81f815e157ecdf49bd6ccfe0319687045217017a091433b1f9f327d1f0cb6"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "203.0.112.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "203.0.112.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "203.0.112.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "203.0.112.255",
+      "taken": -1
+     },
+     "input": "798b65a51729266b22d044e4673b02fbd2b1ef80bb4320e94056b9284f446eb5"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "203.0.114.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "203.0.114.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "203.0.114.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "203.0.114.0",
+      "taken": -1
+     },
+     "input": "66339804fcb590a7bda0b0276406c31204cb87bfd1e39fbe4d469c0e31cab096"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.0.1.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.1.255",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.1.255",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.1.255",
+      "taken": -1
+     },
+     "input": "7107ef3e917ac1041d831afba3426b1d59ac2dec84ea683b057f375aff7c236c"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "192.0.3.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.3.0",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "192.0.3.0",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stderr": "",
+      "stdout": ""
+     },
+     "case": {
+      "address": "192.0.3.0",
+      "taken": -1
+     },
+     "input": "968817de810b5416216ac3394adea34335f9e91a1c5869e771105768d2c17317"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "",
+      "taken": -1
+     },
+     "input": "632ea0d8d7ebfd6985badaaa2eb402697b309b509b349168f4eb6f9de1744675"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "1.2.3",
+      "taken": -1
+     },
+     "input": "ee6d5acaedc7404762448ab4ac8c67c2f16d6011e21535645749bd8540366e94"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "1.2.3.4.5",
+      "taken": -1
+     },
+     "input": "dcc1bfce6a1d6d5c16e5c481fa16b81241f7e7c570559c109912e8541f814551"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "01.2.3.4",
+      "taken": -1
+     },
+     "input": "59cf83411cdd34847e24d45444bd6db753e753e26a47d5f194c660fe1f2f7e14"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "1.2.3.256",
+      "taken": -1
+     },
+     "input": "9f4b934112c2d7e8f7ec309d1b8ca4ef52986ffbf985094c4649664c0a7ea7d3"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": " 8.8.8.8",
+      "taken": -1
+     },
+     "input": "25f926dfa39169a407e05af29775146baba18a7b8113c5f8cb1ce10abbd75c55"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "8.8.8.8 ",
+      "taken": -1
+     },
+     "input": "4dcff3d0b952a6506c88996721e1cdff7f2cbcac058e2f1b89ab54fa702080e7"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "8.8.8.8\n",
+      "taken": -1
+     },
+     "input": "719729763a9b5b332a0924a4c761a98b183f0cdddb909014f6aa4d7a9240020c"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "2001:db8::1",
+      "taken": -1
+     },
+     "input": "3c20f66a0c5f5edd9dcacc2d79b8e32e961915a974ec49a4312f0badb2ce8ed2"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "::ffff:8.8.8.8",
+      "taken": -1
+     },
+     "input": "150415fba953bf4605bef09dc9dc241a4999bf9517289fb3318a7f843f2f8f18"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "８.8.8.8",
+      "taken": -1
+     },
+     "input": "cbd88f3633e86a8a98ae9ce62c07eb5506842052e471061794a3def4c77302e8"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "+8.8.8.8",
+      "taken": -1
+     },
+     "input": "515ba8a6cac4548c73b738270417a6a9693fe72d9997e27f970f829e2209489b"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "8.8.8.-8",
+      "taken": -1
+     },
+     "input": "604567dd4e581f068c84bbdfa2f0c3dabe1b0428bafa50e09f6141d2d3762f11"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "0x8.8.8.8",
+      "taken": -1
+     },
+     "input": "d8ceaf894d925c431c7ad23f204a76a8f36a5db78df7f57cbb5f89c3865ae0f5"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "8.8.8",
+      "taken": -1
+     },
+     "input": "09b3c2f30f5509f165fd7a13732af2903df6e1522790ec0b535ff16529494ffa"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "8..8.8",
+      "taken": -1
+     },
+     "input": "e7ddf5bc786c3b05d6705fa5148ffa04fd4468efd057abcf97577efba86f933c"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "1.2.3.4/32",
+      "taken": -1
+     },
+     "input": "29525aae30aef9bb8f66ec1b249f6b7a54d49e57ac584d6121e22b1a8969d455"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "08.8.8.8",
+      "taken": -1
+     },
+     "input": "9aa860111e561cb13225c7734a8957cb6a68af93c50b63c17ffee4edd7192969"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "8.8.8.08",
+      "taken": -1
+     },
+     "input": "72404d9192e27c4eeb4c402fdafb1144e7915dc3eb223d4229d4786520ddd9a0"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "255.255.255.256",
+      "taken": -1
+     },
+     "input": "85f1fe2bfd8eaf991b50fbe04702c583266b4aa0f7178aa036e96251bd9c2111"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [],
+      "stdout": "",
+      "traceback": "ipaddress.AddressValueError"
+     },
+     "case": {
+      "address": "1e1.8.8.8",
+      "taken": -1
+     },
+     "input": "6053585478357a5d87c3fb07bfcfee20bba34b05b8e20d6f6823624613950826"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "close",
+        "udp"
+       ]
+      ],
+      "stdout": "",
+      "traceback": "OSError"
+     },
+     "case": {
+      "address": "8.8.8.8",
+      "taken": 0
+     },
+     "input": "f273c8be20d1a2f7bab3b0eae1bd86d1c3ffc8956c0d67c3517e5376b8da270d"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stdout": "",
+      "traceback": "OSError"
+     },
+     "case": {
+      "address": "8.8.8.8",
+      "taken": 1
+     },
+     "input": "5fc1770490a1d42ee22994bb36af2f5b35236ce6db41bab35fcc145593604c80"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "sockets": [
+       [
+        "socket",
+        "udp"
+       ],
+       [
+        "bind",
+        "udp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "8.8.8.8",
+        3478
+       ],
+       [
+        "socket",
+        "tcp"
+       ],
+       [
+        "bind",
+        "tcp",
+        "8.8.8.8",
+        5349
+       ],
+       [
+        "close",
+        "udp"
+       ],
+       [
+        "close",
+        "tcp"
+       ],
+       [
+        "close",
+        "tcp"
+       ]
+      ],
+      "stdout": "",
+      "traceback": "OSError"
+     },
+     "case": {
+      "address": "8.8.8.8",
+      "taken": 2
+     },
+     "input": "4247e2f683c2a4ab76dea2b50c28a3fac3eb1294b6ee087c3de46d96d3ef6e2c"
+    }
+   ],
+   "comment": "The relay address program of ops/ansible/turn.yml at dbfec38e, as recorded by a scratch recorder: the program ran unchanged under the interpreter named here with the case's address as its argument, its socket module replaced before it was imported by one that records each socket it opens, binds and closes and refuses the bind a case names as taken (EADDRINUSE; -1 names none). Its exit status, output and those socket events were kept. Each case is bound to the SHA-256 of its canonical JSON description.",
+   "tally": {
+    "A local public IPv4 address is required": 23,
+    "accepted": 28,
+    "traceback OSError": 3,
+    "traceback ipaddress.AddressValueError": 21
+   }
+  },
+  "every_recorded_relay_secret_state_is_answered_as_the_program_did": {
+   "cases": [
+    {
+     "answer": {
+      "again": {
+       "exit": 0,
+       "stderr": "",
+       "stdout": "retained\n"
+      },
+      "exit": 0,
+      "file": {
+       "bytes": 64,
+       "lowercaseHex": true,
+       "mode": "600",
+       "regular": true
+      },
+      "stderr": "",
+      "stdout": "created\n",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "absent"
+     },
+     "input": "c1da90f72acca1ecde148593c1d5a21086c14a9e0643149022ee7a5f80d3c864"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "retained\n",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "c72c29154f4a669d5fc1d9865c684e7fe1b7c89804c94fb48e143bb583c2315b"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "640",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "89c1b58357d2e7c0bcc0694ae0cb966a762f391551bab35ca197637e95df1349"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "644",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "3dfdf34ceee4901083c9d4b0b16120090f01702f73c53468d52b9137d7448953"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "400",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "b71ac916e6e98a27c2ee8eae0e6c0f0c48b3fa03433b9d2fa65beb97341e9f11"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "700",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "ad999f5d2e3945ce784b04d86a42da24a11bf833afba39cb637838a74b4e7f3d"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "4600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "ad6e10562c8d49afba51e2c6f57e4f76fae273f8123272ca0ab8c55b49c5f572"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "1600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "af7d718118322da3f07390b930c7dd716d3131b65975fe9bfebb0a50bc3f99af"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "2600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "a33733ff0b95a758622d727bc060427c293f19e88aff621e44e871b1ed2b3884"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "other",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "7fadd7e66ae820a4decf5e1068b6f02f85d81fa21706225e53275dea6595a231"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
+     },
+     "input": "44fa001707522c936aa065d0876289ba255636a8d51bf226e3b18336474bfbd2"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
+     },
+     "input": "dbb80f24a9b563946d72cebb84e8a5bd3b71bac57ab79bcd65583a7a6cfcbc48"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
+     },
+     "input": "c254db4c734081d46a684e318411c1c203ce92646b0851c3b628dd71c0e78d38"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n"
+     },
+     "input": "2fcd1bf1fdf02f84fe8d9b47605cfffc5af05949550504eaa6580ce554fbadd6"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\r"
+     },
+     "input": "a1b27efed55ae79549ed6c32506f5dce05c1c7ccec5dbf77c6c1db1daebf0555"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdeg0123456789abcdeg0123456789abcdeg0123456789abcdeg"
+     },
+     "input": "9b8172f680286a08462d366ed38e910d55fcdc2854092f3476b6c2def2f85864"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": ""
+     },
+     "input": "1e8be51347d62f714415acda8b30769d564a94d7d751af58bb7d1b8b6349aba6"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": " 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
+     },
+     "input": "921b9273078c7f9204adf87986a4e17cf427a24267b36b8617a0f09c0b400b04"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "UnicodeDecodeError",
+      "unchanged": true
+     },
+     "case": {
+      "hex": "ff303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030",
+      "kind": "file",
+      "mode": "600",
+      "owner": "root"
+     },
+     "input": "8af9db72638aa391990fb804b254093615732f3824edef6cb50abc95adc973c9"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "file",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdé"
+     },
+     "input": "612d5272820c8cc7cda58321d164e6e869af3c4a21e31792d1706958b6262248"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": "",
+      "unchanged": true
+     },
+     "case": {
+      "kind": "link",
+      "mode": "600",
+      "owner": "root",
+      "text": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     },
+     "input": "768dedbf78eada8bf18f0a3c0d6485551b4625564c17060ff2c49ae5f701bf62"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "kind": "dangling"
+     },
+     "input": "11f00a70fe1e9a4478d8bd2da4c8583457c53ab72c1be0fe4d8c097cd0d1abff"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "kind": "directory",
+      "mode": "700",
+      "owner": "root"
+     },
+     "input": "e9d6dcc58fcd76b42fa497f7e1acf9ad018c6e03d15651900cc03e7c59c4a817"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "kind": "fifo",
+      "mode": "600",
+      "owner": "root"
+     },
+     "input": "31738ec837bfdf3e8b5c670f9e4b13123cb25386b9637d5255854bdcdadfd675"
+    }
+   ],
+   "comment": "The relay secret program of ops/ansible/turn.yml at dbfec38e, as recorded by a scratch recorder: each case's file state was built in a private directory, the program ran under the interpreter named here with only its fixed path and its required owner replaced (root is the recording user, other is not), and its exit status, output and the created file's mode, length and alphabet were kept, never its value. A created secret was given to the program a second time. Each case is bound to the SHA-256 of its canonical JSON description.",
+   "tally": {
+    "Operational precondition failed": 21,
+    "accepted": 2,
+    "traceback UnicodeDecodeError": 1
+   }
+  }
+ }
+}

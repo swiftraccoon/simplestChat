@@ -19,7 +19,7 @@ use crate::host::command::Local;
 use crate::host::evidence::Evidence;
 use crate::host::failure::Failure;
 use crate::host::fault::{Fault, KEY, Result, VALUE, field, object, require, string};
-use crate::host::{Host, Paths, System, emit, hexadecimal, image_id, state};
+use crate::host::{Host, Paths, System, emit, global_ipv4, hexadecimal, image_id, state};
 use crate::json::{InOrder, Json, python_dump};
 use crate::release::assets::{self, Takeover, Workload};
 use crate::turn::store::Site;
@@ -47,46 +47,13 @@ const MOUNTS: [(&str, &str); 3] = [
     ("key.pem", "/tls/key.pem"),
     ("Caddyfile", "/etc/caddy/Caddyfile"),
 ];
-/// Address blocks that are not globally reachable: the shared address
-/// space, then the special-purpose registry's private blocks as Python 3.13
-/// reads it, and the two addresses that registry excepts.
-const SPECIAL: [(Ipv4Addr, u32); 15] = [
-    (Ipv4Addr::new(100, 64, 0, 0), 10),
-    (Ipv4Addr::new(0, 0, 0, 0), 8),
-    (Ipv4Addr::new(10, 0, 0, 0), 8),
-    (Ipv4Addr::new(127, 0, 0, 0), 8),
-    (Ipv4Addr::new(169, 254, 0, 0), 16),
-    (Ipv4Addr::new(172, 16, 0, 0), 12),
-    (Ipv4Addr::new(192, 0, 0, 0), 24),
-    (Ipv4Addr::new(192, 0, 0, 170), 31),
-    (Ipv4Addr::new(192, 0, 2, 0), 24),
-    (Ipv4Addr::new(192, 168, 0, 0), 16),
-    (Ipv4Addr::new(198, 18, 0, 0), 15),
-    (Ipv4Addr::new(198, 51, 100, 0), 24),
-    (Ipv4Addr::new(203, 0, 113, 0), 24),
-    (Ipv4Addr::new(240, 0, 0, 0), 4),
-    (Ipv4Addr::new(255, 255, 255, 255), 32),
-];
-const EXCEPTED: [Ipv4Addr; 2] = [Ipv4Addr::new(192, 0, 0, 9), Ipv4Addr::new(192, 0, 0, 10)];
-
-/// Whether an address is globally reachable.
-fn global(address: Ipv4Addr) -> bool {
-    let within = |(network, prefix): &(Ipv4Addr, u32)| {
-        let mask = u32::MAX.checked_shl(32 - prefix).unwrap_or(0);
-        u32::from(address) & mask == u32::from(*network)
-    };
-    let shared = within(&SPECIAL[0]);
-    let special = SPECIAL[1..].iter().any(within) && !EXCEPTED.contains(&address);
-    !shared && !special
-}
-
 /// A public address. Only the one canonical spelling of an address is
 /// read as one: four decimal numbers without leading zeros or blanks.
 fn public(value: &str) -> Result<Ipv4Addr> {
     let address: Ipv4Addr = value
         .parse()
         .map_err(|_| Fault::Kind("AddressValueError"))?;
-    require(global(address), "handoff_public_ipv4_required")?;
+    require(global_ipv4(address), "handoff_public_ipv4_required")?;
     Ok(address)
 }
 

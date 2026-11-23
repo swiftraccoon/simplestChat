@@ -5,6 +5,7 @@
 //! carried over; it pins the public playbook's recorded-release guard.
 
 pub(crate) mod ansible;
+mod ansible_modules;
 mod backups;
 mod benchmark_automation;
 mod browser_assets;
@@ -21,15 +22,19 @@ mod performance_compare_ci;
 mod public_deployment;
 mod public_reboot;
 mod public_recorded_release;
+mod public_secrets;
 mod public_templates;
 mod python_quality;
 mod reboot;
+mod recorded;
 mod release_container_ci;
 mod release_playbook;
 mod release_workflow;
+mod runtime_components;
 mod security_ci;
 mod security_codeql_cache;
 mod session_soak_ci;
+mod site_guards;
 mod sizing;
 mod turn;
 

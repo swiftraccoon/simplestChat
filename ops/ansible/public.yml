@@ -214,36 +214,54 @@
         - {name: caddy-data, owner: '10001', mode: '0700'}
         - {name: caddy-config, owner: '10001', mode: '0700'}
 
+    - name: Look for the deployment secrets without following links
+      ansible.builtin.stat:
+        path: /etc/simplestchat-public/secrets.json
+        follow: false
+        get_checksum: false
+        get_mime: false
+      register: scpub_secret_record
+      when: not ansible_check_mode
+
+    # Each value is 64 lowercase hexadecimal digits from the controller's
+    # system random source; nothing replaces a name that already exists.
     - name: Generate independent deployment secrets once without printing them
-      ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -c
-          - |
-            import json, os, secrets, stat
-            from pathlib import Path
-            path = Path('/etc/simplestchat-public/secrets.json')
-            names = ['postgres_admin_password', 'migration_password', 'database_password',
-                     'metrics_token', 'proxy_secret', 'owner_password']
-            if path.exists() or path.is_symlink():
-                metadata = path.lstat()
-                if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
-                    raise SystemExit('Operational precondition failed')
-                if not (stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size < 16384):
-                    raise SystemExit('Operational precondition failed')
-                values = json.loads(path.read_text())
-                if not (set(values) == set(names)):
-                    raise SystemExit('Operational precondition failed')
-                if not (all((isinstance(v, str) and len(v) == 64 and all((c in '0123456789abcdef' for c in v)) for v in values.values()))):
-                    raise SystemExit('Operational precondition failed')
-                print('retained')
-            else:
-                values = {name: secrets.token_hex(32) for name in names}
-                with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:
-                    json.dump(values, output)
-                print('created')
-      register: scpub_secret_creation
-      changed_when: scpub_secret_creation.stdout == 'created'
+      ansible.builtin.copy:
+        content: >-
+          {{ dict(['postgres_admin_password', 'migration_password', 'database_password',
+                   'metrics_token', 'proxy_secret', 'owner_password']
+                  | zip(query('ansible.builtin.password', '/dev/null', '/dev/null', '/dev/null',
+                              '/dev/null', '/dev/null', '/dev/null',
+                              length=64, chars=['0123456789abcdef'])))
+             | to_json }}
+        dest: /etc/simplestchat-public/secrets.json
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      diff: false
+      no_log: true
+      when:
+        - not ansible_check_mode
+        - not scpub_secret_record.stat.exists
+
+    - name: Inspect the deployment secrets without following links
+      ansible.builtin.stat:
+        path: /etc/simplestchat-public/secrets.json
+        follow: false
+        get_checksum: false
+        get_mime: false
+      register: scpub_secret_state
+      when: not ansible_check_mode
+
+    - name: Require the deployment secrets to be a small private root file
+      ansible.builtin.assert:
+        that:
+          - scpub_secret_state.stat.isreg | default(false)
+          - scpub_secret_state.stat.uid == 0
+          - scpub_secret_state.stat.mode == '0600'
+          - scpub_secret_state.stat.size < 16384
+        fail_msg: Operational precondition failed
       when: not ansible_check_mode
 
     - name: Read protected secrets for private configuration rendering
@@ -257,6 +275,22 @@
         scpub_secrets: "{{ scpub_secret_file.content | b64decode | from_json }}"
         cacheable: false
       no_log: true
+
+    - name: Decide without printing them whether the secrets have their names and shape
+      ansible.builtin.set_fact:
+        scpub_secrets_shaped: >-
+          {{ scpub_secrets is mapping
+             and (scpub_secrets.keys() | sort) == ['database_password', 'metrics_token', 'migration_password',
+                                                   'owner_password', 'postgres_admin_password', 'proxy_secret']
+             and (scpub_secrets.values() | reject('string') | list) == []
+             and (scpub_secrets.values() | reject('match', '[0-9a-f]{64}\Z') | list) == [] }}
+        cacheable: false
+      no_log: true
+
+    - name: Require deployment secrets of exactly the six names and shape
+      ansible.builtin.assert:
+        that: scpub_secrets_shaped
+        fail_msg: Operational precondition failed
 
     - name: Copy the maintained base runtime and proxy configuration
       ansible.builtin.copy:

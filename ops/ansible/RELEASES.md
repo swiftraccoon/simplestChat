@@ -1002,8 +1002,9 @@ host, use
 `reboot.yml -e scpub_reboot=true -e scpub_upgrade_runtime=true`. Update the exact
 inventory package and upstream binary pins first; local inventory overrides group
 defaults. The candidate Compose executable must match its separately pinned official SHA-256.
-Before stopping services, the playbook compares its resolved configuration and
-all three service hashes against the installed Compose. Any difference fails
+Before stopping services, the installed Ops executable
+(`simplestchat-ops reboot compare-compose`) compares its resolved configuration
+and all three service hashes against the installed Compose. Any difference fails
 before maintenance and requires a separate configuration migration.
 
 After preparation saves container identities and gracefully stops the public

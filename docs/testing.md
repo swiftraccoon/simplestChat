@@ -456,7 +456,13 @@ CI uses this same gate. Set `PYTHON_CHECK_ENV` to another virtual environment
 directory to select both its pinned tools and its Python import environment.
 The checks do not install packages, contact deployment hosts, or start services.
 Routine releases install no Python helper: the release playbook delivers the
-signed Ops executable and verifies, receives and stages through it.
+signed Ops executable and verifies, receives and stages through it. No playbook
+or task file runs a program through Python. The checks that once did are file
+inspections, fixed commands and assertions where they may run before the Ops
+executable is installed, and Ops commands where it is; the `automation::pins`
+tests run those assertions through Ansible against every state the retired
+programs were recorded on (`crates/ci/src/automation/pins/*_recorded.json`), and
+the Ops commands replay theirs under `ops/src`.
 
 ### Readiness and shutdown
 

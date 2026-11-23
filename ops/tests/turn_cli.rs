@@ -37,6 +37,10 @@ fn malformed_invocations_are_usage_errors_without_effects() {
         ],
         &["turn", "--config", "PRIVATE_PATH", "enable-metrics"],
         &["turn", "--verify-address", "192.0.2.45"],
+        &["turn", "check-listeners"],
+        &["turn", "check-listeners", "192.0.2.45", "PRIVATE_VALUE"],
+        &["turn", "prepare-secret", "PRIVATE_VALUE"],
+        &["turn", "PREPARE-SECRET"],
     ] {
         let output = ops(arguments);
         assert_eq!(output.status.code(), Some(2), "{arguments:?}");
@@ -102,4 +106,41 @@ fn refused_requests_get_one_fixed_line_that_names_only_the_kind() {
         let text = String::from_utf8(output.stderr).unwrap();
         assert_eq!(text, refused(kind), "{arguments:?}");
     }
+}
+
+/// The address check refuses an address that is not one public IPv4
+/// address, and one that is not this machine's, each in its fixed words and
+/// without output; the secret step names only the kind of a fault where its
+/// directory does not exist.
+#[test]
+fn preparation_steps_refuse_in_their_fixed_words() {
+    let not_public = "A local public IPv4 address is required\n";
+    let taken = "The relay listeners must be free on the public address\n";
+    for (address, refusal) in [
+        ("10.0.0.1", not_public),
+        ("203.0.113.5", not_public),
+        ("08.8.8.8", not_public),
+        ("PRIVATE.example", not_public),
+        ("8.8.8.8", taken),
+    ] {
+        let output = ops(&["turn", "check-listeners", address]);
+        assert_eq!(output.status.code(), Some(1), "{address}");
+        assert!(output.stdout.is_empty(), "{address}");
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            refusal,
+            "{address}"
+        );
+    }
+    if std::path::Path::new("/etc/simplestchat-turn").exists() {
+        // A prepared relay host: the step would act on its own fixed path.
+        return;
+    }
+    let output = ops(&["turn", "prepare-secret"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Relay preparation failed (FileNotFoundError)\n"
+    );
 }

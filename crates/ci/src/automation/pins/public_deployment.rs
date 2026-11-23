@@ -337,11 +337,8 @@ fn preparation_requires_opt_in_and_does_not_start_services() {
         }
     }
     let text = checkout_file("ops/ansible/public.yml");
-    for expected in [
-        "os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600",
-        "cacheable: false",
-        "no_log: true",
-    ] {
+    // The secrets are written only where nothing is (`public_secrets.rs`).
+    for expected in ["force: false", "cacheable: false", "no_log: true"] {
         assert!(text.contains(expected), "{expected}");
     }
 }

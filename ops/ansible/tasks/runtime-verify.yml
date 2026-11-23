@@ -1,42 +1,72 @@
 ---
-- name: Verify the active Docker engine, containerd, runc, Compose and Buildx identities
+- name: Read the active Docker engine, Compose and Buildx identities
   ansible.builtin.command:
-    argv:
-      - /usr/bin/python3
-      - -c
-      - |
-        import json
-        import subprocess
-        import sys
-
-        engine, compose, containerd, buildx, runc = sys.argv[1:]
-        environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
-        docker = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
-
-        def output(arguments):
-            result = subprocess.run(docker + arguments, env=environment, capture_output=True,
-                                    timeout=20, check=False)
-            if result.returncode or len(result.stdout) > 65536:
-                sys.exit("Cannot verify the selected runtime components")
-            return result.stdout.decode().strip()
-
-        server = json.loads(output(["version", "--format", "{% raw %}{{json .Server}}{% endraw %}"]))
-        if server.get("Version") != engine:
-            sys.exit("Running Docker differs from the selected package")
-        components = server.get("Components", [])
-        for name, expected in (("containerd", containerd), ("runc", runc)):
-            actual = [item.get("Version", "").removeprefix("v") for item in components if item.get("Name") == name]
-            if actual != [expected]:
-                sys.exit("Running runtime component differs from the selected release")
-        if output(["compose", "version", "--short"]) != compose:
-            sys.exit("Compose differs from the selected package")
-        if output(["buildx", "version"]).split()[:2] != ["github.com/docker/buildx", "v" + buildx]:
-            sys.exit("Buildx differs from the selected upstream release")
-        print("All active runtime components match their selected releases")
-      - "{{ scbench_docker_engine_version.split(':')[-1].split('-')[0] }}"
-      - "{{ scbench_docker_compose_version.split('-')[0] }}"
-      - "{{ scbench_containerd_upstream_version }}"
-      - "{{ scbench_docker_buildx_upstream_version }}"
-      - "{{ scbench_runc_upstream_version }}"
+    argv: "{{ ['/usr/bin/env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL=C',
+               '/usr/bin/docker', '--host', 'unix:///var/run/docker.sock'] + item }}"
+    strip_empty_ends: false
+  loop:
+    - [version, --format, "{% raw %}{{json .Server}}{% endraw %}"]
+    - [compose, version, --short]
+    - [buildx, version]
+  register: scbench_runtime_identities
   changed_when: false
+  failed_when: false
+  timeout: 20
+  when: not ansible_check_mode
+
+# Each answer is read only when the command succeeded within 64 KiB. The
+# engine, its containerd and runc components, Compose and Buildx are
+# compared in that order, and the first difference names the refusal.
+- name: Verify the active Docker engine, containerd, runc, Compose and Buildx identities
+  vars:
+    scbench_server_answer: "{{ scbench_runtime_identities.results[0] }}"
+    scbench_compose_answer: "{{ scbench_runtime_identities.results[1] }}"
+    scbench_buildx_answer: "{{ scbench_runtime_identities.results[2] }}"
+    scbench_server: "{{ scbench_server_answer.stdout | trim | from_json }}"
+    scbench_components: "{{ scbench_server.get('Components', []) }}"
+    scbench_server_readable: >-
+      {{ scbench_server_answer.rc == 0 and scbench_server_answer.stdout.encode() | length <= 65536
+         and scbench_server is mapping }}
+    scbench_engine_selected: >-
+      {{ scbench_server.get('Version') == scbench_docker_engine_version.split(':')[-1].split('-')[0] }}
+    scbench_containerd_versions: >-
+      {{ scbench_components | selectattr('Name', 'defined') | selectattr('Name', 'equalto', 'containerd')
+         | map(attribute='Version', default='') | list }}
+    scbench_runc_versions: >-
+      {{ scbench_components | selectattr('Name', 'defined') | selectattr('Name', 'equalto', 'runc')
+         | map(attribute='Version', default='') | list }}
+    scbench_components_selected: >-
+      {{ scbench_components is sequence and scbench_components is not string and scbench_components is not mapping
+         and scbench_components | reject('mapping') | list == []
+         and scbench_containerd_versions | reject('string') | list == []
+         and scbench_containerd_versions | map('regex_replace', '^v', '') | list == [scbench_containerd_upstream_version | string]
+         and scbench_runc_versions | reject('string') | list == []
+         and scbench_runc_versions | map('regex_replace', '^v', '') | list == [scbench_runc_upstream_version | string] }}
+    scbench_compose_readable: >-
+      {{ scbench_compose_answer.rc == 0 and scbench_compose_answer.stdout.encode() | length <= 65536 }}
+    scbench_compose_selected: >-
+      {{ scbench_compose_answer.stdout | trim == scbench_docker_compose_version.split('-')[0] }}
+    scbench_buildx_readable: >-
+      {{ scbench_buildx_answer.rc == 0 and scbench_buildx_answer.stdout.encode() | length <= 65536 }}
+    scbench_buildx_selected: >-
+      {{ scbench_buildx_answer.stdout.split()[:2]
+         == ['github.com/docker/buildx', 'v' ~ scbench_docker_buildx_upstream_version] }}
+  ansible.builtin.assert:
+    that:
+      - scbench_server_readable
+      - scbench_engine_selected
+      - scbench_components_selected
+      - scbench_compose_readable
+      - scbench_compose_selected
+      - scbench_buildx_readable
+      - scbench_buildx_selected
+    fail_msg: >-
+      {{ 'Cannot verify the selected runtime components' if not scbench_server_readable else
+         'Running Docker differs from the selected package' if not scbench_engine_selected else
+         'Running runtime component differs from the selected release' if not scbench_components_selected else
+         'Cannot verify the selected runtime components' if not scbench_compose_readable else
+         'Compose differs from the selected package' if not scbench_compose_selected else
+         'Cannot verify the selected runtime components' if not scbench_buildx_readable else
+         'Buildx differs from the selected upstream release' }}
+    success_msg: All active runtime components match their selected releases
   when: not ansible_check_mode

@@ -32,3 +32,15 @@ pub(crate) fn python_lines(value: &str) -> impl Iterator<Item = &str> {
             Some(&part[..end])
         })
 }
+
+/// Whether Python's `str.isspace` holds for `value`: Unicode white space
+/// and the four information separators.
+fn python_space(value: char) -> bool {
+    value.is_whitespace() || matches!(value, '\u{1c}'..='\u{1f}')
+}
+
+/// `value` without the leading and trailing white space Python's
+/// `str.strip` removes.
+pub(crate) fn python_strip(value: &str) -> &str {
+    value.trim_matches(python_space)
+}

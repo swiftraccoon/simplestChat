@@ -31,10 +31,14 @@ pub(super) fn section<'a>(play: &'a Value, name: &str) -> &'a [Value] {
     tasks
 }
 
+/// The one task called `name`. A failure points at the caller's line, which
+/// names the task; the message does not repeat it, because a task name can
+/// read like the secret the task handles.
+#[track_caller]
 pub(super) fn named<'a>(tasks: &'a [Value], name: &str) -> &'a Value {
     let mut found = tasks.iter().filter(|task| task["name"] == name);
-    let task = found.next().unwrap_or_else(|| panic!("{name}"));
-    assert!(found.next().is_none(), "{name}");
+    let task = found.next().expect("a task of the caller's name");
+    assert!(found.next().is_none(), "one task of the caller's name");
     task
 }
 
@@ -361,15 +365,17 @@ fn scrape_limit_matches_the_servers_cardinality_budget() {
     assert_eq!(value.replace('_', "").parse::<u64>().unwrap(), limit);
 }
 
-/// From `test_operational_python_gates_survive_optimization`: an interpreter
-/// run with optimization removes `assert` statements, so no embedded check
-/// may be one; every fail-closed branch is a bare `raise SystemExit` of one
-/// plain message, which no optimization level removes.
+/// No playbook, task file or template runs a program of this repository
+/// through an interpreter: no embedded program raises `SystemExit`, no
+/// command starts `python3` or the controller's own interpreter, and
+/// `python3` appears only as the managed host's Ansible interpreter and the
+/// package that provides it. A check that needs a program belongs in the
+/// Ops executable.
 #[test]
-fn embedded_interpreter_checks_fail_closed_without_assertions() {
+fn no_playbook_embeds_an_interpreter_program() {
     let root = super::ansible::root().join("ops/ansible");
     let mut paths = Vec::new();
-    for (directory, extension) in [("", "yml"), ("templates", "j2")] {
+    for (directory, extension) in [("", "yml"), ("tasks", "yml"), ("templates", "j2")] {
         for entry in std::fs::read_dir(root.join(directory)).unwrap() {
             let path = entry.unwrap().path();
             if path.extension().is_some_and(|found| found == extension) {
@@ -378,32 +384,29 @@ fn embedded_interpreter_checks_fail_closed_without_assertions() {
         }
     }
     paths.push(root.join("files/deploy-public.sh"));
-    let mut checked = 0;
-    for path in paths {
-        let text = std::fs::read_to_string(&path).unwrap();
+    let (mut interpreters, mut packages) = (0, 0);
+    for path in &paths {
+        let text = std::fs::read_to_string(path).unwrap();
+        assert!(!text.contains("SystemExit"), "{}", path.display());
+        assert!(
+            !text.contains("ansible_playbook_python"),
+            "{}",
+            path.display()
+        );
         for line in text.lines().map(str::trim) {
-            let assertion = line
-                .strip_prefix("assert")
-                .is_some_and(|rest| rest.starts_with(char::is_whitespace));
-            assert!(
-                !assertion,
-                "optimization-removable check: {}",
-                path.display()
-            );
-            if !line.contains("raise SystemExit(") {
+            if !line.contains("python") {
                 continue;
             }
-            let message = line.strip_prefix("raise SystemExit('");
-            let message = message.and_then(|rest| rest.strip_suffix("')"));
-            let message = message.unwrap_or_else(|| panic!("{}: {line}", path.display()));
-            let plain = |character: char| {
-                character.is_ascii_alphanumeric() || character == ' ' || character == '-'
-            };
-            assert!(!message.is_empty() && message.chars().all(plain), "{line}");
-            checked += 1;
+            if line == "ansible_python_interpreter: /usr/bin/python3" {
+                interpreters += 1;
+            } else {
+                assert_eq!(line, "- python3", "{}", path.display());
+                packages += 1;
+            }
         }
     }
-    // The embedded checks that remain, in four playbooks. The number only
-    // goes down: a new check belongs in the Ops executable.
-    assert_eq!(checked, 20);
+    assert!(paths.iter().any(|path| path.ends_with("tasks/docker.yml")));
+    // The Ansible interpreter of the migration and release plays, and the
+    // one package that installs it on a benchmark host.
+    assert_eq!((interpreters, packages), (9, 1));
 }

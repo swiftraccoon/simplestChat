@@ -1,0 +1,1473 @@
+{
+ "comment": "Answers of the Python programs that tasks of ops/ansible ran inline at revision dbfec38e, recorded before their removal by a scratch recorder that was never committed. Each test names how its program was run; every case is bound to the SHA-256 of its canonical JSON description (sorted keys, no blanks, UTF-8). programs names each program's playbook, task and the SHA-256 of its source text.",
+ "interpreter": "CPython 3.13.18",
+ "programs": [
+  {
+   "sha256": "cf7ab02f79f15b334f0bbb84a83470c609355ab8f9b0422430ab9cfcf3a9a22f",
+   "source": "site.yml",
+   "task": "Refuse host maintenance while the public application is running"
+  },
+  {
+   "sha256": "d379d9b23de2a048f13ad11c1481354f0bb7db3f5e20b02203b8d75bf25efd47",
+   "source": "site.yml",
+   "task": "Refuse provisioning while container cleanup remains uncertain"
+  }
+ ],
+ "tests": {
+  "every_recorded_cleanup_record_state_is_answered_as_the_program_did": {
+   "cases": [
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "absent"
+      },
+      "record": {
+       "kind": "absent"
+      }
+     },
+     "input": "00b249aac154cd5bb0b0d2721ead5874e313d2721babfe52cdb87a9c875509a4"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "absent"
+      }
+     },
+     "input": "649ea1863ac84487feae8f5d54d0b4f21326535ae8c00ecb961504f8cc730954"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "33d4b0ae803cedd32e1fa022f6a3c0a770cb9a7bd989437719ae274cc98003fa"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"finalized\": true, \"schemaVersion\": 1, \"phase\": \"done\"}"
+      }
+     },
+     "input": "7c157edc6eee024d206190b7f9e954545e60c5af22c38bc656add7ba3d8cea10"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":false}"
+      }
+     },
+     "input": "4597ffb8eac914f50b50ad4aa5b0b78924c7c7311c135680abfe7da4e09e3933"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":2,\"finalized\":true}"
+      }
+     },
+     "input": "332c5375ed8b231d4f654bfb228de353516788d24db277c1a81bdcfd31d017d5"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1.0,\"finalized\":true}"
+      }
+     },
+     "input": "07883d467570215ed427ec3a4d279257888fe9c57677d39024d7c66a36f66c44"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":true,\"finalized\":true}"
+      }
+     },
+     "input": "93af8c804c9ff2a646b1ddcaba3e49db9b4bb381093f5e7a55e5262f4f66f157"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":\"1\",\"finalized\":true}"
+      }
+     },
+     "input": "e58fa79896a13a2d0305372324611b055bb495b82d4cf2a281fd62b4f15c6478"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1e0,\"finalized\":true}"
+      }
+     },
+     "input": "dfefb750948c3ee91d6085292e1814a1d938f5bdf3eeb56b737bd31e32673f22"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1}"
+      }
+     },
+     "input": "136cfda00e71afac51d4682872af1e414fab1ef8439d079f225e332261e09b11"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"finalized\":true}"
+      }
+     },
+     "input": "1017d72dc94b773d8133329295155a1fbbf89ebbee2f130123f808da7df34c23"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":\"true\"}"
+      }
+     },
+     "input": "1fe9f620a7577396fa4fddba59a10de6047ea6c86cb462316b05916f5df4c3a1"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":1}"
+      }
+     },
+     "input": "8edbcb2eb326b00c0fa059ab42d0caed771fbc526b0fbad8e2d625e5c0d94064"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":null}"
+      }
+     },
+     "input": "aedc151aaae5e76ee9b36ef45bbe2d61adbbbb2d5f7f73a3028f2745900b3fde"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":false,\"finalized\":true}"
+      }
+     },
+     "input": "42997941743c79934ac42ec2de2872632c4e76b00d81d7bed1fb99be6c2b4292"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Finish owned container cleanup first\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true,\"finalized\":false}"
+      }
+     },
+     "input": "b2abbf2c431fee14c6ce9a8bfd8372a0f9a7ee7823e9e93849d5e8f8bbb0c884"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "AttributeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "[]"
+      }
+     },
+     "input": "b78637fba2f0e7a9554637176077a7be786402fe6f545c839bcf09609c7d3cd8"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "AttributeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "null"
+      }
+     },
+     "input": "606796557d56cbb9c13f9eefa2e708d1319c1db76f7087559882f267ec7943c2"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "AttributeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "\"text\""
+      }
+     },
+     "input": "30be40d27a81a247c1a39305980488d999a90655b5a9c93514658a728ef101da"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "AttributeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "1"
+      }
+     },
+     "input": "2225c0b36332fedcf8d1dfc7b9e61a34906f91ddb3b35cab4ecf7f45be9a5165"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "json.decoder.JSONDecodeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": ""
+      }
+     },
+     "input": "125cd9cc795bdcc55faceff8ed44a5b5793f01deb42be6643f66e8896ecad077"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "json.decoder.JSONDecodeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "not json"
+      }
+     },
+     "input": "bd1e44b3a2fe30c8d88583eeac34b5e3be20e3abf4becb958eac39cb67a54201"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "json.decoder.JSONDecodeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true} {}"
+      }
+     },
+     "input": "fa8d2c12440b25de0e3e2b55182f3d9978a8b62ddf36b0fd177c4264ddfd0ef0"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true,\"x\":NaN}"
+      }
+     },
+     "input": "c900d613242f7b78d3abe607d65ce0d6c2aaaf42840156734b1c547aa59be44f"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "json.decoder.JSONDecodeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "﻿{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "3a6ccd15cf4d0ce722d9197f61f5359223dc3f76be3d932fc5c5a142c80b0913"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": " \n{\"schemaVersion\":1,\"finalized\":true}\r\n"
+      }
+     },
+     "input": "714b3b81cbe54be8c92ff75707bc4b66cc0b640e35563e0738efb9ee7a2f4f7c"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stdout": "",
+      "traceback": "UnicodeDecodeError"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "hex": "7b22736368656d6156657273696f6e223a312c2266696e616c697a6564223a747275652c2278223a22ff227d",
+       "kind": "file",
+       "mode": "600",
+       "owner": "root"
+      }
+     },
+     "input": "368830cba2078d5470684f7d62b73282a323fca2832dd6a82b509255a7570bd8"
+    },
+    {
+     "answer": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No unfinished owned container cleanup.\n"
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            "
+      }
+     },
+     "input": "10f8fc3ebe869805025180a2a488e67856d476407cd266df9d5fdb42051236a6"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             "
+      }
+     },
+     "input": "e55fdaa05d44f1abe857c7fa16ce767a4dd21a78576eeab2c450a404c7e4bb82"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "640",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "6903aae1ad2e44ca4ac4f4b5ee19e4ffb1cf7c7f7f686b00087966b42b551d57"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "644",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "0a4ee3393f7e541c0513aea942dd6a97498b710b0c32e9d0470d8a1a7779b6dc"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "400",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "0bbe1622ba859114c872772a93ce3b7b37124427a41deebc70e699c124d2b800"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "700",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "40f10f7c5be42105032477edf425a31974e8561ee817e274c8d5a90162cd2e56"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "4600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "7086b80ce37429b3694d9f98d38fea4fe450af799338a0e546a4c33208bf4036"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "2600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "68f04c2e9a5dc288d7ebfab17d2ead8c64b963c488693eba751a26d7491fe200"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "1600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "35fcd462aa7c8cdf3ca2afda0788cc986298c62d37b1bea3d1b8b7d21e0e48da"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "other",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "e4c393c31c3279ad2b271cfb88d48f52ad9451bc667d517bae53e9f567b8bae9"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      }
+     },
+     "input": "7f63a6c967b053c9d9976b938df0af7c2a8db1fc909db931b0430c63396496b5"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "link",
+       "mode": "600",
+       "owner": "root"
+      }
+     },
+     "input": "7228195d402ff6c462212345d29e4a580e47b16ebb86d452d09cc1341d977654"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "dangling"
+      }
+     },
+     "input": "5bb407efb545c2aa6aaf9aece757b3b6eb941880931ae9c73895d8696a02b825"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "fifo",
+       "mode": "600",
+       "owner": "root"
+      }
+     },
+     "input": "e8548bd9610b53a03667645a9740b8bcbf83e8449298f4cfbb3e6df725d65076"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "755",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "373f307e40034fa34f14e0bc7e65bc9f85f8357a3eb620389e6b606bf2073bc9"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "750",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "a76a04e5c74e3b4ffb12d9b776c36e6c1e6954e6bfb2e76bc27bcb6f57ff3f9f"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "1700",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "bb280381881bb052f966dbc84514f794489df263292d80be3be7e6c2ea6a7090"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "500",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "bb8e868d0828d58414da640de2440f107e3a9c3df4278a1328eb60387041016d"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "700",
+       "owner": "other"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "5224b508730e084aef4f87c6139abbce3a32059f7fca485bc4b51673b774142a"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "link",
+       "mode": "700",
+       "owner": "root",
+       "to": "directory"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "600",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":true}"
+      }
+     },
+     "input": "1e74698769cd9dad94aa7c6e42db34d43ecffaeedc43e136a09371268713fc1d"
+    },
+    {
+     "answer": {
+      "exit": 1,
+      "stderr": "Operational precondition failed\n",
+      "stdout": ""
+     },
+     "case": {
+      "parent": {
+       "kind": "directory",
+       "mode": "755",
+       "owner": "root"
+      },
+      "record": {
+       "kind": "file",
+       "mode": "644",
+       "owner": "root",
+       "text": "{\"schemaVersion\":1,\"finalized\":false}"
+      }
+     },
+     "input": "7508becc74422b045b853f603912e07ff3853611c2aff49588260f41f7a4f424"
+    }
+   ],
+   "comment": "The 'Refuse provisioning while container cleanup remains uncertain' program of ops/ansible/site.yml at dbfec38e, as recorded by a scratch recorder: each case's file state was built in a private directory and the program ran under the interpreter named here with only its fixed absolute paths replaced by that directory's and the owner and group it requires replaced (root is the recording user and group, other is not); a held lock was held by the recorder. Its exit status and output were kept; for a created file its mode, names and value shape, never a value. Each case is bound to the SHA-256 of its canonical JSON description.",
+   "tally": {
+    "Finish owned container cleanup first": 9,
+    "Operational precondition failed": 20,
+    "accepted": 11,
+    "traceback AttributeError": 4,
+    "traceback UnicodeDecodeError": 1,
+    "traceback json.decoder.JSONDecodeError": 4
+   }
+  },
+  "every_recorded_public_project_probe_is_answered_as_the_program_did": {
+   "cases": [
+    {
+     "answer": {
+      "calls": [],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {},
+      "socket": "absent"
+     },
+     "input": "946c277f3322cf9ee3892e4c824ae0a9bbc8322c394524ac589e3e9e4ef356b4"
+    },
+    {
+     "answer": {
+      "calls": [],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {},
+      "socket": "dangling"
+     },
+     "input": "3304c71e943a85716d82f681c8c135e3d377092c33672dcb57888dd77f5ac6dd"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": ""
+       }
+      },
+      "socket": "file"
+     },
+     "input": "eae1ddd0858500d2828ac7a0685382562e41857a4209287770c167d29d150c54"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": ""
+       }
+      },
+      "socket": "directory"
+     },
+     "input": "277e9c50d32dbb8f13bdd1743264537e59e61cd784a91958493dcd3a4a71bbce"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": ""
+       }
+      },
+      "socket": "link"
+     },
+     "input": "8985d69daebd99749ea9e797a7a647b7e6450e3c5a9e6e01ab752f34befe5df5"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": "\n"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "4a917d573f405e3f421799700e4ac9d10b79c6e3927b05222d9d5c3d752441bf"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": " \t\n\r\n"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "be9a33fdde7e17b46e88c9f13bdfc051e1829145beeb5e028cca24d1ffac340b"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stderr": "Stop the public project before host maintenance\n",
+      "stdout": ""
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": "0123456789ab\n"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "83a1ff04351c1974b0c25a90e77294fc42065ad6eb8b2315b12303998a8fca75"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stderr": "Stop the public project before host maintenance\n",
+      "stdout": ""
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": "a\nb\n"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "b98f033d46e0e5f5177c78d9aca832c3ef94b57528b067e064907d8b90d1aca3"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stderr": "Stop the public project before host maintenance\n",
+      "stdout": ""
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": "x"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "987e39a515112e195fa93856c99f047b64cb561969ac21a48b8157f3e7aff34b"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stderr": "warning\n",
+        "stdout": ""
+       }
+      },
+      "socket": "file"
+     },
+     "input": "4f284ff8676099d3cd9fdbc165cca123331a5f97be5ece44e8b49aa97a83003b"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": " \n"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "62093e3dbceed1321c8324613cd1977b2dc2c8219566891deb2c5d26f93e0a0f"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "No running public project would be interrupted by host maintenance.\n"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdout": "\u001c"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "97310a2113d4d6199e9d5b8aef6056cd6188fe6e662566a68278505530dad2d6"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stdout": "",
+      "traceback": "UnicodeDecodeError"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stdoutHex": "ff0a"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "6f57902ef84e324e7c6e28e832ffd7ff3b5522f7586455a5aa22e8f1f686c48d"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stdout": "",
+      "traceback": "UnicodeDecodeError"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 0,
+        "stderrHex": "ff",
+        "stdout": ""
+       }
+      },
+      "socket": "file"
+     },
+     "input": "fcfd0f8096ed34f7a57f1eadb24ba3bd7b93a9ead19b997bfc63e139689f39c5"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stdout": "",
+      "traceback": "subprocess.CalledProcessError"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 1,
+        "stdout": ""
+       }
+      },
+      "socket": "file"
+     },
+     "input": "d1b733834ed95b6e4862677485a8d2bb87bc71dcab091f776026931b78f3a325"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stdout": "",
+      "traceback": "subprocess.CalledProcessError"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "status": 1,
+        "stdout": "0123456789ab\n"
+       }
+      },
+      "socket": "file"
+     },
+     "input": "0e4711de581cac9b53a4ccc672b4f697094ddc457170548abebff64e44d49a12"
+    },
+    {
+     "answer": {
+      "calls": [
+       {
+        "arguments": "--host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public",
+        "command": "docker"
+       }
+      ],
+      "exit": 1,
+      "stdout": "",
+      "traceback": "subprocess.TimeoutExpired"
+     },
+     "case": {
+      "answers": {
+       "docker --host unix:///var/run/docker.sock ps --quiet --filter label=com.docker.compose.project=simplestchat-public": {
+        "sleep": true,
+        "status": 0,
+        "stdout": ""
+       }
+      },
+      "socket": "file"
+     },
+     "input": "19658b76dedfbe072a4e31c73fb80090644c65fa49f5ec28caf09d3c83e903d1"
+    },
+    {
+     "answer": {
+      "calls": [],
+      "exit": 1,
+      "stdout": "",
+      "traceback": "FileNotFoundError"
+     },
+     "case": {
+      "answers": {},
+      "missing": [
+       "docker"
+      ],
+      "socket": "file"
+     },
+     "input": "022d28eee3d6b4ff941cc954cb1413a083b106e22a8b3ef10df876d4c2ca3a89"
+    }
+   ],
+   "comment": "The 'Refuse host maintenance while the public application is running' program of ops/ansible/site.yml at dbfec38e, as recorded by a scratch recorder: every command it runs was a POSIX shell stand-in at the program's fixed path, answering from the case by its exact argument list (an argument list a case does not answer exits 97; a command a case names missing does not exist), and the program ran under the interpreter named here with its arguments, only those paths and its deadline replaced (by 2 s; an answer marked sleep takes 5). Its exit status, output and the invocations were kept. Each case is bound to the SHA-256 of its canonical JSON description.",
+   "tally": {
+    "Stop the public project before host maintenance": 3,
+    "accepted": 10,
+    "traceback FileNotFoundError": 1,
+    "traceback UnicodeDecodeError": 2,
+    "traceback subprocess.CalledProcessError": 2,
+    "traceback subprocess.TimeoutExpired": 1
+   }
+  }
+ }
+}

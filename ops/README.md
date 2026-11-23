@@ -2004,6 +2004,27 @@ got. The test replays them request by request: every command must be the
 recorded one with its deadline, and every invocation must end as recorded and
 leave the recorded journal, identity and outcome.
 
+A runtime upgrade first compares the downloaded candidate Compose with the
+installed one, before anything stops; it changes nothing, takes no lock and
+needs no evidence directory:
+
+```sh
+simplestchat-ops reboot compare-compose CANDIDATE VERSION
+```
+
+`CANDIDATE` is the absolute path of the candidate executable and `VERSION` the
+version its package selects. The candidate's `version --short`, stripped of
+white space, must be `VERSION`; the installed and then the candidate
+`config --format json` of the public project must be equal JSON values, with
+numbers and booleans compared as Python compares them and duplicate keys or
+non-finite numbers refused; and for `postgres`, `simplestchat` and `caddy` in
+turn, both `config --hash` lines must be the same bytes. Every command has a
+fixed environment, 20 seconds and 8 MiB of output; the first difference or
+failure prints its one fixed line on standard error and exits 1, and nothing a
+command printed leaves the comparison. The answers of the inline program it
+replaced, for 39 comparisons, are recorded in
+`ops/src/reboot/recorded_compose.json` and replayed command by command.
+
 ## Relay certificate, metrics and activation
 
 The [relay playbook](ansible/turn.yml), its hourly timer and the monitoring
@@ -2018,6 +2039,29 @@ simplestchat-ops turn refresh-certificate [--verify-address IP]
 simplestchat-ops turn enable-metrics [--verify-address IP]
 simplestchat-ops turn activate [--verify-address IP]
 ```
+
+Two preparation steps come before the relay has any configuration; they take
+no lock and keep no evidence:
+
+```sh
+simplestchat-ops turn check-listeners IPV4
+simplestchat-ops turn prepare-secret
+```
+
+`check-listeners` admits one IPv4 address in its canonical spelling that is
+globally reachable as Python 3.13 decides it, then opens a UDP socket on port
+3478 and TCP sockets on 3478 and 5349 at it without address reuse, holding each
+until all are open, and closes them; nothing listens. An address that is not
+this machine's, or a port another socket holds, refuses.
+`prepare-secret` keeps `/etc/simplestchat-turn/secret` when it is a regular
+root file of mode 0600 holding exactly 64 lowercase hexadecimal digits, read
+without following a link, and prints `retained`; when nothing is there it
+creates the file exclusively with 32 bytes of the system's random source in
+hexadecimal, mode 0600, and prints `created`. Anything else at the path,
+including a link, refuses without being replaced. A refusal prints its fixed
+line on standard error. The answers of the two inline programs they replaced
+are recorded in `ops/src/turn/recorded_preparation.json`: 24 file states and
+75 address and listener cases, replayed against these steps.
 
 All four first read the relay's prepared identity from the private
 `/etc/simplestchat-turn`: the hostname, the checksum-pinned coturn image, the

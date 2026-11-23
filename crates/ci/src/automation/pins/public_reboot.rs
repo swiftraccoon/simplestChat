@@ -1,117 +1,77 @@
-//! The reboot's runtime upgrade preflight, carried over from the Python
-//! reboot tests: the playbook's own comparison of a candidate Compose with
-//! the installed one runs against answers given by fake commands, and every
-//! difference stops it without printing the resolved configuration. Nothing
+//! The reboot's runtime upgrade preflight: the candidate Compose is
+//! downloaded and authenticated by its checksum, and the installed Ops
+//! executable compares it with the installed Compose before any service
+//! stops, without printing the resolved configuration it compares. The
+//! comparison itself is replayed against the recorded answers of the
+//! program it replaced in `ops/src/reboot/compose_tests.rs`. Nothing
 //! contacts Docker.
 
-use super::ansible::Scratch;
+use super::ansible::evaluate;
 use super::document;
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::process::Command;
+use super::monitoring::{OPS, environment, named, play, section};
+use serde_json::json;
 
 const PREFLIGHT: &str = "ops/ansible/tasks/runtime-upgrade-preflight.yml";
-/// The installed Compose, as the comparison names it.
-const INSTALLED: &str = "\"/usr/bin/docker\"";
-/// The candidate version the comparison is given.
-const VERSION: &str = "5.6.0";
-/// A value of the resolved configuration that must never be printed.
-const PRIVATE: &str = "private fixture value";
+/// Where the candidate is kept for the comparison and removed afterwards.
+const CANDIDATE: &str = "/usr/local/libexec/simplestchat-public/compose-upgrade-candidate";
+const VERSION: &str = "{{ scbench_docker_compose_version.split('-')[0] }}";
 
-/// The comparison's inline program, the third word of its command.
-fn program() -> String {
-    let tasks = document(PREFLIGHT);
-    let argv = tasks[1]["ansible.builtin.command"]["argv"]
-        .as_array()
-        .unwrap();
-    argv[2].as_str().unwrap().to_owned()
-}
-
-/// Write an executable POSIX shell command that answers as Compose does for
-/// the comparison: `version` its version, `--hash` the identity of the
-/// service it ends with (another one for `changed`), anything else the
-/// resolved configuration with `value`, each ending with `status`.
-fn fake(path: &Path, version: &str, changed: &str, value: &str, status: u8) {
-    let script = format!(
-        "#!/bin/sh\nfor last do :; done\nfor word do\n  case $word in\n    \
-         version) printf '%s' '{version}'; exit {status};;\n    \
-         --hash)\n      if [ \"$last\" = '{changed}' ]; then printf '%s' changed\n      \
-         else printf '%s identity' \"$last\"; fi\n      exit {status};;\n  esac\ndone\n\
-         printf '%s' '{{\"environment\": {{\"SECRET\": \"{value}\"}}}}'\nexit {status}\n"
-    );
-    std::fs::write(path, script).unwrap();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-/// From `test_compose_upgrade_refuses_changed_configuration_hash_or_version`:
-/// the actual preflight accepts a candidate only of the selected version
-/// that resolves the same configuration and the same identity of each of
-/// the three services, and never prints the configuration it compares.
+/// The candidate is authenticated before it runs and compared by the
+/// installed executable with the version its package selects; the step's
+/// answer is never shown, a difference fails it, and the candidate is
+/// removed whatever happened.
 #[test]
-fn compose_upgrade_refuses_changed_configuration_hash_or_version() {
-    let program = program();
-    assert_eq!(program.matches(INSTALLED).count(), 1);
-    let identity = "Candidate Compose changes a service identity; separate migration required\n";
-    for (changed, said) in [
-        (
-            "none",
-            "Candidate Compose preserves configuration and all three service identities\n",
-        ),
-        (
-            "configuration",
-            "Candidate Compose changes resolved configuration; separate migration required\n",
-        ),
-        ("postgres", identity),
-        ("simplestchat", identity),
-        ("caddy", identity),
-        (
-            "version",
-            "Candidate Compose does not match the selected package\n",
-        ),
-        (
-            "command",
-            "Compose compatibility command failed; no services were stopped\n",
-        ),
-    ] {
-        let scratch = Scratch::new();
-        let (installed, candidate) = (
-            scratch.path().join("installed"),
-            scratch.path().join("candidate"),
-        );
-        let version = if changed == "version" {
-            "unexpected"
-        } else {
-            VERSION
-        };
-        fake(&installed, version, "", PRIVATE, 0);
-        let value = if changed == "configuration" {
-            "changed"
-        } else {
-            PRIVATE
-        };
-        let status = u8::from(changed == "command");
-        fake(&candidate, version, changed, value, status);
-        let named = format!("\"{}\"", installed.display());
-        assert!(!named.trim_matches('"').contains(['"', '\\']));
-        let output = Command::new("python3")
-            .arg("-I")
-            .arg("-c")
-            .arg(program.replace(INSTALLED, &named))
-            .arg(&candidate)
-            .arg(VERSION)
-            .output()
-            .unwrap();
-        let (printed, refused) = (
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-        if changed == "none" {
-            assert!(output.status.success(), "{changed}");
-            assert_eq!((printed.as_ref(), refused.as_ref()), (said, ""));
-        } else {
-            assert_eq!(output.status.code(), Some(1), "{changed}");
-            assert_eq!((printed.as_ref(), refused.as_ref()), ("", said));
-        }
-        assert!(!printed.contains(PRIVATE) && !refused.contains(PRIVATE));
+fn a_runtime_upgrade_compares_compose_through_the_installed_ops_executable() {
+    let tasks = document(PREFLIGHT);
+    let tasks = tasks.as_array().unwrap();
+    assert_eq!(tasks.len(), 2);
+    let download = &tasks[0]["ansible.builtin.get_url"];
+    assert_eq!(download["dest"], CANDIDATE);
+    assert_eq!(
+        download["checksum"],
+        "sha256:{{ scbench_docker_compose_binary_sha256 }}"
+    );
+    assert_eq!(
+        (&download["owner"], &download["mode"]),
+        (&json!("root"), &json!("0700"))
+    );
+    let compared = &tasks[1];
+    assert_eq!(
+        compared["ansible.builtin.command"],
+        json!({"argv": [OPS, "reboot", "compare-compose", CANDIDATE, VERSION]})
+    );
+    assert_eq!(compared["environment"], environment());
+    assert_eq!(compared["changed_when"], false);
+    assert_eq!(compared["no_log"], true);
+    for softened in ["failed_when", "ignore_errors", "when"] {
+        assert!(compared.get(softened).is_none(), "{softened}");
     }
+    let selected = evaluate(
+        &[&VERSION[3..VERSION.len() - 3]],
+        &[json!({"scbench_docker_compose_version": "5.6.0-1~debian.13~trixie"})],
+    );
+    assert_eq!(selected, [[json!("5.6.0")]]);
+    let text = super::checkout_file(PREFLIGHT);
+    assert!(!text.contains("python") && !text.contains(".py"));
+    // The reboot runs the comparison before the workflow that stops
+    // services, and always removes the candidate.
+    let reboot = play("ops/ansible/reboot.yml");
+    let steps = section(&reboot, "tasks");
+    let first = named(
+        steps,
+        "Verify runtime upgrade compatibility before stopping any services",
+    );
+    assert_eq!(
+        first["ansible.builtin.include_tasks"],
+        "tasks/runtime-upgrade-preflight.yml"
+    );
+    let workflow = named(
+        steps,
+        "Prepare, reboot once and recover the same public containers",
+    );
+    let removed = &section(workflow, "always")[0];
+    assert_eq!(
+        removed["ansible.builtin.file"],
+        json!({"path": CANDIDATE, "state": "absent"})
+    );
 }

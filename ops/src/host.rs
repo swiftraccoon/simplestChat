@@ -13,6 +13,7 @@ pub(crate) mod state;
 use chrono::{DateTime, Utc};
 use command::{Commands, Request};
 use failure::Result;
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -35,6 +36,40 @@ pub(crate) fn boot_identity(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
     groups.iter().map(|group| group.len()).eq([8, 4, 4, 4, 12])
         && groups.iter().all(|group| hexadecimal(group, group.len()))
+}
+
+/// Address blocks that are not globally reachable: the shared address
+/// space, then the special-purpose registry's private blocks as Python 3.13
+/// reads it, and the two addresses that registry excepts.
+const SPECIAL: [(Ipv4Addr, u32); 15] = [
+    (Ipv4Addr::new(100, 64, 0, 0), 10),
+    (Ipv4Addr::new(0, 0, 0, 0), 8),
+    (Ipv4Addr::new(10, 0, 0, 0), 8),
+    (Ipv4Addr::new(127, 0, 0, 0), 8),
+    (Ipv4Addr::new(169, 254, 0, 0), 16),
+    (Ipv4Addr::new(172, 16, 0, 0), 12),
+    (Ipv4Addr::new(192, 0, 0, 0), 24),
+    (Ipv4Addr::new(192, 0, 0, 170), 31),
+    (Ipv4Addr::new(192, 0, 2, 0), 24),
+    (Ipv4Addr::new(192, 168, 0, 0), 16),
+    (Ipv4Addr::new(198, 18, 0, 0), 15),
+    (Ipv4Addr::new(198, 51, 100, 0), 24),
+    (Ipv4Addr::new(203, 0, 113, 0), 24),
+    (Ipv4Addr::new(240, 0, 0, 0), 4),
+    (Ipv4Addr::new(255, 255, 255, 255), 32),
+];
+const EXCEPTED: [Ipv4Addr; 2] = [Ipv4Addr::new(192, 0, 0, 9), Ipv4Addr::new(192, 0, 0, 10)];
+
+/// Whether an IPv4 address is globally reachable, as Python 3.13's
+/// `IPv4Address.is_global` decides it.
+pub(crate) fn global_ipv4(address: Ipv4Addr) -> bool {
+    let within = |(network, prefix): &(Ipv4Addr, u32)| {
+        let mask = u32::MAX.checked_shl(32 - prefix).unwrap_or(0);
+        u32::from(address) & mask == u32::from(*network)
+    };
+    let shared = within(&SPECIAL[0]);
+    let special = SPECIAL[1..].iter().any(within) && !EXCEPTED.contains(&address);
+    !shared && !special
 }
 
 /// A lower-case DNS name of at least two labels ending in a letter-only one.

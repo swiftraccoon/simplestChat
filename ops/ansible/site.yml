@@ -52,34 +52,58 @@
           - scbench_builder_active.stdout not in ['active', 'activating', 'deactivating', 'reloading']
         fail_msg: Wait for the owned image build before changing its inputs.
 
+    - name: Look for an owned container cleanup record without following links
+      tags: [always]
+      ansible.builtin.stat:
+        path: /run/simplestchat-bench/current.json
+        follow: false
+        get_checksum: false
+        get_mime: false
+      register: scbench_cleanup_record
+
+    - name: Look at the cleanup record's directory without following links
+      tags: [always]
+      ansible.builtin.stat:
+        path: /run/simplestchat-bench
+        follow: false
+        get_checksum: false
+        get_mime: false
+      register: scbench_cleanup_directory
+      when: scbench_cleanup_record.stat.exists
+
+    - name: Require a cleanup record to be a small private file in its private directory
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scbench_cleanup_record.stat.isreg
+          - scbench_cleanup_record.stat.uid == 0
+          - scbench_cleanup_record.stat.mode == '0600'
+          - scbench_cleanup_record.stat.size <= 16384
+          - scbench_cleanup_directory.stat.isdir
+          - scbench_cleanup_directory.stat.uid == 0
+          - scbench_cleanup_directory.stat.mode == '0700'
+        fail_msg: Operational precondition failed
+      when: scbench_cleanup_record.stat.exists
+
+    - name: Read the owned container cleanup record
+      tags: [always]
+      ansible.builtin.slurp:
+        src: /run/simplestchat-bench/current.json
+      register: scbench_cleanup_content
+      when: scbench_cleanup_record.stat.exists
+
     - name: Refuse provisioning while container cleanup remains uncertain
       tags: [always]
-      ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -c
-          - |
-            import json
-            import stat
-            from pathlib import Path
-            record = Path('/run/simplestchat-bench/current.json')
-            if record.exists() or record.is_symlink():
-                metadata = record.lstat()
-                if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
-                    raise SystemExit('Operational precondition failed')
-                if not (stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size <= 16384):
-                    raise SystemExit('Operational precondition failed')
-                parent = record.parent.lstat()
-                if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
-                    raise SystemExit('Operational precondition failed')
-                if not (stat.S_IMODE(parent.st_mode) == 0o700):
-                    raise SystemExit('Operational precondition failed')
-                value = json.loads(record.read_text())
-                if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
-                    raise SystemExit('Finish owned container cleanup first')
-            print('No unfinished owned container cleanup.')
-      changed_when: false
-      check_mode: false
+      vars:
+        scbench_cleanup: "{{ scbench_cleanup_content.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - scbench_cleanup is mapping
+          - scbench_cleanup.get('schemaVersion') == 1
+          - scbench_cleanup.get('finalized') is sameas true
+        fail_msg: Finish owned container cleanup first
+        success_msg: No unfinished owned container cleanup.
+      when: scbench_cleanup_record.stat.exists
 
     - name: Refuse provisioning while a public release remains unfinished
       tags: [always]
@@ -112,25 +136,40 @@
       changed_when: false
       check_mode: false
 
-    - name: Refuse host maintenance while the public application is running
+    - name: Look for the local Docker socket
+      tags: [always]
+      ansible.builtin.stat:
+        path: /var/run/docker.sock
+        follow: true
+        get_checksum: false
+        get_mime: false
+      register: scbench_docker_socket
+
+    - name: List the running containers of the public project
       tags: [always]
       ansible.builtin.command:
         argv:
-          - /usr/bin/python3
-          - -c
-          - |
-            from pathlib import Path
-            import subprocess
-            if Path('/var/run/docker.sock').exists():
-                result = subprocess.run(
-                    ['/usr/bin/docker', '--host', 'unix:///var/run/docker.sock', 'ps', '--quiet',
-                     '--filter', 'label=com.docker.compose.project=simplestchat-public'],
-                    check=True, capture_output=True, text=True, timeout=15)
-                if not (not result.stdout.strip()):
-                    raise SystemExit('Stop the public project before host maintenance')
-            print('No running public project would be interrupted by host maintenance.')
+          - /usr/bin/docker
+          - --host
+          - unix:///var/run/docker.sock
+          - ps
+          - --quiet
+          - --filter
+          - label=com.docker.compose.project=simplestchat-public
+      register: scbench_public_running
       changed_when: false
       check_mode: false
+      timeout: 15
+      when: scbench_docker_socket.stat.exists
+
+    - name: Refuse host maintenance while the public application is running
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scbench_public_running.stdout | trim == ''
+        fail_msg: Stop the public project before host maintenance
+        success_msg: No running public project would be interrupted by host maintenance.
+      when: scbench_docker_socket.stat.exists
 
   tasks:
     - name: Prepare OS packages and private directories

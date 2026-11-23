@@ -292,28 +292,57 @@ fn bootstrap_keeps_the_authenticated_executable_beside_the_request_on_both_machi
     }
 }
 
-/// Bootstrap refuses unfinished owned work before it writes anything: its
-/// first task changes nothing and checks the workload lock, an unfinished
-/// journal and an existing request. It creates the root-owned directory a
+/// The bootstrap checks of a move, in their order, each changing nothing.
+const BOOTSTRAP_CHECKS: [&str; 10] = [
+    "Inspect the existing bootstrap paths without following links",
+    "Refuse unsafe existing bootstrap paths",
+    "Inspect the workload lock without following links",
+    "Refuse an unsafe workload lock",
+    "Refuse a held workload lock",
+    "Inspect the owned operation journals without following links",
+    "Read each small private owned operation journal",
+    "Refuse unfinished owned work",
+    "Look for an earlier operation of this run without following links",
+    "Refuse an existing operation of this run",
+];
+
+/// Bootstrap refuses unsafe paths and unfinished owned work before it
+/// writes anything: its first steps only look, take a free workload lock
+/// and release it at once, and assert. It creates the root-owned directory a
 /// release later delivers the Ops executable into and copies nothing there:
 /// every step of a move runs the executable it keeps beside its request,
-/// and no step names a Python file.
+/// and no step names a Python file or runs an interpreter.
 #[test]
 fn bootstrap_refuses_unfinished_work_and_installs_no_helper() {
     let play = play();
     let steps = block(&play, "bootstrap");
-    let guard = &steps[0];
-    assert_eq!(guard["changed_when"], false);
-    let source = strings(&guard["ansible.builtin.command"]["argv"]).join("\n");
-    for token in [
-        "LOCK_EX | fcntl.LOCK_NB",
-        "record.get('finalized') is True",
-        "request.exists()",
-        "release-state.json",
-        "current.json",
-    ] {
-        assert!(source.contains(token), "{token}");
+    assert_eq!(names(&steps[..BOOTSTRAP_CHECKS.len()]), BOOTSTRAP_CHECKS);
+    assert_eq!(
+        steps[BOOTSTRAP_CHECKS.len()]["name"],
+        "Create private migration and immutable release storage"
+    );
+    for step in &steps[..BOOTSTRAP_CHECKS.len()] {
+        let looks = [
+            "ansible.builtin.stat",
+            "ansible.builtin.slurp",
+            "ansible.builtin.assert",
+        ];
+        let command = step.get("ansible.builtin.command");
+        assert!(looks.iter().any(|module| uses(step, module)) || command.is_some());
+        if command.is_some() {
+            assert_eq!(step["changed_when"], false, "{}", step["name"]);
+        }
+        for softened in ["ignore_errors", "failed_when", "delegate_to"] {
+            assert!(step.get(softened).is_none(), "{} {softened}", step["name"]);
+        }
     }
+    let (_, flock) = located(steps, |task| task["name"] == BOOTSTRAP_CHECKS[4]);
+    assert_eq!(
+        flock["ansible.builtin.command"],
+        json!({"argv": ["/usr/bin/flock", "--exclusive", "--nonblock",
+            "/run/simplestchat-bench/workload.lock", "/bin/true"]})
+    );
+    assert_eq!(flock["when"], "scmig_workload_lock.stat.exists");
     let (_, directory) = located(steps, |task| {
         task["name"] == "Create the protected Ops executable directory"
     });
@@ -325,7 +354,8 @@ fn bootstrap_refuses_unfinished_work_and_installs_no_helper() {
         let installed = destination.is_some_and(|path| path.starts_with("/usr/local/libexec"));
         assert!(!installed, "{}", task["name"]);
     }
-    assert!(!Value::from(steps.to_vec()).to_string().contains(".py"));
+    let text = Value::from(steps.to_vec()).to_string();
+    assert!(!text.contains(".py") && !text.contains("python"));
 }
 
 /// Every data step of a move runs the executable the move keeps, with the
@@ -1237,4 +1267,492 @@ fn the_ops_executable_is_authenticated_on_the_controller_before_any_host() {
     for (index, (accepted, (_, expected))) in verdicts.iter().zip(&cases).enumerate() {
         assert_eq!(accepted, expected, "case {index}");
     }
+}
+
+const RECORDED: &str = include_str!("migration_prepare_recorded.json");
+const BOOTSTRAP: &str = "every_recorded_bootstrap_state_is_answered_as_the_program_did";
+const EVIDENCE: &str = "every_recorded_controller_evidence_is_answered_as_the_program_did";
+const FINALIZED: &str = "{\"schemaVersion\":1,\"finalized\":true}";
+/// The bootstrap paths in the order they are checked, with their modes.
+const BOOTSTRAP_PATHS: [(&str, &str); 7] = [
+    ("/etc/simplestchat-public", "0700"),
+    ("/srv/simplestchat-public", "0700"),
+    ("/srv/simplestchat-public/releases", "0700"),
+    ("/srv/simplestchat-public/results", "0700"),
+    ("/srv/simplestchat-public/migrations", "0700"),
+    ("/run/simplestchat-bench", "0700"),
+    ("/usr/local/libexec/simplestchat-public", "0755"),
+];
+const JOURNALS: [&str; 2] = [
+    "/run/simplestchat-bench/current.json",
+    "/srv/simplestchat-public/release-state.json",
+];
+
+/// The machine states the bootstrap program was given, in its order.
+fn bootstrap_cases() -> Vec<Value> {
+    let baseline = || {
+        let mut paths = Map::new();
+        for (path, mode) in BOOTSTRAP_PATHS {
+            let mode = &mode[1..];
+            paths.insert(
+                path.to_owned(),
+                json!({"kind": "directory", "mode": mode, "owner": "root", "group": "root"}),
+            );
+        }
+        json!({"paths": paths,
+            "lock": {"kind": "file", "mode": "600", "owner": "root", "held": false},
+            "journals": {"current.json": {"kind": "absent"},
+                "release-state.json": {"kind": "absent"}},
+            "request": {"kind": "absent"}})
+    };
+    let variant = |change: &dyn Fn(&mut Value)| {
+        let mut case = baseline();
+        change(&mut case);
+        case
+    };
+    let merge = |target: &mut Value, change: &Value| {
+        for (key, value) in change.as_object().unwrap() {
+            target[key] = value.clone();
+        }
+    };
+    let mut cases = vec![variant(&|case| {
+        for (path, _) in BOOTSTRAP_PATHS {
+            case["paths"][path] = json!({"kind": "absent"});
+        }
+        case["lock"] = json!({"kind": "absent"});
+    })];
+    cases.push(baseline());
+    for (path, mode) in BOOTSTRAP_PATHS {
+        let libexec = mode == "0755";
+        for change in [
+            json!({"mode": if libexec { "700" } else { "755" }}),
+            json!({"mode": if libexec { "1755" } else { "1700" }}),
+            json!({"owner": "other"}),
+            json!({"group": "other"}),
+            json!({"kind": "file", "text": ""}),
+            json!({"kind": "link", "to": "directory"}),
+            json!({"kind": "dangling"}),
+        ] {
+            cases.push(variant(&|case| merge(&mut case["paths"][path], &change)));
+        }
+    }
+    for change in [
+        json!({"held": true}),
+        json!({"mode": "644"}),
+        json!({"mode": "4600"}),
+        json!({"owner": "other"}),
+        json!({"group": "other"}),
+        json!({"kind": "directory", "mode": "700"}),
+        json!({"kind": "fifo"}),
+        json!({"kind": "link"}),
+        json!({"kind": "dangling"}),
+        json!({"kind": "absent"}),
+    ] {
+        cases.push(variant(&|case| merge(&mut case["lock"], &change)));
+    }
+    fn file(mode: &str, owner: &str, text: &str) -> Value {
+        json!({"kind": "file", "mode": mode, "owner": owner, "text": text})
+    }
+    let cut: String = FINALIZED[..FINALIZED.len() - 1]
+        .bytes()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let undecodable = format!("{cut}2c2278223a22ff227d");
+    let mut grouped = file("600", "root", FINALIZED);
+    grouped["group"] = json!("other");
+    let journals = [
+        file("600", "root", FINALIZED),
+        file("600", "root", "{\"schemaVersion\":1,\"finalized\":false}"),
+        file("600", "root", "{\"schemaVersion\":1.0,\"finalized\":true}"),
+        file("600", "root", "{\"schemaVersion\":true,\"finalized\":true}"),
+        file(
+            "600",
+            "root",
+            "{\"schemaVersion\":\"1\",\"finalized\":true}",
+        ),
+        file("600", "root", "{\"schemaVersion\":2,\"finalized\":true}"),
+        file("600", "root", "{\"finalized\":true}"),
+        file("600", "root", "{\"schemaVersion\":1,\"finalized\":1}"),
+        file("600", "root", "[]"),
+        file("600", "root", "not json"),
+        file("600", "root", ""),
+        json!({"kind": "file", "mode": "600", "owner": "root", "hex": undecodable}),
+        file("600", "root", &format!("{FINALIZED:<16384}")),
+        file("600", "root", &format!("{FINALIZED:<16385}")),
+        file("640", "root", FINALIZED),
+        file("600", "other", FINALIZED),
+        grouped,
+        json!({"kind": "link", "mode": "600", "owner": "root", "text": FINALIZED}),
+        json!({"kind": "directory", "mode": "700", "owner": "root"}),
+    ];
+    for journal in ["current.json", "release-state.json"] {
+        for state in &journals {
+            cases.push(variant(&|case| case["journals"][journal] = state.clone()));
+        }
+    }
+    for state in [
+        json!({"kind": "directory", "mode": "700", "owner": "root"}),
+        file("600", "root", ""),
+        json!({"kind": "dangling"}),
+    ] {
+        cases.push(variant(&|case| case["request"] = state.clone()));
+    }
+    let unfinished = file("600", "root", "{\"schemaVersion\":1,\"finalized\":false}");
+    cases.push(variant(&|case| {
+        case["paths"]["/etc/simplestchat-public"]["mode"] = json!("755");
+        case["lock"]["held"] = json!(true);
+    }));
+    cases.push(variant(&|case| {
+        case["lock"]["mode"] = json!("644");
+        case["journals"]["current.json"] = unfinished.clone();
+    }));
+    cases.push(variant(&|case| {
+        case["journals"]["release-state.json"] = unfinished.clone();
+        case["request"] = json!({"kind": "directory", "mode": "700", "owner": "root"});
+    }));
+    cases
+}
+
+/// Whether a path the bootstrap reads lies below a listed path that is a
+/// regular file, where the stat module fails instead of finding nothing.
+fn below_a_file(case: &Value, path: &str) -> bool {
+    BOOTSTRAP_PATHS.iter().any(|(parent, _)| {
+        path.starts_with(&format!("{parent}/")) && case["paths"][*parent]["kind"] == "file"
+    })
+}
+
+/// What the bootstrap's stat, slurp and lock steps register for a case, or
+/// nothing where a stat fails below a regular file.
+fn bootstrap_results(case: &Value) -> Option<Value> {
+    use super::ansible_modules::{slurp_result, stat_result};
+    let absent = json!({"kind": "absent"});
+    // Below an absent or dangling path there is nothing; below a link to a
+    // directory there is what the target holds, here what the case names.
+    let beneath = |path: &str| {
+        let gone = BOOTSTRAP_PATHS.iter().any(|(parent, _)| {
+            path.starts_with(&format!("{parent}/"))
+                && ["absent", "dangling"]
+                    .contains(&case["paths"][*parent]["kind"].as_str().unwrap())
+        });
+        !gone
+    };
+    let mut paths = Vec::new();
+    for (path, mode) in BOOTSTRAP_PATHS {
+        if below_a_file(case, path) {
+            return None;
+        }
+        let state = if beneath(path) {
+            &case["paths"][path]
+        } else {
+            &absent
+        };
+        let mut result = stat_result(state, false, 0);
+        result["item"] = json!({"path": path, "mode": mode});
+        paths.push(result);
+    }
+    let work = "/run/simplestchat-bench/workload.lock";
+    let lock = if beneath(work) {
+        &case["lock"]
+    } else {
+        &absent
+    };
+    let mut journal_states = Vec::new();
+    let mut journal_contents = Vec::new();
+    for (path, name) in JOURNALS.iter().zip(["current.json", "release-state.json"]) {
+        let state = if beneath(path) {
+            &case["journals"][name]
+        } else {
+            &absent
+        };
+        let mut stat = stat_result(state, false, 0);
+        stat["item"] = json!(path);
+        let shaped = state["kind"] == "file"
+            && state["mode"] == "600"
+            && state["owner"] != "other"
+            && (1..=16384).contains(&super::ansible_modules::content(state).len());
+        let mut content = if shaped {
+            slurp_result(state)
+        } else {
+            json!({"changed": false, "skipped": true})
+        };
+        content["item"] = stat.clone();
+        journal_states.push(stat);
+        journal_contents.push(content);
+    }
+    let request = format!(
+        "/srv/simplestchat-public/migrations/{}",
+        "0123456789abcdef".repeat(2)
+    );
+    let request = if beneath(&request) {
+        &case["request"]
+    } else {
+        &absent
+    };
+    Some(json!({
+        "scmig_bootstrap_paths": {"changed": false, "results": paths},
+        "scmig_workload_lock": stat_result(lock, false, 0),
+        "scmig_journal_states": {"changed": false, "results": journal_states},
+        "scmig_journal_contents": {"changed": false, "results": journal_contents},
+        "scmig_existing_request": stat_result(request, false, 0),
+        "scmig_run_id": "0123456789abcdef".repeat(2),
+    }))
+}
+
+/// The bootstrap paths, the workload lock, the two journals and the run's
+/// request are looked at without following links, each in the program's
+/// order: an unsafe path, an unsafe or held lock, an unsafe or unfinished
+/// journal and an existing request each refuse in the program's words, a
+/// journal is read only once it is a small private root file, and a held
+/// lock is found by taking it without waiting. Ansible decides every
+/// recorded state as the program decided it; where a listed path is a
+/// regular file, the look below it fails before the program's words.
+#[test]
+fn every_recorded_bootstrap_state_is_answered_as_the_program_did() {
+    use super::ansible::{Verdict, first_failures};
+    use super::recorded::{Ending, Recorded, agrees, ending};
+    let play = play();
+    let steps = block(&play, "bootstrap");
+    let step = |name: &str| located(steps, |task| task["name"] == name).1.clone();
+    let looked = step(BOOTSTRAP_CHECKS[0]);
+    let listed: Vec<Value> = BOOTSTRAP_PATHS
+        .iter()
+        .map(|(path, mode)| json!({"path": path, "mode": mode}))
+        .collect();
+    assert_eq!(looked["loop"], json!(listed));
+    assert_eq!(looked["register"], "scmig_bootstrap_paths");
+    fn no_follow(path: &str) -> Value {
+        json!({"path": path, "follow": false, "get_checksum": false, "get_mime": false})
+    }
+    assert_eq!(looked["ansible.builtin.stat"], no_follow("{{ item.path }}"));
+    let lock = step(BOOTSTRAP_CHECKS[2]);
+    assert_eq!(
+        lock["ansible.builtin.stat"],
+        no_follow("/run/simplestchat-bench/workload.lock")
+    );
+    let journals = step(BOOTSTRAP_CHECKS[5]);
+    assert_eq!(journals["ansible.builtin.stat"], no_follow("{{ item }}"));
+    assert_eq!(journals["loop"], json!(JOURNALS));
+    let read = step(BOOTSTRAP_CHECKS[6]);
+    assert_eq!(
+        read["ansible.builtin.slurp"],
+        json!({"src": "{{ item.item }}"})
+    );
+    assert_eq!(read["loop"], "{{ scmig_journal_states.results }}");
+    let request = step(BOOTSTRAP_CHECKS[8]);
+    assert_eq!(
+        request["ansible.builtin.stat"],
+        no_follow("/srv/simplestchat-public/migrations/{{ scmig_run_id }}")
+    );
+    let decided = [1, 3, 7, 9].map(|index| step(BOOTSTRAP_CHECKS[index]));
+    let cases = bootstrap_cases();
+    let variables: Vec<Option<Value>> = cases.iter().map(bootstrap_results).collect();
+    let evaluated: Vec<Value> = variables.iter().flatten().cloned().collect();
+    let mut verdicts = first_failures(&decided, &evaluated).into_iter();
+    // Which of the slurp step's reads a case makes, as Ansible decides it.
+    let when = read["when"].as_str().unwrap();
+    let reads: Vec<Value> = evaluated
+        .iter()
+        .flat_map(|variables| {
+            variables["scmig_journal_states"]["results"]
+                .as_array()
+                .unwrap()
+        })
+        .map(|item| json!({"item": item}))
+        .collect();
+    let decided_reads = super::ansible::evaluate(&[when], &reads);
+    let mut reads = decided_reads.iter();
+    let mut recorded = Recorded::new(RECORDED, &[BOOTSTRAP, EVIDENCE], BOOTSTRAP);
+    let mut tally = std::collections::BTreeMap::<&str, usize>::new();
+    for (index, (case, variables)) in cases.iter().zip(&variables).enumerate() {
+        let ending = ending(&recorded.answer(case));
+        let Some(variables) = variables else {
+            assert!(matches!(ending, Ending::Refused(_)), "case {index}");
+            *tally.entry("refused below a file").or_default() += 1;
+            continue;
+        };
+        for item in variables["scmig_journal_contents"]["results"]
+            .as_array()
+            .unwrap()
+        {
+            let decided = reads.next().unwrap()[0].as_bool().unwrap();
+            assert_eq!(decided, item.get("content").is_some(), "case {index}");
+        }
+        let mut verdict = verdicts.next().unwrap();
+        // The lock is taken after its own check and before the journals.
+        let held = case["lock"]["held"] == true
+            && variables["scmig_workload_lock"]["stat"]["exists"] == true;
+        let taken_first = !matches!(verdict, Verdict::Failed(position, _) if position <= 1);
+        if held && taken_first {
+            verdict = Verdict::Failed(2, "the lock is held".to_owned());
+            assert_eq!(ending, Ending::Thrown, "case {index}");
+        }
+        assert!(
+            agrees(&ending, Some(&verdict)),
+            "case {index}: {ending:?} {verdict:?}"
+        );
+        let kind = match &ending {
+            Ending::Accepted => "accepted",
+            Ending::Refused(_) => "refused",
+            Ending::Thrown => "thrown",
+        };
+        *tally.entry(kind).or_default() += 1;
+    }
+    assert_eq!(recorded.finish(), 105);
+    let tally: Vec<(&str, usize)> = tally.into_iter().collect();
+    assert_eq!(
+        tally,
+        [
+            ("accepted", 10),
+            ("refused", 87),
+            ("refused below a file", 1),
+            ("thrown", 7)
+        ]
+    );
+}
+
+/// The evidence paths the controller program was given, in its order.
+fn evidence_cases() -> Vec<Value> {
+    let private = json!({"kind": "directory", "mode": "700", "owner": "root"});
+    let mut cases = Vec::new();
+    for state in [
+        private.clone(),
+        json!({"kind": "directory", "mode": "750", "owner": "root"}),
+        json!({"kind": "directory", "mode": "755", "owner": "root"}),
+        json!({"kind": "directory", "mode": "1700", "owner": "root"}),
+        json!({"kind": "directory", "mode": "700", "owner": "other"}),
+        json!({"kind": "file", "mode": "700", "owner": "root"}),
+        json!({"kind": "link", "to": "directory", "mode": "700"}),
+        json!({"kind": "dangling"}),
+        json!({"kind": "absent"}),
+    ] {
+        cases.push(json!({"evidence": "results/migration.1", "state": state}));
+    }
+    for evidence in [
+        "results/migration.1/",
+        "results/./migration.1",
+        "results//migration.1",
+        "results/../results/migration.1",
+        "results/nested/migration.1",
+        "elsewhere/migration.1",
+        "results",
+        "relative",
+        "linked/migration.1",
+    ] {
+        cases.push(json!({"evidence": evidence, "state": private}));
+    }
+    cases
+}
+
+/// The controller's evidence is inspected without following links and must
+/// be a canonical absolute path directly in the checkout's results
+/// directory, a directory of the controller's user with mode 0700. The real
+/// stat module and assertion run on this controller against each recorded
+/// state, built in a scratch checkout, and decide as the program decided,
+/// except that a path the program normalized (a trailing slash, `.` or a
+/// doubled slash) is refused as not canonical.
+#[test]
+fn every_recorded_controller_evidence_is_answered_as_the_program_did() {
+    use super::ansible::{Scratch, Verdict, first_failures_from};
+    use super::ansible_modules::build;
+    use super::recorded::{Ending, Recorded, agrees, ending};
+    use std::os::unix::fs::MetadataExt;
+    let guard = tasks(&play()["pre_tasks"]).to_vec();
+    let named = |name: &str| located(&guard, |task| task["name"] == name);
+    let (looked, look) = named("Inspect the private controller evidence without following links");
+    let (read, user) = named("Read the controller user's identity");
+    let (checked, check) =
+        named("Require existing private controller evidence before contacting either host");
+    assert!(0 < looked && looked < read && read < checked);
+    assert_eq!(
+        look["ansible.builtin.stat"],
+        json!({"path": "{{ scmig_evidence }}", "follow": false, "get_checksum": false,
+            "get_mime": false})
+    );
+    assert_eq!(look["register"], "scmig_evidence_directory");
+    assert_eq!(
+        user["ansible.builtin.command"],
+        json!({"argv": ["/usr/bin/id", "-u"]})
+    );
+    assert_eq!(user["register"], "scmig_controller_user");
+    for task in [look, user, check] {
+        assert_eq!(task["when"], "inventory_hostname == 'migration_source'");
+        if task.get("ansible.builtin.assert").is_none() {
+            assert_eq!(
+                (&task["delegate_to"], &task["become"]),
+                (&json!("localhost"), &json!(false))
+            );
+        }
+    }
+    // Every case is a host of its own, so the selected-host rule is lifted.
+    let unselected = |task: &Value| {
+        let mut task = task.clone();
+        task.as_object_mut().unwrap().remove("when");
+        task
+    };
+    let scratch = Scratch::new();
+    let checkout = scratch.path().join("checkout");
+    let playbooks = checkout.join("ops/ansible");
+    std::fs::create_dir_all(&playbooks).unwrap();
+    for directory in ["results/nested", "elsewhere"] {
+        std::fs::create_dir_all(checkout.join(directory)).unwrap();
+    }
+    std::os::unix::fs::symlink(checkout.join("results"), checkout.join("linked")).unwrap();
+    let uid = std::fs::metadata(&checkout).unwrap().uid();
+    let cases = evidence_cases();
+    let mut variables = Vec::new();
+    for (index, case) in cases.iter().enumerate() {
+        let spelled = case["evidence"].as_str().unwrap();
+        let own = spelled.replace("migration.1", &format!("migration.{index}"));
+        let (argument, target) = if spelled == "relative" {
+            let relative = format!("results/migration.{index}");
+            (relative.clone(), checkout.join(relative))
+        } else {
+            let mut target = std::path::PathBuf::new();
+            for part in std::path::Path::new(&own.replace("linked", "results")).components() {
+                match part {
+                    std::path::Component::ParentDir => {
+                        target.pop();
+                    }
+                    part => target.push(part),
+                }
+            }
+            (
+                format!("{}/{own}", checkout.display()),
+                checkout.join(target),
+            )
+        };
+        if !target.exists() {
+            let holder = scratch.path().join(format!("holder-{index}"));
+            std::fs::create_dir(&holder).unwrap();
+            build(&case["state"], &target, &holder);
+        }
+        let controller = if case["state"]["owner"] == "other" {
+            uid + 1
+        } else {
+            uid
+        };
+        variables.push(json!({"scmig_evidence": argument,
+            "scmig_controller_user": {"stdout": controller.to_string()}}));
+    }
+    let decided = [unselected(look), unselected(check)];
+    let verdicts = first_failures_from(&playbooks, &decided, &variables, &scratch);
+    let mut recorded = Recorded::new(RECORDED, &[BOOTSTRAP, EVIDENCE], EVIDENCE);
+    let normalized = [
+        "results/migration.1/",
+        "results/./migration.1",
+        "results//migration.1",
+    ];
+    for (index, (case, verdict)) in cases.iter().zip(&verdicts).enumerate() {
+        let ending = ending(&recorded.answer(case));
+        if normalized.contains(&case["evidence"].as_str().unwrap()) {
+            assert_eq!(ending, Ending::Accepted, "case {index}");
+            assert!(!matches!(verdict, Verdict::Passed), "case {index}");
+            continue;
+        }
+        assert!(
+            agrees(&ending, Some(verdict)),
+            "case {index}: {ending:?} {verdict:?}"
+        );
+    }
+    assert_eq!(recorded.finish(), 18);
 }

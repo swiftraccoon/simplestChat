@@ -339,8 +339,9 @@ and sends SIGUSR2; active allocations are retained. Configuration preparation
 requires the relay to be stopped, but the application and HTTPS remain running.
 Serialize this operation with releases and other host maintenance.
 
-The certificate steps, the timer and the activation run the installed Ops
-executable (`simplestchat-ops turn prepare-certificate|refresh-certificate|activate`,
+The address and listener check, the secret, the certificate steps, the timer
+and the activation run the installed Ops executable (`simplestchat-ops turn
+check-listeners|prepare-secret|prepare-certificate|refresh-certificate|activate`,
 described in the [Ops guide](../README.md#relay-certificate-metrics-and-activation)),
 so the host needs a signed release first: any `release.yml` run for a signed
 revision delivers the executable, staging alone is enough, and the playbook

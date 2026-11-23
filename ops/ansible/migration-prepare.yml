@@ -25,29 +25,41 @@
           - scpub_root == '/srv/simplestchat-public'
         fail_msg: Use the migration controller with two frozen hosts and explicit operation identities.
 
-    - name: Require existing private controller evidence before contacting either host
+    - name: Inspect the private controller evidence without following links
+      ansible.builtin.stat:
+        path: "{{ scmig_evidence }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+      register: scmig_evidence_directory
+      delegate_to: localhost
+      become: false
+      when: inventory_hostname == 'migration_source'
+
+    - name: Read the controller user's identity
       ansible.builtin.command:
-        argv:
-          - "{{ ansible_playbook_python }}"
-          - -B
-          - -c
-          - |
-            import os, stat, sys
-            from pathlib import Path
-            path = Path(sys.argv[1])
-            parent = Path(sys.argv[2]).resolve()
-            metadata = path.lstat()
-            if not (path.is_absolute() and path.resolve() == path and path.parent == parent
-                    and stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == os.getuid()
-                    and stat.S_IMODE(metadata.st_mode) == 0o700):
-                raise SystemExit('Invalid private migration evidence')
-          - "{{ scmig_evidence }}"
-          - "{{ playbook_dir }}/../../results"
+        argv: [/usr/bin/id, -u]
+      register: scmig_controller_user
       delegate_to: localhost
       become: false
       when: inventory_hostname == 'migration_source'
       changed_when: false
+      check_mode: false
       timeout: 15
+
+    # The evidence is a canonical absolute path directly in the checkout's
+    # results directory: a private directory of the controller user.
+    - name: Require existing private controller evidence before contacting either host
+      ansible.builtin.assert:
+        that:
+          - scmig_evidence is match('^/')
+          - scmig_evidence | realpath == scmig_evidence
+          - scmig_evidence | dirname == (playbook_dir ~ '/../../results') | realpath
+          - scmig_evidence_directory.stat.isdir | default(false)
+          - scmig_evidence_directory.stat.uid == scmig_controller_user.stdout | int
+          - scmig_evidence_directory.stat.mode == '0700'
+        fail_msg: Invalid private migration evidence
+      when: inventory_hostname == 'migration_source'
 
   tasks:
     # Controller-local: neither host is contacted. The verified application
@@ -364,53 +376,114 @@
     - name: Prepare private storage and exact source secrets without starting services
       when: scmig_action == 'bootstrap'
       block:
-        - name: Refuse unfinished owned work and unsafe existing bootstrap paths
+        - name: Inspect the existing bootstrap paths without following links
+          ansible.builtin.stat:
+            path: "{{ item.path }}"
+            follow: false
+            get_checksum: false
+            get_mime: false
+          loop:
+            - {path: /etc/simplestchat-public, mode: '0700'}
+            - {path: /srv/simplestchat-public, mode: '0700'}
+            - {path: /srv/simplestchat-public/releases, mode: '0700'}
+            - {path: /srv/simplestchat-public/results, mode: '0700'}
+            - {path: /srv/simplestchat-public/migrations, mode: '0700'}
+            - {path: /run/simplestchat-bench, mode: '0700'}
+            - {path: /usr/local/libexec/simplestchat-public, mode: '0755'}
+          loop_control:
+            label: "{{ item.path }}"
+          register: scmig_bootstrap_paths
+
+        - name: Refuse unsafe existing bootstrap paths
+          ansible.builtin.assert:
+            that:
+              - >-
+                not item.stat.exists or (item.stat.isdir and item.stat.uid == 0 and item.stat.gid == 0
+                and item.stat.mode == item.item.mode)
+            fail_msg: Unsafe migration bootstrap path
+          loop: "{{ scmig_bootstrap_paths.results }}"
+          loop_control:
+            label: "{{ item.item.path }}"
+
+        - name: Inspect the workload lock without following links
+          ansible.builtin.stat:
+            path: /run/simplestchat-bench/workload.lock
+            follow: false
+            get_checksum: false
+            get_mime: false
+          register: scmig_workload_lock
+
+        - name: Refuse an unsafe workload lock
+          ansible.builtin.assert:
+            that:
+              - scmig_workload_lock.stat.isreg
+              - scmig_workload_lock.stat.uid == 0
+              - scmig_workload_lock.stat.mode == '0600'
+            fail_msg: Unsafe workload lock
+          when: scmig_workload_lock.stat.exists
+
+        # Only a free lock is taken, and at once released again: any holder
+        # is a workload this move would interrupt.
+        - name: Refuse a held workload lock
           ansible.builtin.command:
-            argv:
-              - /usr/bin/python3
-              - -B
-              - -c
-              - |
-                import fcntl, json, os, stat, sys
-                from pathlib import Path
-                private = ['/etc/simplestchat-public', '/srv/simplestchat-public',
-                           '/srv/simplestchat-public/releases', '/srv/simplestchat-public/results',
-                           '/srv/simplestchat-public/migrations', '/run/simplestchat-bench']
-                paths = [(Path(name), 0o700) for name in private]
-                paths.append((Path('/usr/local/libexec/simplestchat-public'), 0o755))
-                for path, mode in paths:
-                    if path.exists() or path.is_symlink():
-                        metadata = path.lstat()
-                        if not (stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == 0
-                                and metadata.st_gid == 0 and stat.S_IMODE(metadata.st_mode) == mode):
-                            raise SystemExit('Unsafe migration bootstrap path')
-                lock = Path('/run/simplestchat-bench/workload.lock')
-                if lock.exists() or lock.is_symlink():
-                    descriptor = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                    metadata = os.fstat(descriptor)
-                    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-                            and stat.S_IMODE(metadata.st_mode) == 0o600):
-                        raise SystemExit('Unsafe workload lock')
-                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                for name in ['/run/simplestchat-bench/current.json',
-                             '/srv/simplestchat-public/release-state.json']:
-                    path = Path(name)
-                    if path.exists() or path.is_symlink():
-                        metadata = path.lstat()
-                        if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-                                and stat.S_IMODE(metadata.st_mode) == 0o600
-                                and 0 < metadata.st_size <= 16384):
-                            raise SystemExit('Unsafe owned operation journal')
-                        record = json.loads(path.read_text())
-                        if not (isinstance(record, dict) and type(record.get('schemaVersion')) is int
-                                and record['schemaVersion'] == 1 and record.get('finalized') is True):
-                            raise SystemExit('Unfinished owned operation')
-                request = Path('/srv/simplestchat-public/migrations') / sys.argv[1]
-                if request.exists() or request.is_symlink():
-                    raise SystemExit('Migration operation already exists')
-              - "{{ scmig_run_id }}"
+            argv: [/usr/bin/flock, --exclusive, --nonblock, /run/simplestchat-bench/workload.lock, /bin/true]
           changed_when: false
           timeout: 30
+          when: scmig_workload_lock.stat.exists
+
+        - name: Inspect the owned operation journals without following links
+          ansible.builtin.stat:
+            path: "{{ item }}"
+            follow: false
+            get_checksum: false
+            get_mime: false
+          loop: [/run/simplestchat-bench/current.json, /srv/simplestchat-public/release-state.json]
+          register: scmig_journal_states
+
+        - name: Read each small private owned operation journal
+          ansible.builtin.slurp:
+            src: "{{ item.item }}"
+          loop: "{{ scmig_journal_states.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+          register: scmig_journal_contents
+          when: >-
+            item.stat.exists and item.stat.isreg and item.stat.uid == 0 and item.stat.mode == '0600'
+            and 0 < item.stat.size <= 16384
+
+        # In journal order, a journal that is not a small private file, or
+        # that is not a finalized record of schema 1, names the refusal.
+        - name: Refuse unfinished owned work
+          vars:
+            scmig_journal_shaped: >-
+              {{ item.stat.isreg and item.stat.uid == 0 and item.stat.mode == '0600' and 0 < item.stat.size <= 16384 }}
+            scmig_journal: "{{ scmig_journal_contents.results[index].content | b64decode | from_json }}"
+          ansible.builtin.assert:
+            that:
+              - scmig_journal_shaped
+              - scmig_journal is mapping
+              - scmig_journal.get('schemaVersion') is integer
+              - scmig_journal.get('schemaVersion') == 1
+              - scmig_journal.get('finalized') is sameas true
+            fail_msg: "{{ 'Unsafe owned operation journal' if not scmig_journal_shaped else 'Unfinished owned operation' }}"
+          loop: "{{ scmig_journal_states.results }}"
+          loop_control:
+            index_var: index
+            label: "{{ item.item }}"
+          when: item.stat.exists
+
+        - name: Look for an earlier operation of this run without following links
+          ansible.builtin.stat:
+            path: "/srv/simplestchat-public/migrations/{{ scmig_run_id }}"
+            follow: false
+            get_checksum: false
+            get_mime: false
+          register: scmig_existing_request
+
+        - name: Refuse an existing operation of this run
+          ansible.builtin.assert:
+            that: not scmig_existing_request.stat.exists
+            fail_msg: Migration operation already exists
 
         - name: Create private migration and immutable release storage
           ansible.builtin.file:

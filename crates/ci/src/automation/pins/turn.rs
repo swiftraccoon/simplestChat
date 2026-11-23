@@ -1,9 +1,10 @@
 //! The relay playbook, its certificate timer and the relay's templates.
-//! Certificate preparation, refresh and activation run through the
-//! installed Ops executable, on a host a signed release has delivered it
-//! to. Nothing connects to a host.
+//! The address and listener check, the shared secret, certificate
+//! preparation, refresh and activation run through the installed Ops
+//! executable, on a host a signed release has delivered it to. Nothing
+//! connects to a host.
 
-use super::ansible::{asserted, render_with};
+use super::ansible::{asserted, evaluate, render_with};
 use super::checkout_file;
 use super::monitoring::{
     LOOK, OPS, REQUIRE, addressed, environment, named, names, play, requirement, section,
@@ -245,14 +246,62 @@ fn the_relay_is_activated_by_the_installed_ops_executable_in_one_bounded_unit() 
         assert!(activation.get(softened).is_none(), "{softened}");
     }
     let text = checkout_file(TURN);
-    for absent in [".py", "libexec/simplestchat-public/{{", "helpers"] {
+    for absent in [".py", "python", "libexec/simplestchat-public/{{", "helpers"] {
         assert!(!text.contains(absent), "{absent}");
     }
-    // Two preparation steps still run a script of their own on the host:
-    // the public IPv4 listener check and the generation of the secret.
-    assert_eq!(text.matches("/usr/bin/python3").count(), 2);
-    let preparation = serde_json::to_string(named(tasks, PREPARATION)).unwrap();
-    assert_eq!(preparation.matches("/usr/bin/python3").count(), 2);
+}
+
+/// Before anything of the relay is written, the installed executable checks
+/// the announced address and its free listeners, and then makes the shared
+/// secret once: the step reports a change only when it created one, and is
+/// skipped in check mode. Both run with the fixed environment, in the
+/// preparation's order, and nothing softens a refusal.
+#[test]
+fn the_relay_address_and_secret_are_prepared_by_the_installed_ops_executable() {
+    let play = play(TURN);
+    let preparation = named(section(&play, "tasks"), PREPARATION);
+    let block = section(preparation, "block");
+    let order = names(block);
+    let at = |name: &str| order.iter().position(|known| *known == name).unwrap();
+    let address = "Validate a local public IPv4 address and free relay listeners";
+    let secret = "Generate a dedicated shared relay secret once";
+    let stopped = "Require the relay project to be stopped before preparing its configuration";
+    let configured = "Create private relay configuration";
+    let read = "Read the private relay secret without logging it";
+    assert!(at(stopped) < at(address) && at(address) < at(configured));
+    assert!(at(configured) < at(secret) && at(secret) < at(read));
+    let checked = named(block, address);
+    assert_eq!(
+        checked["ansible.builtin.command"],
+        json!({"argv": [OPS, "turn", "check-listeners", "{{ scpub_announce_ip }}"]})
+    );
+    assert_eq!(checked["changed_when"], false);
+    assert_eq!(checked["check_mode"], false);
+    let made = named(block, secret);
+    assert_eq!(
+        made["ansible.builtin.command"],
+        json!({"argv": [OPS, "turn", "prepare-secret"]})
+    );
+    assert_eq!(made["register"], "scpub_turn_secret_created");
+    assert_eq!(
+        made["changed_when"],
+        "scpub_turn_secret_created.stdout == 'created'"
+    );
+    assert_eq!(made["when"], "not ansible_check_mode");
+    for step in [checked, made] {
+        assert_eq!(step["environment"], environment(), "{}", step["name"]);
+        for softened in ["failed_when", "ignore_errors", "ignore_unreachable"] {
+            assert!(step.get(softened).is_none(), "{}", step["name"]);
+        }
+    }
+    let changed = evaluate(
+        &[made["changed_when"].as_str().unwrap()],
+        &[
+            json!({"scpub_turn_secret_created": {"stdout": "created"}}),
+            json!({"scpub_turn_secret_created": {"stdout": "retained"}}),
+        ],
+    );
+    assert_eq!(changed, [[json!(true)], [json!(false)]]);
 }
 
 /// The relay is a project of its own: one service of the pinned image, run

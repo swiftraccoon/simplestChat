@@ -1,34 +1,48 @@
 ---
 # Keep the signed Docker packages and their service lifecycle, while selecting
 # independently authenticated upstream releases when that package channel lags.
-- name: Refuse unreviewed containerd service overrides before selecting upstream binaries
+- name: Read the containerd service definition before selecting upstream binaries
   ansible.builtin.command:
     argv:
-      - /usr/bin/python3
-      - -c
-      - |
-        import re
-        import subprocess
-        import sys
-
-        result = subprocess.run(
-            ["/usr/bin/systemctl", "show", "containerd.service", "--property=LoadState",
-             "--property=FragmentPath", "--property=DropInPaths", "--property=ExecStart"],
-            check=False, capture_output=True, text=True, timeout=15,
-        )
-        fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
-        allowed = ("/usr/lib/systemd/system/containerd.service", "/lib/systemd/system/containerd.service")
-        dropin = "/etc/systemd/system/containerd.service.d/simplestchat-runtime.conf"
-        if result.returncode or fields.get("LoadState") != "loaded" or fields.get("FragmentPath") not in allowed:
-            sys.exit("containerd must retain its packaged service definition")
-        if fields.get("DropInPaths") not in ("", dropin):
-            sys.exit("Custom containerd service overrides require separate review")
-        command = fields.get("ExecStart", "")
-        executable = r"(?:/usr/bin/containerd|/usr/local/lib/simplestchat-runtime/[0-9]+\.[0-9]+\.[0-9]+/bin/containerd)"
-        if command.count("argv[]=") != 1 or re.search(r"argv\[\]=" + executable + r" ;", command) is None:
-            sys.exit("Custom containerd service arguments require separate review")
+      - /usr/bin/systemctl
+      - show
+      - containerd.service
+      - --property=LoadState
+      - --property=FragmentPath
+      - --property=DropInPaths
+      - --property=ExecStart
+  register: scbench_containerd_unit
   changed_when: false
+  failed_when: false
   check_mode: false
+  timeout: 15
+
+# The packaged unit is kept: at most the one drop-in this runtime selection
+# writes, and one command that runs the packaged or a selected containerd
+# with no arguments. The first rule broken names the refusal.
+- name: Refuse unreviewed containerd service overrides before selecting upstream binaries
+  vars:
+    scbench_containerd: "{{ dict(scbench_containerd_unit.stdout_lines | select('search', '=') | map('split', '=', 1)) }}"
+    scbench_containerd_packaged: >-
+      {{ scbench_containerd_unit.rc == 0 and scbench_containerd.get('LoadState') == 'loaded'
+         and scbench_containerd.get('FragmentPath') in ['/usr/lib/systemd/system/containerd.service',
+                                                        '/lib/systemd/system/containerd.service'] }}
+    scbench_containerd_overrides: >-
+      {{ scbench_containerd.get('DropInPaths') in ['', '/etc/systemd/system/containerd.service.d/simplestchat-runtime.conf'] }}
+    scbench_containerd_arguments: >-
+      {{ scbench_containerd.get('ExecStart', '').count('argv[]=') == 1
+         and scbench_containerd.get('ExecStart', '') is search('argv\[\]=(?:/usr/bin/containerd|'
+                                                               ~ '/usr/local/lib/simplestchat-runtime/[0-9]+\.[0-9]+\.[0-9]+'
+                                                               ~ '/bin/containerd) ;') }}
+  ansible.builtin.assert:
+    that:
+      - scbench_containerd_packaged
+      - scbench_containerd_overrides
+      - scbench_containerd_arguments
+    fail_msg: >-
+      {{ 'containerd must retain its packaged service definition' if not scbench_containerd_packaged else
+         'Custom containerd service overrides require separate review' if not scbench_containerd_overrides else
+         'Custom containerd service arguments require separate review' }}
 
 - name: Create root-controlled upstream runtime and Docker plugin directories
   ansible.builtin.file:
@@ -137,25 +151,29 @@
     daemon_reload: true
   when: not (scbench_docker_defer_restart | default(false) | bool)
 
-- name: Verify the selected Buildx plugin and containerd executable versions
+- name: Read the selected containerd and Buildx versions
   ansible.builtin.command:
-    argv:
-      - /usr/bin/python3
-      - -c
-      - |
-        import subprocess
-        import sys
-
-        version, buildx = sys.argv[1:]
-        executable = "/usr/local/lib/simplestchat-runtime/" + version + "/bin/containerd"
-        for command, position, expected in (([executable, "--version"], 2, "v" + version),
-                                            (["/usr/bin/docker", "buildx", "version"], 1, "v" + buildx)):
-            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=15,
-                                    env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"})
-            words = result.stdout.split()
-            if result.returncode or len(words) <= position or words[position] != expected:
-                sys.exit("The installed upstream runtime component differs from the selected release")
-      - "{{ scbench_containerd_upstream_version }}"
-      - "{{ scbench_docker_buildx_upstream_version }}"
+    argv: "{{ ['/usr/bin/env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL=C'] + item }}"
+  loop:
+    - ["/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin/containerd", --version]
+    - [/usr/bin/docker, buildx, version]
+  register: scbench_upstream_versions
   changed_when: false
+  failed_when: false
+  timeout: 15
+  when: not ansible_check_mode
+
+- name: Verify the selected Buildx plugin and containerd executable versions
+  vars:
+    scbench_containerd_words: "{{ scbench_upstream_versions.results[0].stdout.split() }}"
+    scbench_buildx_words: "{{ scbench_upstream_versions.results[1].stdout.split() }}"
+  ansible.builtin.assert:
+    that:
+      - scbench_upstream_versions.results[0].rc == 0
+      - scbench_containerd_words | length > 2
+      - scbench_containerd_words[2] == 'v' ~ scbench_containerd_upstream_version
+      - scbench_upstream_versions.results[1].rc == 0
+      - scbench_buildx_words | length > 1
+      - scbench_buildx_words[1] == 'v' ~ scbench_docker_buildx_upstream_version
+    fail_msg: The installed upstream runtime component differs from the selected release
   when: not ansible_check_mode
