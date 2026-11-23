@@ -127,6 +127,7 @@ pub(in super::super::super) struct Auditor<'a> {
     cursor: usize,
     row: Option<usize>,
     detail: Option<Value>,
+    pg: Option<PgReason>,
 }
 impl<'a> Auditor<'a> {
     pub fn new(raw: &'a [Value]) -> Self {
@@ -136,7 +137,13 @@ impl<'a> Auditor<'a> {
             cursor: 0,
             row: None,
             detail: None,
+            pg: None,
         }
+    }
+    /// The first PostgreSQL history reason noted, even when no record of it
+    /// could be kept.
+    pub fn first_pg(&self) -> Option<PgReason> {
+        self.pg
     }
     pub fn begin_pg(&mut self) {
         self.stage = Stage::Pg;
@@ -220,6 +227,7 @@ impl<'a> Auditor<'a> {
         expected_count: Option<usize>,
         observed_count: Option<usize>,
     ) {
+        self.pg.get_or_insert(reason);
         self.note(
             Class::Pg(reason),
             expected_command,

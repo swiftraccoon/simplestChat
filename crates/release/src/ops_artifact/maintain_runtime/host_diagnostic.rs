@@ -33,23 +33,7 @@ const CLASSES: [&str; 7] = [
     "nonzero-exit",
     "incomplete-sequence",
 ];
-const BASELINE_CLASSES: [&str; 15] = [
-    "pg-source-missing",
-    "pg-source-utf8",
-    "pg-query-shape",
-    "pg-query-count",
-    "pg-action-shape",
-    "pg-exec-id",
-    "pg-duplicate-create",
-    "pg-unknown-command",
-    "pg-missing-create",
-    "pg-start-order",
-    "pg-die-action",
-    "pg-die-order",
-    "pg-nonzero-exit",
-    "pg-incomplete-sequence",
-    "pg-command-count",
-];
+const BASELINE_CLASSES: [&str; 15] = projection::PG_REASONS;
 const MAXIMUM: usize = 1024;
 const ROWS: u64 = 2048;
 

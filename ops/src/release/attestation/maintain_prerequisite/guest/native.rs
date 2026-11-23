@@ -7,6 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// What the native run (1,050 s) and its observation (120 s) require of the
+/// body when the run starts.
+pub(super) const RESERVED: Duration = Duration::from_secs(1170);
+
 pub(super) struct Native {
     pub raw: Option<i32>,
     pub frame: Option<Value>,
@@ -30,7 +34,7 @@ impl Native {
             .control
             .body_end()
             .saturating_duration_since(Instant::now())
-            < Duration::from_secs(1170)
+            < RESERVED
         {
             return Err(Error::Deadline);
         }

@@ -132,10 +132,23 @@ impl Collector {
         result
     }
     pub fn boundary(&mut self, control: &mut Control) -> Result<()> {
+        self.boundary_when(control, |_| true).map(|_| ())
+    }
+    /// Read once, then open the native window after every row received so far
+    /// if `ready` accepts exactly those rows. Returns whether it opened; the
+    /// window opens only after the network marker joined.
+    pub fn boundary_when(
+        &mut self,
+        control: &mut Control,
+        ready: impl FnOnce(&[Value]) -> bool,
+    ) -> Result<bool> {
         require(self.marker.is_some())?;
         self.check(control)?;
+        if !ready(&self.rows) {
+            return Ok(false);
+        }
         self.native_start = self.rows.len();
-        Ok(())
+        Ok(true)
     }
     pub async fn finish(&mut self, control: &mut Control) -> Result<()> {
         if self.closed {
@@ -173,6 +186,23 @@ impl Collector {
         }
         self.failure = first;
         first.map_or(Ok(()), Err)
+    }
+}
+#[cfg(test)]
+impl Collector {
+    /// A collector over an owned test child standing in for `docker events`,
+    /// its network marker already joined.
+    pub(super) fn fixture(actor: Running) -> Self {
+        Self {
+            actor,
+            rows: Vec::new(),
+            buffer: Vec::new(),
+            consumed: 0,
+            marker: Some("fixture network".into()),
+            native_start: 0,
+            closed: false,
+            failure: None,
+        }
     }
 }
 

@@ -347,6 +347,7 @@ fn closed_controller_stdin_stays_a_body_failure_but_permits_only_known_final_ret
         socket: None,
         host_retired: BTreeSet::new(),
         host_diagnostic: None,
+        pg_diagnostic: None,
     };
     assert_eq!(ctx.check(), Err(Error::Refused));
     ctx.control.record(Error::Refused);

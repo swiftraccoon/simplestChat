@@ -3444,6 +3444,37 @@ maintain-runtime`. Run the controller's protocol and catalog tests with:
 cargo test --locked -p simplestchat-release maintain_runtime -- --test-threads=1
 ```
 
+The guest's PostgreSQL history check (`daemon-pg-history`) admits, inside the
+native window, only whole `exec_create`/`exec_start`/`exec_die` executions of
+the container's inspected health probe and of the launcher's expected
+commands, with exit code `"0"`, plus `health_status: healthy`. The probe runs
+every five seconds independently of the launcher, so each cut of the window
+waits until no probe the event collector has received is unfinished: the
+opening cut after GO for at most ten seconds and never into the 1,170 seconds
+the native run and its observation require, the closing cut for at most ten
+seconds of the 120-second observation. Only probes are waited for. When a wait
+ends at its deadline the cut is taken anyway and the unchanged check refuses
+the divided probe. A refusal there carries the receipt's `pgHistoryDiagnostic`
+(`null` otherwise and always on a passed receipt): the check's first reason
+from the shared `pg-*` vocabulary, the number of PostgreSQL events in the
+window, and up to eight described events, with the rest counted. Each event
+names its Docker type and action, the command class (`health`, `launcher`,
+`unlisted`), the actor class (`postgres`, `fixture`, `unknown`), where the
+collector received it (`before`, `inside` or `after` the window, or
+`unobserved`), the fault (`missing`, `unadmitted`, `unlisted-command`,
+`duplicate`, `out-of-order`, `nonzero-exit`, `surplus`) and, for a nonzero
+exit, its code. It carries no ID, name, image, path, command text or
+environment value, and the controller refuses any other key, value or count.
+The guest tests drive the waits against an owned shell child that prints a
+probe's events with a second between its start and its death; they show an
+immediate cut refusing at both edges and the waiting cuts admitting whole
+probes. They do not show live Docker, a guest or a hosted run:
+
+```sh
+cargo test --locked -p simplestchat-ops --features maintain-guest pg_window \
+  -- --test-threads=1
+```
+
 ## Prepared-host native maintenance
 
 Run the focused local transaction checks with the pinned native dependencies:
@@ -3499,10 +3530,11 @@ derivation, event shape or identity, create/start/die ordering, nonzero exit,
 incomplete triplet or command-count failure. It exposes command hashes and
 bounded counts only; row indices refer to the original retained event array.
 These reasons are valid only at that baseline stage and never on a passed
-receipt. An earlier failure retains its checkpoint and diagnostic. The older
-launcher-prerequisite output, clocks and acceptance criteria remain unchanged.
-Controlled incomplete-health fixtures at both snapshot boundaries continue to
-fail through the strict launcher-prerequisite wrapper. The complete host fixture
+receipt. An earlier failure retains its checkpoint and diagnostic. The launcher
+prerequisite keeps its clocks, acceptance criteria and strict history check:
+it waits for whole probes at its cuts instead, and controlled incomplete-health
+fixtures at both snapshot boundaries still fail through its strict wrapper
+(see the launcher fixture above). The complete host fixture
 instead permits a cut health execution only with a unique retained create for
 the same container and exact inspected health command. It reconciles the gap and
 requires every distinct cold-boundary obligation to end with string exit code

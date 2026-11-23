@@ -423,6 +423,52 @@ impl Running {
         self.finish(control).await
     }
 }
+#[cfg(test)]
+impl Running {
+    /// An owned test child: `command` in its own process group with both
+    /// output streams piped and logged into the existing private `directory`.
+    /// Reads refuse after twenty seconds; settlement retires the whole group.
+    pub(super) fn fixture(mut command: Command, directory: &Path) -> Self {
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .process_group(0);
+        let mut group = Group::new(command.spawn().expect("the test child starts"));
+        let child = group.child();
+        let output = File::from(OwnedFd::from(child.stdout.take().expect("piped stdout")));
+        let error = File::from(OwnedFd::from(child.stderr.take().expect("piped stderr")));
+        let logs = ["stdout", "stderr"].map(|name| {
+            Some(
+                OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o600)
+                    .open(directory.join(name))
+                    .expect("a fresh private log"),
+            )
+        });
+        let mut running = Self {
+            group: Some(group),
+            pipes: [Some(Pipe::open(output)), Some(Pipe::open(error))],
+            logs,
+            output: [Vec::new(), Vec::new()],
+            end: Instant::now() + Duration::from_secs(20),
+            first: None,
+            status: None,
+            closed: false,
+            retired: false,
+            reaped: false,
+            joined: false,
+            limits: [MAX, MAX],
+            grace: Duration::from_secs(1),
+        };
+        for pipe in running.pipes.iter_mut().flatten() {
+            pipe.configure().expect("a nonblocking pipe");
+        }
+        running
+    }
+}
 
 struct Tool {
     original: Original,

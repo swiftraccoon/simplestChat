@@ -187,6 +187,7 @@ pub(super) fn run(arguments: &[OsString]) -> ExitCode {
         socket: None,
         host_retired: BTreeSet::new(),
         host_diagnostic: None,
+        pg_diagnostic: None,
     };
     let mut state = State::new(request);
     let runtime = tokio::runtime::Builder::new_multi_thread()

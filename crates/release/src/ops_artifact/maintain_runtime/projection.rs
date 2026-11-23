@@ -3,6 +3,29 @@
 use super::{Error, Result, options};
 use serde_json::Value;
 
+#[path = "launcher_diagnostic.rs"]
+pub(super) mod diagnostic;
+
+/// The guest's PostgreSQL history refusal reasons, shared by the launcher's
+/// record and the prepared host's baseline diagnostic.
+pub(super) const PG_REASONS: [&str; 15] = [
+    "pg-source-missing",
+    "pg-source-utf8",
+    "pg-query-shape",
+    "pg-query-count",
+    "pg-action-shape",
+    "pg-exec-id",
+    "pg-duplicate-create",
+    "pg-unknown-command",
+    "pg-missing-create",
+    "pg-start-order",
+    "pg-die-action",
+    "pg-die-order",
+    "pg-nonzero-exit",
+    "pg-incomplete-sequence",
+    "pg-command-count",
+];
+
 pub(super) fn exact(value: &Value, names: &[&str]) -> Result<()> {
     let object = value.as_object().ok_or(Error::Refused)?;
     if object.len() != names.len() || names.iter().any(|name| !object.contains_key(*name)) {
@@ -346,6 +369,7 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
             "nativeFrame",
             "observations",
             "sourcePins",
+            "pgHistoryDiagnostic",
         ],
     )?;
     if value["schemaVersion"].as_u64() != Some(1)
@@ -391,6 +415,11 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
             return Err(Error::Refused);
         }
     }
+    diagnostic::validate(
+        &value["pgHistoryDiagnostic"],
+        &value["checkpoint"],
+        &value["failure"],
+    )?;
     if value["passed"] == true {
         if !value["failure"].is_null()
             || value["checkpoint"] != "complete"

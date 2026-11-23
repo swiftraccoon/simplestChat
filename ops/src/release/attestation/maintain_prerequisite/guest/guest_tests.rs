@@ -162,6 +162,45 @@ fn guest_failure_category_keeps_the_first_cause_through_cleanup() {
         assert_eq!(failed_status(control.status), 1);
     }
 }
+/// The receipt carries the retained window record verbatim, and `null` when
+/// none was retained; the record field is its fifteenth.
+#[test]
+fn receipt_carries_only_the_retained_pg_history_record() {
+    use std::os::{fd::OwnedFd, unix::net::UnixStream};
+    let (input, _peer) = UnixStream::pair().unwrap();
+    let output = fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/null")
+        .unwrap();
+    let request = Request::decode(&serde_json::to_vec(&request_value()).unwrap()).unwrap();
+    let mut ctx = Context {
+        source_root: PathBuf::from("/nonexistent-maintain-source"),
+        request,
+        control: Control::new(Instant::now()).unwrap(),
+        commands: Commands::new(),
+        sources: BTreeMap::new(),
+        originals: Vec::new(),
+        observed: Observations::new(),
+        wire: protocol::Wire::fixture(OwnedFd::from(input).into(), output),
+        socket: None,
+        host_retired: BTreeSet::new(),
+        host_diagnostic: None,
+        pg_diagnostic: None,
+    };
+    let native = native::Native::new();
+    let clean = receipt(&ctx, &native, "native", true);
+    assert_eq!(clean.as_object().unwrap().len(), 15);
+    assert_eq!(clean["passed"], true);
+    assert!(clean["pgHistoryDiagnostic"].is_null());
+    let record = json!({"scope":"fixture record","events":[]});
+    ctx.pg_diagnostic = Some(record.clone());
+    ctx.control.record(Error::Refused);
+    let refused = receipt(&ctx, &native, "daemon-pg-history", false);
+    assert_eq!(refused["pgHistoryDiagnostic"], record);
+    assert_eq!(refused["checkpoint"], "daemon-pg-history");
+    ctx.control.begin_settling();
+    assert_eq!(ctx.control.finish(), Err(Error::Refused));
+}
 fn native_value() -> Value {
     let mut facts = serde_json::Map::new();
     for name in observation::BOOLEANS {

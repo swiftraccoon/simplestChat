@@ -8,6 +8,7 @@ pub(super) mod deploy;
 mod host;
 mod migration_upgrade;
 mod observation;
+mod pg_window;
 mod policy;
 pub(super) mod proxy_upgrade;
 #[cfg(test)]

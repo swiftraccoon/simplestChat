@@ -516,6 +516,7 @@ pub(super) fn blocked_counter(bytes: &[u8], table: &str) -> Result<(u64, u64)> {
     ))
 }
 
+#[cfg(test)]
 pub(super) fn pg_exec_history(
     rows: &[Value],
     commands: &BTreeMap<String, usize>,
@@ -524,7 +525,8 @@ pub(super) fn pg_exec_history(
     pg_exec_history_inner(rows, commands, health, None, None).map(|_| ())
 }
 
-#[cfg(test)]
+/// The window's PostgreSQL execution check, with its first refusal reason
+/// noted in `audit`; the verdict is the one the unaudited check gives.
 pub(super) fn pg_exec_history_observed(
     rows: &[Value],
     commands: &BTreeMap<String, usize>,

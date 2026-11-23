@@ -200,7 +200,8 @@ fn case(scenario: &str) -> Value {
         "runId":expected["runId"],"revision":expected["revision"],"scenario":scenario,
         "passed":true,"failure":null,"checkpoint":"complete","finalStatus":0,
         "cleanupPassed":true,"nativeRawExit":status,"nativeFrame":native,
-        "observations":observations,"sourcePins":expected["sourcePins"]})
+        "observations":observations,"sourcePins":expected["sourcePins"],
+        "pgHistoryDiagnostic":null})
 }
 #[test]
 fn four_expected_native_statuses_stay_distinct_from_the_guest_verdict() {
@@ -292,7 +293,7 @@ fn closed_capture_checkpoints_preserve_failed_guest_metadata_without_positive_co
         let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
         let admitted = projection::guest(decoded, &expected(scenario)).unwrap();
         assert_eq!(admitted, failed);
-        assert_eq!(admitted.as_object().unwrap().len(), 14);
+        assert_eq!(admitted.as_object().unwrap().len(), 15);
         assert_eq!(admitted["passed"], false);
         assert_eq!(admitted["nativeRawExit"], 124);
         assert_eq!(admitted["nativeFrame"]["failure"], "deadline");
@@ -327,7 +328,7 @@ fn closed_render_checkpoints_preserve_pre_native_refusal_without_admitting_succe
         let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
         let admitted = projection::guest(decoded, &expected("positive")).unwrap();
         assert_eq!(admitted, failed);
-        assert_eq!(admitted.as_object().unwrap().len(), 14);
+        assert_eq!(admitted.as_object().unwrap().len(), 15);
 
         let mut passed = case("positive");
         passed["checkpoint"] = checkpoint.into();
@@ -378,7 +379,7 @@ fn network_checkpoints_and_typed_failures_preserve_negative_receipts_only() {
             let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
             let admitted = projection::guest(decoded, &expected("positive")).unwrap();
             assert_eq!(admitted, failed);
-            assert_eq!(admitted.as_object().unwrap().len(), 14);
+            assert_eq!(admitted.as_object().unwrap().len(), 15);
         }
         let mut passed = case("positive");
         passed["checkpoint"] = checkpoint.into();
@@ -422,7 +423,7 @@ fn closed_daemon_checkpoints_preserve_failed_guest_metadata_without_positive_com
         let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
         let admitted = projection::guest(decoded, &expected("positive")).unwrap();
         assert_eq!(admitted, failed);
-        assert_eq!(admitted.as_object().unwrap().len(), 14);
+        assert_eq!(admitted.as_object().unwrap().len(), 15);
         assert_eq!(admitted["observations"].as_object().unwrap().len(), 24);
         assert_eq!(
             admitted["nativeFrame"]["facts"].as_object().unwrap().len(),
@@ -440,6 +441,246 @@ fn closed_daemon_checkpoints_preserve_failed_guest_metadata_without_positive_com
             Err(Error::Refused)
         );
     }
+}
+/// A guest record of a probe cut at both edges of the window, as the guest's
+/// own owned-stream test produces it.
+fn pg_record() -> Value {
+    let missing = |action: &str, window: &str| {
+        json!({"type":"container","action":action,"command":"health",
+            "actor":"postgres","window":window,"fault":"missing","exitCode":null})
+    };
+    json!({"schemaVersion":1,"scope":"MaintainLauncherPgHistoryDiagnostic",
+        "reason":"pg-missing-create","postgresEvents":6,
+        "events":[missing("exec_create","before"),missing("exec_die","after")],
+        "withheldEvents":0})
+}
+/// The hosted symptom: a refused receipt at `daemon-pg-history`.
+fn pg_refused(scenario: &str, record: Value) -> Value {
+    let mut failed = case(scenario);
+    failed["passed"] = false.into();
+    failed["failure"] = "refused".into();
+    failed["checkpoint"] = "daemon-pg-history".into();
+    failed["finalStatus"] = 1.into();
+    failed["cleanupPassed"] = false.into();
+    for (name, value) in [
+        ("daemonEffectsUncertain", true),
+        ("observedExpectedDaemonJoins", false),
+        ("noObservedUnexpectedMutatingEvents", false),
+    ] {
+        failed["observations"][name] = value.into();
+    }
+    failed["pgHistoryDiagnostic"] = record;
+    failed
+}
+fn admitted(receipt: &Value, scenario: &str) -> Result<Value> {
+    let decoded = decode(&serde_json::to_vec(receipt).unwrap())?;
+    projection::guest(decoded, &expected(scenario))
+}
+#[test]
+fn pg_history_record_rides_only_a_refused_pg_history_receipt() {
+    for scenario in ["dirty-source", "timeout-stopped-launcher"] {
+        for record in [pg_record(), Value::Null] {
+            let failed = pg_refused(scenario, record);
+            let projected = admitted(&failed, scenario).unwrap();
+            assert_eq!(projected, failed);
+            assert_eq!(projected.as_object().unwrap().len(), 15);
+        }
+        // A passing receipt keeps an empty record and nothing else changes.
+        let passed = case(scenario);
+        assert!(passed["pgHistoryDiagnostic"].is_null());
+        let mut claimed = passed.clone();
+        claimed["pgHistoryDiagnostic"] = pg_record();
+        assert_eq!(admitted(&claimed, scenario), Err(Error::Refused));
+        let mut absent = passed;
+        absent
+            .as_object_mut()
+            .unwrap()
+            .remove("pgHistoryDiagnostic");
+        assert_eq!(admitted(&absent, scenario), Err(Error::Refused));
+        for (name, value) in [
+            ("checkpoint", json!("daemon-actor-classification")),
+            ("checkpoint", json!("native-result")),
+            ("failure", json!("deadline")),
+            ("failure", json!("io")),
+        ] {
+            let mut moved = pg_refused(scenario, pg_record());
+            moved[name] = value.clone();
+            assert_eq!(admitted(&moved, scenario), Err(Error::Refused), "{value}");
+            moved["pgHistoryDiagnostic"] = Value::Null;
+            assert!(admitted(&moved, scenario).is_ok(), "{value}");
+        }
+    }
+}
+#[test]
+fn pg_history_record_refuses_every_unclosed_shape_value_and_count() {
+    let scenario = "dirty-source";
+    let refused = |record: Value| admitted(&pg_refused(scenario, record), scenario).unwrap_err();
+    let mut cases = Vec::new();
+    for (name, value) in [
+        ("schemaVersion", json!(2)),
+        ("schemaVersion", json!("1")),
+        ("schemaVersion", json!(1.0)),
+        ("scope", json!("PreparedHostObservationDiagnostic")),
+        ("reason", json!("pg-command-count\nSECRET")),
+        ("reason", json!("incomplete-sequence")),
+        ("reason", json!(7)),
+        ("postgresEvents", json!(2049)),
+        ("postgresEvents", json!(-1)),
+        ("postgresEvents", Value::Null),
+        ("postgresEvents", json!("6")),
+        ("events", json!({})),
+        ("events", Value::Null),
+        ("withheldEvents", json!(1)),
+        ("withheldEvents", json!(-1)),
+        ("withheldEvents", Value::Null),
+        ("rawRows", json!([])),
+    ] {
+        let mut record = pg_record();
+        record[name] = value;
+        cases.push(record);
+    }
+    for name in pg_record().as_object().unwrap().keys() {
+        let mut record = pg_record();
+        record.as_object_mut().unwrap().remove(name);
+        cases.push(record);
+    }
+    let event = pg_record()["events"][0].clone();
+    for (name, value) in [
+        ("type", json!("network")),
+        ("type", json!("Container")),
+        ("type", Value::Null),
+        ("action", json!("exec_create: SECRET")),
+        ("action", json!("Exec_die")),
+        ("action", Value::Null),
+        ("command", json!("SECRET")),
+        ("command", json!("psql --command SECRET")),
+        ("actor", json!("a".repeat(64))),
+        ("actor", Value::Null),
+        ("window", json!("during")),
+        ("window", json!("inside")),
+        ("fault", json!("SECRET")),
+        ("fault", json!("nonzero-exit")),
+        ("exitCode", json!(137)),
+        ("execID", json!("a".repeat(64))),
+    ] {
+        let mut changed = event.clone();
+        changed[name] = value;
+        let mut record = pg_record();
+        record["events"][0] = changed;
+        cases.push(record);
+    }
+    for name in event.as_object().unwrap().keys() {
+        let mut changed = event.clone();
+        changed.as_object_mut().unwrap().remove(name);
+        let mut record = pg_record();
+        record["events"][0] = changed;
+        cases.push(record);
+    }
+    let failed = json!({"type":"container","action":"exec_die","command":"health",
+        "actor":"postgres","window":"inside","fault":"nonzero-exit","exitCode":137});
+    for (name, value) in [
+        ("exitCode", json!(0)),
+        ("exitCode", json!(256)),
+        ("exitCode", json!("137")),
+        ("exitCode", json!(-9)),
+        ("window", json!("before")),
+    ] {
+        let mut changed = failed.clone();
+        changed[name] = value;
+        let mut record = pg_record();
+        record["events"] = json!([changed]);
+        cases.push(record);
+    }
+    let unadmitted = json!({"type":"container","action":"top","command":null,
+        "actor":"postgres","window":"inside","fault":"unadmitted","exitCode":null});
+    for (name, value) in [
+        ("fault", json!("SECRET")),
+        ("fault", json!("missing")),
+        ("window", json!("unobserved")),
+        ("command", json!("SECRET")),
+        ("actor", json!("SECRET")),
+        ("action", json!("SECRET")),
+    ] {
+        let mut changed = unadmitted.clone();
+        changed[name] = value;
+        let mut record = pg_record();
+        record["events"] = json!([changed]);
+        cases.push(record);
+    }
+    let mut nine = pg_record();
+    nine["events"] = json!(vec![failed.clone(); 9]);
+    cases.push(nine);
+    for record in cases {
+        let error = refused(record.clone());
+        assert_eq!(error, Error::Refused, "{record}");
+        assert!(!format!("{error:?}").contains("SECRET"));
+    }
+    // The closed neighbors that are admitted keep their meaning.
+    let mut record = pg_record();
+    record["events"] = json!([failed.clone()]);
+    for code in [1, 255] {
+        record["events"][0]["exitCode"] = code.into();
+        assert!(admitted(&pg_refused(scenario, record.clone()), scenario).is_ok());
+    }
+    record["events"][0]["exitCode"] = Value::Null;
+    record["events"][0]["command"] = Value::Null;
+    record["reason"] = Value::Null;
+    assert!(admitted(&pg_refused(scenario, record), scenario).is_ok());
+    let mut eight = pg_record();
+    eight["events"] = json!(vec![failed; 8]);
+    eight["withheldEvents"] = 2048.into();
+    eight["postgresEvents"] = 2048.into();
+    assert!(admitted(&pg_refused(scenario, eight), scenario).is_ok());
+}
+#[test]
+fn largest_pg_history_record_stays_under_two_kilobytes() {
+    use projection::diagnostic::{ACTIONS, ACTORS, COMMANDS};
+    let longest = |names: &[&'static str]| *names.iter().max_by_key(|name| name.len()).unwrap();
+    // The longest admitted window and fault pair is an unlisted command inside.
+    let event = json!({"type":"container","action":longest(&ACTIONS),
+        "command":longest(&COMMANDS),"actor":longest(&ACTORS),"window":"inside",
+        "fault":"unlisted-command","exitCode":null});
+    let reason = longest(&projection::PG_REASONS);
+    let record = json!({"schemaVersion":1,"scope":"MaintainLauncherPgHistoryDiagnostic",
+        "reason":reason,"postgresEvents":2048,"events":vec![event; 8],
+        "withheldEvents":2048});
+    assert!(admitted(&pg_refused("positive", record.clone()), "positive").is_ok());
+    let bytes = serde_json::to_vec(&record).unwrap().len();
+    assert!(bytes < 2048, "{bytes}");
+}
+/// The controller's closed vocabularies are exactly those the guest producer
+/// declares; neither side can add, drop or rename a value alone.
+#[test]
+fn pg_history_vocabulary_is_the_guest_producers() {
+    use projection::diagnostic::{ACTIONS, ACTORS, COMMANDS, FAULTS, WINDOWS};
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../ops/src/release/attestation/maintain_prerequisite/guest/effects/pg_window.rs"
+    ));
+    let declared = |name: &str| {
+        let start = source
+            .find(&format!("pub(super) const {name}: [&str; "))
+            .unwrap();
+        let body = &source[start..];
+        let open = body.find("= [").unwrap() + 3;
+        let close = open + body[open..].find("];").unwrap();
+        body[open..close]
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    for (name, controller) in [
+        ("ACTIONS", ACTIONS.as_slice()),
+        ("COMMANDS", COMMANDS.as_slice()),
+        ("ACTORS", ACTORS.as_slice()),
+        ("WINDOWS", WINDOWS.as_slice()),
+        ("FAULTS", FAULTS.as_slice()),
+    ] {
+        assert_eq!(declared(name), controller, "{name}");
+    }
+    assert!(source.contains("const SCOPE: &str = \"MaintainLauncherPgHistoryDiagnostic\";"));
 }
 #[test]
 fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {

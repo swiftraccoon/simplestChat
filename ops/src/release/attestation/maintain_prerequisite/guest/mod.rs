@@ -79,6 +79,8 @@ struct Context {
     socket: Option<(PathBuf, std::fs::Metadata)>,
     host_retired: BTreeSet<usize>,
     host_diagnostic: Option<Value>,
+    /// The launcher receipt's record of a refused window history.
+    pg_diagnostic: Option<Value>,
 }
 impl Context {
     pub fn admit_socket(&mut self) -> Result<()> {
@@ -359,7 +361,7 @@ async fn body(
     ctx.wire.no_extra(&mut ctx.control)?;
     ctx.control.advance()?;
     ctx.control.checkpoint = "native";
-    fixture.native_boundary(ctx)?;
+    fixture.open_native_window(ctx).await?;
     native.invoke(ctx).await?;
     ctx.control.checkpoint = "native-result";
     fixture.observe(ctx).await?;
@@ -391,6 +393,7 @@ fn receipt(ctx: &Context, native: &native::Native, checkpoint: &str, cleanup: bo
         "nativeFrame":native.frame,
         "observations":ctx.observed.as_value(),
         "sourcePins":ctx.request.source_pins,
+        "pgHistoryDiagnostic":ctx.pg_diagnostic,
     })
 }
 
@@ -528,6 +531,7 @@ fn entry(arguments: &[OsString], host: bool) -> ExitCode {
         socket: None,
         host_retired: BTreeSet::new(),
         host_diagnostic: None,
+        pg_diagnostic: None,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

@@ -624,11 +624,27 @@ impl Fixture {
                 );
                 result?;
             } else {
-                policy::pg_exec_history(
-                    &pg_rows,
-                    &self.expected_pg_commands(ctx)?,
-                    &self.pg_health,
-                )?;
+                let mut audit = Auditor::new(&self.native_rows);
+                let commands = self.expected_pg_commands_observed(ctx, Some(&mut audit));
+                let result = commands
+                    .as_ref()
+                    .map_err(|error| *error)
+                    .and_then(|commands| {
+                        policy::pg_exec_history_observed(
+                            &pg_rows,
+                            commands,
+                            &self.pg_health,
+                            &mut audit,
+                        )
+                    });
+                super::pg_window::retain(
+                    &mut ctx.pg_diagnostic,
+                    &result,
+                    earlier,
+                    ctx.control.first,
+                    || self.pg_refusal(commands.as_ref().ok(), audit.first_pg()),
+                );
+                result?;
             }
             if positive {
                 stage = DaemonStage::FinalTraces;
@@ -879,15 +895,12 @@ impl Fixture {
         let closed = super::super::files::close(file, &mut ctx.control);
         result.and(unlocked).and(marked).and(closed)
     }
+    /// Close the native window (its ten-second wait for a quiet PostgreSQL
+    /// history is part of the 120-second observation), then observe it.
     pub async fn observe(&mut self, ctx: &mut Context) -> Result<()> {
-        self.check_monitors(ctx)?;
-        {
-            let monitors = self.monitors.lock().map_err(|_| Error::Io)?;
-            let collector = monitors.collector.as_ref().ok_or(Error::Refused)?;
-            self.native_rows = collector.rows[collector.native_start..].to_vec();
-        }
         let observation = ctx.control.push_phase(Duration::from_secs(120))?;
         let result = async {
+            self.close_native_window(&mut ctx.control).await?;
             let attempt = self.attempt(ctx).await?;
             let previous = ctx.control.push_phase(Duration::from_secs(15))?;
             let result = self.daemon_observe(ctx, attempt.as_deref()).await;
