@@ -345,43 +345,94 @@ fn every_recorded_relay_address_is_judged_and_bound_as_the_program_did() {
     assert_eq!((accepted, taken_refused, not_public), (28, 3, 44));
 }
 
-/// A free port on the loopback address for `transport`, as the system
-/// chose it for a socket that is closed again.
-fn spare(transport: Transport) -> u16 {
-    let loopback = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
-    match transport {
-        Transport::Udp => std::net::UdpSocket::bind(loopback).unwrap(),
-        Transport::Tcp => {
-            let listener = std::net::TcpListener::bind(loopback).unwrap();
-            let port = listener.local_addr().unwrap().port();
-            return port;
+/// How many times the listener sequence runs on new ports before a refusal
+/// of a step that must pass fails the test. Any other process on the
+/// machine can hold a loopback port, for either transport, at any moment:
+/// a connection's ephemeral port, or its `TIME_WAIT` after it closed, which
+/// refuses a bind without address reuse. A defect refuses every attempt.
+const ATTEMPTS: usize = 5;
+
+/// Two distinct loopback ports that both transports could bind just now
+/// without address reuse, as the check binds, chosen by the system for UDP
+/// sockets that are held until both are found and then closed. The search
+/// is bounded.
+fn spare_ports() -> (u16, u16) {
+    let loopback = Ipv4Addr::LOCALHOST;
+    let (mut chosen, mut ports) = (Vec::new(), Vec::new());
+    for _ in 0..100 {
+        let socket = std::net::UdpSocket::bind(SocketAddrV4::new(loopback, 0)).unwrap();
+        let port = socket.local_addr().unwrap().port();
+        chosen.push(socket);
+        if bound(Transport::Tcp, SocketAddrV4::new(loopback, port)).is_ok() {
+            ports.push(port);
+        }
+        if let [udp, tcp] = ports[..] {
+            return (udp, tcp);
         }
     }
-    .local_addr()
-    .unwrap()
-    .port()
+    panic!("no two loopback ports were free for both transports in 100 choices");
+}
+
+/// The step `step` refused: what a direct `bound` call answers for each of
+/// its listeners on the loopback address, at the moment of the refusal.
+fn diagnosis(step: &str, listeners: &[(Transport, u16)]) -> String {
+    let answer = |&(transport, port): &(Transport, u16)| {
+        let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+        let kind = bound(transport, address)
+            .map(drop)
+            .map_err(|error| error.kind());
+        format!("{transport:?} {address} {kind:?}")
+    };
+    let answers: Vec<String> = listeners.iter().map(answer).collect();
+    format!("{step}: {}", answers.join(", "))
+}
+
+/// One run of the listener sequence on the spare ports `udp` and `tcp`. A
+/// step that must be refused is asserted at once, since no other process
+/// can make a bind succeed; a step that must pass and is refused, or a
+/// socket this test cannot hold, ends the run with its diagnosis.
+fn listener_sequence(udp: u16, tcp: u16) -> Result<(), String> {
+    let loopback = Ipv4Addr::LOCALHOST;
+    let listeners = [(Transport::Udp, udp), (Transport::Tcp, tcp)];
+    let passes = |step: &str, listeners: &[(Transport, u16)]| {
+        free(loopback, listeners, &mut bound).map_err(|_| diagnosis(step, listeners))
+    };
+    let held = |step: &str, kind: std::io::ErrorKind| format!("{step}: {kind:?}");
+    passes("opened while free", &listeners)?;
+    passes("opened again once closed", &listeners)?;
+    let taken = Err(Fault::Refused(TAKEN.into()));
+    let tcp_held = std::net::TcpListener::bind(SocketAddrV4::new(loopback, tcp))
+        .map_err(|error| held("holding the Tcp port", error.kind()))?;
+    assert_eq!(free(loopback, &listeners, &mut bound), taken);
+    passes("Udp on the held Tcp port", &[(Transport::Udp, tcp)])?;
+    drop(tcp_held);
+    let udp_held = std::net::UdpSocket::bind(SocketAddrV4::new(loopback, udp))
+        .map_err(|error| held("holding the Udp port", error.kind()))?;
+    assert_eq!(free(loopback, &listeners, &mut bound), taken);
+    passes("Tcp on the held Udp port", &[(Transport::Tcp, udp)])?;
+    drop(udp_held);
+    let elsewhere = Ipv4Addr::new(192, 0, 2, 1);
+    assert_eq!(free(elsewhere, &listeners, &mut bound), taken);
+    passes("opened again after the refusals", &listeners)
 }
 
 /// Real sockets: free listeners are opened and closed again, a port another
 /// socket holds is refused for its transport alone, and an address that is
-/// not this machine's is refused. Nothing listens.
+/// not this machine's is refused. Nothing listens. The sequence runs on new
+/// spare ports up to `ATTEMPTS` times while a step that must pass is
+/// refused, and every attempt's diagnosis is reported when none passes.
 #[test]
 fn listeners_are_opened_without_address_reuse_and_closed_again() {
-    let (udp, tcp) = (spare(Transport::Udp), spare(Transport::Tcp));
-    let listeners = [(Transport::Udp, udp), (Transport::Tcp, tcp)];
-    let loopback = Ipv4Addr::LOCALHOST;
-    assert_eq!(free(loopback, &listeners, &mut bound), Ok(()));
-    assert_eq!(free(loopback, &listeners, &mut bound), Ok(()));
-    let taken = Err(Fault::Refused(TAKEN.into()));
-    let held = std::net::TcpListener::bind(SocketAddrV4::new(loopback, tcp)).unwrap();
-    assert_eq!(free(loopback, &listeners, &mut bound), taken);
-    assert_eq!(free(loopback, &[(Transport::Udp, tcp)], &mut bound), Ok(()));
-    drop(held);
-    let held = std::net::UdpSocket::bind(SocketAddrV4::new(loopback, udp)).unwrap();
-    assert_eq!(free(loopback, &listeners, &mut bound), taken);
-    assert_eq!(free(loopback, &[(Transport::Tcp, udp)], &mut bound), Ok(()));
-    drop(held);
-    let elsewhere = Ipv4Addr::new(192, 0, 2, 1);
-    assert_eq!(free(elsewhere, &listeners, &mut bound), taken);
-    assert_eq!(free(loopback, &listeners, &mut bound), Ok(()));
+    let mut refusals = Vec::new();
+    for attempt in 1..=ATTEMPTS {
+        let (udp, tcp) = spare_ports();
+        match listener_sequence(udp, tcp) {
+            Ok(()) => return,
+            Err(refusal) => refusals.push(format!("attempt {attempt}, {refusal}")),
+        }
+    }
+    panic!(
+        "a step that must pass was refused on every attempt:\n{}",
+        refusals.join("\n")
+    );
 }
