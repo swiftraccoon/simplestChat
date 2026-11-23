@@ -109,7 +109,7 @@ dependency profile. On Linux this includes the host, process and archive cases.
 This exercises the distributed capacity runtime profile early; the workspace
 suite also checks the combined feature profile. Both jobs select CPython 3.14.8
 before fingerprinting or creating the controller environment. The Ops suite
-itself starts no interpreter: its comparisons with the retained Python helpers
+itself starts no interpreter: its comparisons with the retired Python helpers
 replay answers recorded beside the tests (`recorded_*.json` under `ops/src`),
 so the manifest checks no longer depend on that interpreter's Unicode database.
 Ignored subprocess workers do their work only when their owning tests launch

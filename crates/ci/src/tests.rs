@@ -1360,7 +1360,6 @@ fn restore_test_and_registration_inputs_invalidate_existing_success_receipts() {
     let name = "restore_test_and_registration_inputs_invalidate_existing_success_receipts";
     let fixture = Fixture::recorded(name);
     let paths = [
-        "ops/ansible/tests/test_restore_verify.py",
         "ops/src/release/attestation/restore/database_tests.rs",
         "xtask/src/ci/automation.rs",
         ".github/workflows/ci.yml",
@@ -1400,7 +1399,7 @@ fn restore_test_and_registration_inputs_invalidate_existing_success_receipts() {
             );
         }
     }
-    assert_eq!(fixture.replayed(), [10, 0, 0]);
+    assert_eq!(fixture.replayed(), [8, 0, 0]);
 }
 #[test]
 fn rust_maintenance_controller_and_actual_workflow_invalidate_existing_success_fingerprints() {

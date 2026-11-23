@@ -605,8 +605,8 @@ fn host_steps_run_only_the_delivered_executable_with_fixed_budgets() {
         json!({
             "name": "Install a release helper",
             "ansible.builtin.copy": {
-                "src": "release-public.py",
-                "dest": "/usr/local/libexec/simplestchat-public/release-public.py",
+                "src": "release-helper.py",
+                "dest": "/usr/local/libexec/simplestchat-public/release-helper.py",
             },
         }),
     );

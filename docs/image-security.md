@@ -146,13 +146,14 @@ while retaining built-in providers, including legacy algorithms;
 no loader cache, preload or hwcaps paths; no ELF audit/filter or RPATH/RUNPATH
 hooks; identical bytes for every present standard-directory candidate of each
 approved dependency; and the exact files/DNS NSS configuration. The image audit
-checks the image's defaults with `runtime_profile.py`; a launcher checks the
-image and its resolved deployment settings against the same rules with
-[`simplestchat-ops release profile`](../ops/README.md#runtime-profile-and-migration-ledger).
-The source review in `security/runtime-source-review.json` pins complete source
-trees, dependency/native manifests and profile bytes, expires on a fixed date,
-and requires explicit re-review after changes. The gate does not regenerate or
-renew it.
+checks the image's defaults with the rules of
+[`simplestchat-ops release profile`](../ops/README.md#runtime-profile-and-migration-ledger)
+(`ops/src/release/profile.rs`), the same rules a launcher checks the image and
+its resolved deployment settings against. The source review in
+`security/runtime-source-review.json` pins complete source trees,
+dependency/native manifests and the bytes of that profile source and the NSS
+configuration, expires on a fixed date, and requires explicit re-review after
+changes. The gate does not regenerate or renew it.
 
 `runtime-proof.json` records these prerequisites. `vex.openvex.json` identifies
 the exact managed-server product, archive hash and affected RPM PURLs using

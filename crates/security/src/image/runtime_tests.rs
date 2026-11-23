@@ -1,14 +1,16 @@
 //! Replays of `recorded_runtime.json`: what the reference in Python made
 //! of source reviews, of the image's filesystem profile, of published
 //! report digests, of whole runtime proofs, of the advisory's affected
-//! scopes, of dispositions and of their absence.
+//! scopes, of dispositions and of their absence. Two pins hold what the
+//! proof binds in this checkout: the profile's source and the committed
+//! review's digests of the profile files.
 
 use super::{
-    Evidence, Limits, affected_scopes, apply, encoded, filesystem_profile, not_required, proof,
-    report_digest, source_review, written,
+    Evidence, Limits, PROFILE, REVIEW, affected_scopes, apply, encoded, filesystem_profile,
+    not_required, proof, report_digest, source_review, written,
 };
 use crate::{
-    Fault,
+    Fault, digest,
     document::Document,
     image::{
         notices::tests::built,
@@ -21,6 +23,7 @@ use crate::{
     policy::Date,
     scratch::{Scratch, base64},
 };
+use std::path::Path;
 
 const RECORDING: &[u8] = include_bytes!("recorded_runtime.json");
 fn recording() -> Document {
@@ -41,11 +44,91 @@ fn whole(case: &Document, name: &str) -> i128 {
         .unwrap_or_else(|| panic!("no number {name}"))
 }
 
+/// The profile file that the recorded reviews bind, and the source that
+/// holds the profile's checks now. A replayed review, its checkout and the
+/// arguments git is asked name the second wherever the recording names the
+/// first; the recorded bytes of that file stay as recorded.
+const RENAMED_SINCE_RECORDING: (&str, &str) = (
+    "ops/ansible/files/runtime_profile.py",
+    "ops/src/release/profile.rs",
+);
+
+/// Move a replayed checkout's profile file to its current name and rename it
+/// in the review, which names it at most once. Answers the review's bytes as
+/// recorded and as renamed, or nothing when the case has no review.
+fn renamed(root: &Path) -> Option<(Vec<u8>, Vec<u8>)> {
+    let (recorded, current) = RENAMED_SINCE_RECORDING;
+    if root.join(recorded).is_file() {
+        let moved = root.join(current);
+        std::fs::create_dir_all(moved.parent().expect("a directory")).expect("a directory");
+        std::fs::rename(root.join(recorded), moved).expect("the profile file moved");
+    }
+    let review = root.join(REVIEW);
+    if !review.is_file() {
+        return None;
+    }
+    let body = std::fs::read(&review).expect("the review");
+    let named = |window: &[u8]| window == recorded.as_bytes();
+    let at: Vec<usize> = (0..body.len())
+        .filter(|at| body[*at..].get(..recorded.len()).is_some_and(named))
+        .collect();
+    assert!(at.len() <= 1, "the review names its profile file once");
+    let Some(&at) = at.first() else {
+        return Some((body.clone(), body));
+    };
+    let mut changed = body[..at].to_vec();
+    changed.extend_from_slice(current.as_bytes());
+    changed.extend_from_slice(&body[at + recorded.len()..]);
+    std::fs::write(&review, &changed).expect("the renamed review");
+    Some((body, changed))
+}
+
+/// What a replayed review came to there, with its profile file renamed: a
+/// review that held binds the file by its current name, and the digest it
+/// answers, recorded as that of the recorded review, is that of the renamed
+/// one.
+fn renamed_there(case: &Document, review: Option<&(Vec<u8>, Vec<u8>)>) -> String {
+    let Some(held) = case.get("result").and_then(|result| result.get("held")) else {
+        return there(case);
+    };
+    let (recorded, current) = RENAMED_SINCE_RECORDING;
+    let (original, changed) = review.expect("a review that held");
+    let Document::Record(fields) = held.clone() else {
+        panic!("a held review is a record");
+    };
+    let mut renamed = Vec::new();
+    for (name, value) in fields {
+        let value = match name.as_str() {
+            "sha256" => {
+                assert_eq!(value.text(), Some(digest(original).as_str()));
+                digest(changed).into()
+            }
+            "profileFiles" => {
+                let Document::Record(files) = value else {
+                    panic!("the profile files are a record");
+                };
+                let files = files
+                    .into_iter()
+                    .map(|(path, bound)| match path == recorded {
+                        true => (current.to_owned(), bound),
+                        false => (path, bound),
+                    });
+                Document::Record(files.collect())
+            }
+            _ => value,
+        };
+        renamed.push((name, value));
+    }
+    format!("held {}", Document::Record(renamed).pretty())
+}
+
 fn reviews() -> Vec<(String, String, String)> {
+    let (earlier, current) = RENAMED_SINCE_RECORDING;
     let mut all = Vec::new();
     for case in cases("reviews") {
         let scratch = Scratch::new("runtime");
         let root = built(&case, &scratch.0);
+        let review = renamed(&root);
         let asked = case
             .get("asked")
             .and_then(Document::items)
@@ -56,12 +139,12 @@ fn reviews() -> Vec<(String, String, String)> {
         let came = {
             let mut git = |arguments: &[String], limit: u64| -> crate::Result<Vec<u8>> {
                 let answer = answers.next().expect("an answer git gave");
-                let recorded: Vec<&str> = answer
+                let recorded: Vec<String> = answer
                     .get("arguments")
                     .and_then(Document::items)
                     .expect("arguments")
                     .iter()
-                    .map(|argument| argument.text().expect("text"))
+                    .map(|argument| argument.text().expect("text").replace(earlier, current))
                     .collect();
                 assert_eq!(arguments, recorded.as_slice());
                 assert_eq!(i128::from(limit), whole(answer, "limit"));
@@ -83,7 +166,8 @@ fn reviews() -> Vec<(String, String, String)> {
             "{}: git was asked less",
             text(&case, "name")
         );
-        all.push((text(&case, "name").to_owned(), here(came), there(&case)));
+        let expected = renamed_there(&case, review.as_ref());
+        all.push((text(&case, "name").to_owned(), here(came), expected));
     }
     all
 }
@@ -403,4 +487,46 @@ fn every_recorded_disposition_is_the_same() {
 fn every_recorded_absence_of_a_claim_is_the_same() {
     let tables = [(&UNREAD_ABSENCES[..], There::Raised)];
     assert_eq!(tallied(absences(), &tables), [2, 1, 1, 0, 0]);
+}
+
+/// The bytes of the file at `path` below this checkout.
+fn checkout(path: &str) -> Vec<u8> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    std::fs::read(root.join(path)).unwrap_or_else(|_| panic!("no {path} in the checkout"))
+}
+
+/// The profile file the proof binds is the source of the image defaults the
+/// proof applies: the file of `simplestchat-ops release profile` that
+/// defines `image_defaults`.
+#[test]
+fn the_profile_file_is_the_source_of_the_image_profile() {
+    assert_eq!(PROFILE, "ops/src/release/profile.rs");
+    let source = String::from_utf8(checkout(PROFILE)).expect("Rust source is text");
+    let defined = "\npub fn image_defaults(config: &[u8]) -> Result<(), Option<&'static str>> {\n";
+    assert_eq!(source.matches(defined).count(), 1);
+}
+
+/// The committed review binds exactly the profile's source and the name
+/// switch, each by the SHA-256 of this checkout's bytes: a changed byte of
+/// either is a change that needs a fresh review.
+#[test]
+fn the_committed_review_binds_the_checkouts_profile_files() {
+    let review = Document::read(&checkout(REVIEW)).expect("the review is JSON");
+    let bound = review.get("profileFiles").and_then(Document::fields);
+    let bound = bound.expect("the review's profile files");
+    let names: Vec<&str> = bound.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "ops/src/release/profile.rs",
+            "security/runtime/nsswitch.conf"
+        ]
+    );
+    for (path, digested) in bound {
+        assert_eq!(
+            digested.text(),
+            Some(digest(&checkout(path)).as_str()),
+            "{path}"
+        );
+    }
 }

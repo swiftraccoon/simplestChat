@@ -6,10 +6,10 @@ release builder can invoke the selected local Git and Docker tools to build or
 export an unsigned image. Local unsigned artifact preparation can write a new
 private directory, as described below. The signed routine release verifies,
 receives, stages and deploys through this executable, and prepared-host
-maintenance has the explicit native caller described below. Python retains the
-explicit force app-only release, host provisioning and the other keeper roles
-named in their sections; where this guide compares a native command with "the
-reference", it means the corresponding Python implementation.
+maintenance has the explicit native caller described below. No playbook installs
+a Python helper on a host or runs one there; where this guide compares a native
+command with "the reference", it means the retired Python implementation whose
+recorded answers the tests replay.
 A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
@@ -20,7 +20,9 @@ drill run through this executable as well.
 The separate Ops install/upgrade commands publish one original-pinned executable
 at its fixed helper path. Both signed host callers authenticate its
 delivery through the native controller before that executable runs. The Python
-files that remain are frozen until their last caller moves.
+release helper and the modules it imports stay in `ansible/files` only for the
+Python template and playbook tests that still import them; no playbook installs
+them.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -57,7 +59,7 @@ answers; original timestamp text remains unchanged.
 The manifest parity tests replay `src/release/recorded_manifest.json`, the answers
 CPython 3.14.10 and its Unicode 16 database gave for every document the tests
 build, each bound to the SHA-256 of the document's bytes. They start no
-interpreter. The operational Python helpers retain their Python 3.12 support.
+interpreter.
 
 | Module | Responsibility |
 | --- | --- |
@@ -352,7 +354,7 @@ through the installed executable; native deployment and maintenance publish
 through the same store. A host provisioned from source has no executable until
 its first signed release: there the tasks only ensure the directory the proxy
 mounts, the timer's unit is skipped, and that release's publication initializes
-the store. The Python `release_assets.py` remains only for the force route.
+the store.
 These commands do not copy from an image, run a workload or alter a proxy.
 Never substitute an unverified development binary on a release host.
 
@@ -1884,8 +1886,7 @@ leaves the journal unfinished for that reason.
 
 The Python helper's answers for 56 invocations are recorded in
 `ops/src/backup/recorded_nightly.json`, and the tests reproduce each one's
-commands, archives, receipts and journal. `backup_public.py` itself stays in
-the tree, frozen, until the migration cutover stops copying it.
+commands, archives, receipts and journal.
 
 ## Offsite upload and restore drill
 
@@ -1935,9 +1936,7 @@ The Python helper's answers for 125 invocations are recorded in
 The test replays them request by request: every command must be the recorded
 one, and every invocation must leave the recorded selection, evidence,
 downloads and journal. The isolated verification here serves the drill;
-`release backup verify` remains the verifier of a release attempt's backup,
-and `restore_verify.py` stays in the tree, frozen, for the infrastructure
-proof's guest that still imports it.
+`release backup verify` remains the verifier of a release attempt's backup.
 
 ## Prepared reboot
 
@@ -2004,9 +2003,7 @@ The Python helper's answers for 143 invocations in 105 scenarios are recorded
 in `ops/src/reboot/recorded_reboot.json`, each command with the answer it
 got. The test replays them request by request: every command must be the
 recorded one with its deadline, and every invocation must end as recorded and
-leave the recorded journal, identity and outcome. `reboot_public.py` itself
-stays in the tree, frozen, while the release preflight's helper digest list
-still names it.
+leave the recorded journal, identity and outcome.
 
 ## Relay certificate, metrics and activation
 
@@ -3095,8 +3092,8 @@ late signal, descriptor, runtime, mask or original-deadline failures.
 Syntax errors return 2; operational refusals return 1. The public facade is
 intended for dedicated synchronous use outside an entered Tokio runtime.
 
-The release playbook stages through this command. Explicit force deployment
-and its prepared-helper preflight keep their Python route. Signed routine
+The release playbook and the explicit force playbook stage through this
+command, after the release preflight. Signed routine
 deployment and prepared maintenance have
 separate authenticated native callers. First installation and
 identical repeat remain distinct from an explicit Ops upgrade.
@@ -3186,9 +3183,8 @@ simplestchat-ops release backup verify --release-attempt release.NAME \
 
 This explicit example verifies one root-owned recorded release backup on the fixed
 prepared Linux host. N/M are required,0<M<N<=1800;1200/120 is not a default or
-measured capacity guarantee. Existing installed Python, nightly/offsite callers
-and authenticated Ops bootstrap remain unchanged. The standalone Python helper
-has no whole-operation clock; the native readiness profile is stricter.
+measured capacity guarantee. Nightly/offsite callers and authenticated Ops
+bootstrap remain unchanged.
 
 The operation admits the source outcome/manifest and its nonempty exact subset
 ledger, including valid failed-release/pre-upgrade backups. It copies at most64MiB,
@@ -3263,9 +3259,9 @@ The supported prepared-host caller is the direct maintenance playbook, after
 signed application staging and a caller-trusted controller build before
 credentials. The [operator sequence](ansible/RELEASES.md#prepare-the-controller-before-credentials)
 specifies the breaking typed-input migration; the frozen deployment wrapper
-cannot supply these Ops inputs. Python staging, explicit force app-only deployment
-and retained Python routes keep their existing roles; signed routine deployment
-uses the separate direct caller described above.
+cannot supply these Ops inputs. Staging and explicit force app-only deployment
+keep their own playbooks; signed routine deployment uses the separate direct
+caller described above.
 
 `distribution install` retains its
 schema 1 first-install/exact-repeat contract. Explicit `distribution upgrade`

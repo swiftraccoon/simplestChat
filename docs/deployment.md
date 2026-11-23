@@ -140,8 +140,8 @@ native Ops helper before canonical maintenance. The caller joins the retained
 original signed application predicate and staged manifest hash to the same Ops
 repository, revision, run and attempt; retained JSON alone is not authentication.
 The frozen deployment wrapper does not supply that workflow's new typed Ops
-inputs. The application remains containerized; existing Python staging and
-Ansible keep their documented roles.
+inputs. The application remains containerized, and Ansible keeps its documented
+role.
 
 1. Point your domain at the host and set Caddy's `CADDY_DOMAIN` environment
    variable (or edit its example hostname). Set `ALLOWED_ORIGINS` to the exact

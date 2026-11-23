@@ -363,7 +363,7 @@
       changed_when: false
       no_log: true
 
-    - name: Install the isolated routine-release helpers
+    - name: Create the protected Ops executable directory
       ansible.builtin.file:
         path: /usr/local/libexec/simplestchat-public
         state: directory
@@ -371,24 +371,45 @@
         group: root
         mode: '0755'
 
-    - name: Copy routine-release commands without starting a release
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-        owner: root
-        group: root
-        mode: '0644'
+    # These files belong to no release and no playbook installs them: every
+    # operation they held is a command of the signed Ops executable, which
+    # this task leaves in place. `--tags retired-helpers` removes only them.
+    - name: Remove the retired Python release helpers
+      tags: [retired-helpers]
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
       loop:
-        - bounded_process.py
-        - runtime_profile.py
-        - release-public.py
-        - release_public.py
-        - release_artifact.py
-        - release_assets.py
-        - browser_assets.py
-        - release_json.py
-        - reboot-public.py
-        - reboot_public.py
+        - /usr/local/libexec/simplestchat-public/backup_offsite.py
+        - /usr/local/libexec/simplestchat-public/backup_public.py
+        - /usr/local/libexec/simplestchat-public/bounded_process.py
+        - /usr/local/libexec/simplestchat-public/browser_assets.py
+        - /usr/local/libexec/simplestchat-public/database_logging.py
+        - /usr/local/libexec/simplestchat-public/fetch-release.py
+        - /usr/local/libexec/simplestchat-public/force_release.py
+        - /usr/local/libexec/simplestchat-public/migrate_public.py
+        - /usr/local/libexec/simplestchat-public/migration_snapshot.py
+        - /usr/local/libexec/simplestchat-public/migration_tls.py
+        - /usr/local/libexec/simplestchat-public/monitoring_alerts.py
+        - /usr/local/libexec/simplestchat-public/monitoring_collect.py
+        - /usr/local/libexec/simplestchat-public/monitoring_external.py
+        - /usr/local/libexec/simplestchat-public/monitoring_prepare.py
+        - /usr/local/libexec/simplestchat-public/monitoring_report.py
+        - /usr/local/libexec/simplestchat-public/reboot-public.py
+        - /usr/local/libexec/simplestchat-public/reboot_public.py
+        - /usr/local/libexec/simplestchat-public/release-public.py
+        - /usr/local/libexec/simplestchat-public/release_artifact.py
+        - /usr/local/libexec/simplestchat-public/release_assets.py
+        - /usr/local/libexec/simplestchat-public/release_fetch_receiver.py
+        - /usr/local/libexec/simplestchat-public/release_json.py
+        - /usr/local/libexec/simplestchat-public/release_public.py
+        - /usr/local/libexec/simplestchat-public/release_trust.py
+        - /usr/local/libexec/simplestchat-public/restore_verify.py
+        - /usr/local/libexec/simplestchat-public/runtime_profile.py
+        - /usr/local/libexec/simplestchat-public/turn_public.py
+        - /usr/local/libexec/simplestchat-bench/release_json.py
+        - /usr/local/libexec/simplestchat-bench/seed-public-room.py
+        - /usr/local/libexec/simplestchat-bench/seed_public_room.py
 
     - name: Prepare bounded public asset storage and expiration before startup
       ansible.builtin.import_tasks: tasks/browser-assets.yml

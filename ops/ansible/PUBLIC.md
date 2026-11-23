@@ -162,6 +162,22 @@ missing pinned dependency images, and installs commands. It does not start the
 public service. The public project must be stopped when applying configuration.
 Do not print resolved Compose configuration: it contains secrets.
 
+The playbook installs nothing beside the Ops executable in
+`/usr/local/libexec/simplestchat-public` and removes the retired Python release
+helpers a host may still hold there or in `/usr/local/libexec/simplestchat-bench`,
+each by the path its "Remove the retired Python release helpers" task lists;
+no release installs any of them. To remove only those files from a running
+host, select that task's tag: the run gathers facts, performs the
+unfinished-release check and the removal, and nothing else, so the public
+project keeps running:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
+  ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/public.yml \
+  --limit public_vps --tags retired-helpers
+```
+
 The image comes from the host's own build of `scbench_revision` by default. To
 apply configuration changes with the image CI tested instead, stage it while
 chat is live (`release.yml` with `scpub_release_deploy: false`; see
@@ -407,8 +423,7 @@ the deployment command again.
 
 A release that also removes a deployment secret and adds migrations has one
 working order. The release that replaced JWT access tokens with opaque session
-handles is one: it drops `jwt_secret`, adds migrations 037 and 038 and changes
-the release helper (`files/release_public.py`).
+handles is one: it drops `jwt_secret` and adds migrations 037 and 038.
 
 1. Push the revision and follow its hosted CI to green; the maintenance release
    below needs that run's signed application and Ops artifacts.
@@ -513,7 +528,7 @@ command may clear only that operation after the recorded same-boot safety deadli
 daemon-side dump to finish before other work is admitted:
 
 ```sh
-sudo /usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_public.py cleanup
+sudo /usr/local/libexec/simplestchat-public/simplestchat-ops backup cleanup
 ```
 
 Local dumps cannot survive loss of the VPS. The separate, explicit

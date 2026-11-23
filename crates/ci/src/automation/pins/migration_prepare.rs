@@ -294,11 +294,12 @@ fn bootstrap_keeps_the_authenticated_executable_beside_the_request_on_both_machi
 
 /// Bootstrap refuses unfinished owned work before it writes anything: its
 /// first task changes nothing and checks the workload lock, an unfinished
-/// journal and an existing request. The helpers it then installs include
-/// every one a host's releases, fetches, reboots and backups run, and none
-/// of a move's own steps, which are commands of the executable it keeps.
+/// journal and an existing request. It creates the root-owned directory a
+/// release later delivers the Ops executable into and copies nothing there:
+/// every step of a move runs the executable it keeps beside its request,
+/// and no step names a Python file.
 #[test]
-fn bootstrap_refuses_unfinished_work_and_installs_every_host_helper() {
+fn bootstrap_refuses_unfinished_work_and_installs_no_helper() {
     let play = play();
     let steps = block(&play, "bootstrap");
     let guard = &steps[0];
@@ -313,29 +314,18 @@ fn bootstrap_refuses_unfinished_work_and_installs_every_host_helper() {
     ] {
         assert!(source.contains(token), "{token}");
     }
-    let install = first(steps, |task| {
-        task["ansible.builtin.copy"]["src"] == "{{ item }}"
+    let (_, directory) = located(steps, |task| {
+        task["name"] == "Create the protected Ops executable directory"
     });
-    let installed = strings(&install["loop"]);
-    for helper in [
-        "bounded_process.py",
-        "release-public.py",
-        "release_public.py",
-        "release_artifact.py",
-        "release_assets.py",
-        "browser_assets.py",
-        "release_json.py",
-        "runtime_profile.py",
-        "reboot-public.py",
-        "reboot_public.py",
-        "fetch-release.py",
-        "release_fetch_receiver.py",
-        "release_trust.py",
-        "backup_public.py",
-    ] {
-        assert!(installed.contains(&helper), "{helper}");
+    let protected = json!({"path": "/usr/local/libexec/simplestchat-public",
+        "state": "directory", "owner": "root", "group": "root", "mode": "0755"});
+    assert_eq!(directory["ansible.builtin.file"], protected);
+    for task in steps {
+        let destination = task["ansible.builtin.copy"]["dest"].as_str();
+        let installed = destination.is_some_and(|path| path.starts_with("/usr/local/libexec"));
+        assert!(!installed, "{}", task["name"]);
     }
-    assert!(installed.iter().all(|name| !name.starts_with("migrat")));
+    assert!(!Value::from(steps.to_vec()).to_string().contains(".py"));
 }
 
 /// Every data step of a move runs the executable the move keeps, with the

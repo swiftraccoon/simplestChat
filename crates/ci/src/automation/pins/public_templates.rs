@@ -6,6 +6,7 @@
 use super::ansible::render_with;
 use super::{checkout_file, document};
 use serde_json::{Map, Value, json};
+use simplestchat_ops::release::maintain::IDENTITY_KEYS;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::OnceLock;
@@ -494,23 +495,14 @@ fn ipv6_only_network_carries_the_primary_announced_address() {
     assert_eq!(compose["networks"]["default"]["enable_ipv6"], true);
 }
 
-/// The lines of `app.env` that the maintenance helper refuses to change, as
-/// its source lists them.
+/// The lines of `app.env` that a maintenance release refuses to change.
 fn identity_keys() -> BTreeSet<String> {
-    let helper = checkout_file("ops/ansible/files/release_public.py");
-    let listed =
-        regex::Regex::new(r"(?s)\nIDENTITY_KEYS = frozenset\(\n    \{\n(.*?)    \}\n\)\n").unwrap();
-    let body = listed.captures(&helper).expect("the identity lines");
-    let key = regex::Regex::new(r#"^        "([A-Z_0-9]+)",$"#).unwrap();
-    let keys = body[1]
-        .lines()
-        .map(|line| key.captures(line).expect("one line")[1].to_owned());
-    keys.collect()
+    IDENTITY_KEYS.map(str::to_owned).into()
 }
 
 /// From `test_the_maintenance_helper_protects_every_secret_and_identity_line`:
-/// a candidate `app.env` may change sizing; the helper refuses secret or
-/// identity changes.
+/// a candidate `app.env` may change sizing; a maintenance release refuses
+/// one that changes a secret or identity line.
 #[test]
 fn the_maintenance_helper_protects_every_secret_and_identity_line() {
     let relayed =

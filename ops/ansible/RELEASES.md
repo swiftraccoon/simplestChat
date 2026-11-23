@@ -30,9 +30,9 @@ cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/re
 
 This validates metadata only; it does not authenticate an image archive or
 signature and cannot authorize deployment. It starts no host operation.
-Application staging retains its Python runtime. Explicit routine deployment and
-prepared-host maintenance use the separately authenticated Ops executable
-described below; it is not part of the production image.
+Application staging, explicit routine deployment and prepared-host maintenance
+use the separately authenticated Ops executable described below; it is not part
+of the production image.
 
 The same tool can inspect the original uncompressed image archive against that
 validated manifest without extracting, loading or running it:
@@ -580,8 +580,8 @@ the exact staged 40-character commit on the VPS:
 sudo systemd-run --unit=simplestchat-app-release \
   --property=Type=exec --property=RuntimeMaxSec=1800 \
   --property=TimeoutStopSec=240 --wait \
-  /usr/bin/python3 -B /usr/local/libexec/simplestchat-public/release-public.py \
-  deploy <40-character-commit>
+  /usr/local/libexec/simplestchat-public/simplestchat-ops release deploy \
+  --revision <40-character-commit> --timeout-seconds 1800 --finalization-seconds 60
 ```
 
 Use a new unit name for a later attempt. Do not automatically retry a failed job.
@@ -626,8 +626,8 @@ This is a breaking maintenance caller change: use the direct playbooks below.
 [Routine signed app-only deployment](#routine-update-use-the-image-ci-tested)
 also uses direct typed Ansible, and there is no forced maintenance. This
 maintenance path requires a
-signed Ops artifact and has no unsigned force bootstrap fallback. Existing
-Python remains in application staging, Ansible and the retained helpers.
+signed Ops artifact and has no unsigned force bootstrap fallback; it runs no
+Python helper on the host.
 
 ### Prepare the controller before credentials
 

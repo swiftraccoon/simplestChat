@@ -1553,52 +1553,42 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-0dde6d412a5ba49a415abd72218a193a470b1d394342ed09595fabb435354ea7"
+    "key": "ci-verified-v1-automation-main-f5eac99ee70a95246a94c38c23ace27990f3e5f363980ca6713cae39f214441b"
    },
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-d8d6517eb4847b1eccd92843a014be5cff1835b55953567e2f5e15fe7598ced3"
+    "key": "ci-verified-v1-automation-main-e9996102255c09a217680319be230db3323017f26539bbeb4ec629f7b60e5efb"
    },
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-f8752bacb7223188ff05be21dcebc25d05731a802f07559cfbc7f2f0145dfd53"
+    "key": "ci-verified-v1-automation-main-268b4bc07ac8ff2661a6ef6159a04f98a90bae1ed77cf79d782821276bacc162"
    },
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-2ca3ce37b46a2e8ec05d4ca60b621d38297ac0c5d7289be9e688037655d298d9"
-   },
-   {
-    "operation": "key",
-    "scope": "automation",
-    "key": "ci-verified-v1-automation-main-ddaa1ec5383a3ae77815b74710b0291462146841bf50958e5b2c53043767df62"
+    "key": "ci-verified-v1-automation-main-fd9f7dfc3be16e8fc4374430b3e88764ae80bb7bc0b154529f80e3451ae22eda"
    },
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-04e9e806307528b7876dad76397d1f481bfacc58a00c54319af39fdcb935d48f"
+    "key": "ci-verified-v1-rust-test-main-f71fb87b260be070c2b6c286bdf7caccd46e2bc459546ad7959ec490131cd771"
    },
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-c5a4339861da5de0c85e33d2004b103ece43e11e2b28e54e59004794357207ec"
+    "key": "ci-verified-v1-rust-test-main-aa10fd12c46b884548674bf1c0212f58251d253196184419414f31ee49672318"
    },
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-70a01e3708ec3bfea8caaeb7684181b22ef9cfec1bb66e6efa1656d9cb39fb2c"
+    "key": "ci-verified-v1-rust-test-main-05fee896e272d4beeab01b5159a16a61661c57fe54ee8dff85ee309769259e92"
    },
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-d63c80faa9e3fec7cbdeda30a9688ae657780bef330afa0e85ec6edb53d61e3c"
-   },
-   {
-    "operation": "key",
-    "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-04172b1d0a5e6bbad76abdb0a5f36e8bb4a428b4ad6685f0c91e4a8e141c5a26"
+    "key": "ci-verified-v1-rust-test-main-cdb999a13465f49387a0da3e2e49647ba1ff0f858f0598b1bfa089a3bc541abd"
    }
   ],
   "the_reference_omits_the_shared_crates_that_rust_keys": [
@@ -7832,12 +7822,12 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-553c83b59f4b2471b341ca0874456ac91c7ea94970f957b37770d89efb66576c"
+    "key": "ci-verified-v1-automation-main-97cdfc00207b0625b77cbe8e59e370c3d26e17305227ddbfcffce6a6751c20fb"
    },
    {
     "operation": "save",
     "scope": "automation",
-    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-automation-main-553c83b59f4b2471b341ca0874456ac91c7ea94970f957b37770d89efb66576c\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
+    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-automation-main-97cdfc00207b0625b77cbe8e59e370c3d26e17305227ddbfcffce6a6751c20fb\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
    },
    {
     "operation": "verify",
@@ -7847,7 +7837,7 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-9f3d2dc5df0e1da7098e87b836bb65df61a62ecb994612bedd2679e328fdbf5c"
+    "key": "ci-verified-v1-automation-main-5ea540b5d4b9f160e04346ea3b590a21bbb7efee6859219fffa8b1bc4f33434f"
    },
    {
     "operation": "verify",
@@ -7862,7 +7852,7 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-15bbdf98178b701ccc9a6ee1673d35cc96732a58eed7feacf64b64a97859756f"
+    "key": "ci-verified-v1-automation-main-e960357893b83336662b047a462357451496ffbc2aeaeff1f3a32f0d36fec775"
    },
    {
     "operation": "verify",
@@ -7877,7 +7867,7 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-8dc488ab0f8c1210b5eccc90d0575ccbb96e8b11920b071fa85862d7bc937d7d"
+    "key": "ci-verified-v1-automation-main-ef60a7cf2b54f52bef73f6c86e7f55df0a6ca5666adb76bd5d090dc50e9e6012"
    },
    {
     "operation": "verify",
@@ -7892,7 +7882,7 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-e8af3dcd6e6e9a46ad5776176ea641b390ed7fbbbc0bc806e9c5a1e225805aa8"
+    "key": "ci-verified-v1-automation-main-7f1da569d62f6e3eb2530c09cdea5a78828fb4e74c7e5b1508b909099f1b0eec"
    },
    {
     "operation": "verify",
@@ -7907,7 +7897,7 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-8d0b71e3574a49fd6d4c57d10d4397f35dec587dc2e631614aaaeae98efdc31e"
+    "key": "ci-verified-v1-automation-main-988ab7dc940e2d2ddb41c80221b02ddfc0340f2754983463fda8b6ac94eaa25f"
    },
    {
     "operation": "verify",
@@ -7922,22 +7912,7 @@
    {
     "operation": "key",
     "scope": "automation",
-    "key": "ci-verified-v1-automation-main-d574e4dc09de8c82d5a90602fda8aae6bd7e50d2ba07e474175112655bf5008f"
-   },
-   {
-    "operation": "verify",
-    "scope": "automation",
-    "refused": "ci_cache_inputs_changed"
-   },
-   {
-    "operation": "verify",
-    "scope": "automation",
-    "revision": "1111111111111111111111111111111111111111"
-   },
-   {
-    "operation": "key",
-    "scope": "automation",
-    "key": "ci-verified-v1-automation-main-4c99389e8261289bfae617001bb22bbfc86c235578f5b091f0a015e05fdbf82b"
+    "key": "ci-verified-v1-automation-main-e482f1e9d19f585d41900f32c01083d0c0d77efc19726c1a19748f9ce102044e"
    },
    {
     "operation": "verify",
@@ -7952,12 +7927,12 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-8b12c7f5c32baa7437b52849dace0f80bc1bc9fb37985a3ccfb931f29491d767"
+    "key": "ci-verified-v1-rust-test-main-045a3d4357c25f435259b8b2f637cbc6e2e8c6eed49ab08e3b20451febadaf21"
    },
    {
     "operation": "save",
     "scope": "rust-test",
-    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-rust-test-main-8b12c7f5c32baa7437b52849dace0f80bc1bc9fb37985a3ccfb931f29491d767\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
+    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-rust-test-main-045a3d4357c25f435259b8b2f637cbc6e2e8c6eed49ab08e3b20451febadaf21\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
    },
    {
     "operation": "verify",
@@ -7967,7 +7942,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-1229f716555202d2a3a3cf70deac37064595f63cbc8f20c5e3d5e358e570811a"
+    "key": "ci-verified-v1-rust-test-main-219c03b1d867b36536e91ab5e7600b40d4baadc81240e8121419e8877b59aa26"
    },
    {
     "operation": "verify",
@@ -7982,7 +7957,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-3fad5c1ffe4e41f261dfea4f4445a4234164ee345c90f6ca412ef20088cf1eac"
+    "key": "ci-verified-v1-rust-test-main-d9a0d763b275a8a36bf69240d658c2c519af216fcd8102f8cc4138284a63b730"
    },
    {
     "operation": "verify",
@@ -7997,7 +7972,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-da814731ce52b4f3267575be01b3daefdb9783858ee59397ccacfe8e5ab4ac61"
+    "key": "ci-verified-v1-rust-test-main-6a24e4f312019b1faf3a7593e805c4bace704022773f1432756ca9332978b402"
    },
    {
     "operation": "verify",
@@ -8012,7 +7987,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-bb071cd5b2ddcd9b65df14a54eacbf8b10143335abd23c1f0d892f1d201af4e4"
+    "key": "ci-verified-v1-rust-test-main-b4f2f5e5141c4a1790da6f6a19fd1f4de46c42d096500570e090c48cd95c23d7"
    },
    {
     "operation": "verify",
@@ -8027,7 +8002,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-97037c506b4c78d035e7f09b633b57ddf9476c4853b12a89fde398f4594fbe75"
+    "key": "ci-verified-v1-rust-test-main-6eb95673333da72a1224c06e0e008df3a25b7e526330963f5d332b818d8b6f11"
    },
    {
     "operation": "verify",
@@ -8042,22 +8017,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-85efd1101ea14494a73584693b9f4a003806e7e7e855746320d52e1fd0f6a82e"
-   },
-   {
-    "operation": "verify",
-    "scope": "rust-test",
-    "refused": "ci_cache_inputs_changed"
-   },
-   {
-    "operation": "verify",
-    "scope": "rust-test",
-    "revision": "1111111111111111111111111111111111111111"
-   },
-   {
-    "operation": "key",
-    "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-72c28407cb494df73f9d6fae49ffcfb9b01daa8fcbe5962d850787ad64486510"
+    "key": "ci-verified-v1-rust-test-main-fde2d27c621113612924c9c2ef58a9a09deb842bcf2a49a9cb76e749406eba88"
    },
    {
     "operation": "verify",

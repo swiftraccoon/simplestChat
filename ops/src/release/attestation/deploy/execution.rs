@@ -13,6 +13,7 @@ pub(super) mod maintenance;
 mod maintenance_effect_tests;
 #[path = "maintenance_selection.rs"]
 mod maintenance_selection;
+pub use maintenance_selection::IDENTITY_KEYS;
 #[cfg(test)]
 #[path = "relay_effect_tests.rs"]
 mod relay_effect_tests;

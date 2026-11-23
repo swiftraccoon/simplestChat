@@ -19,6 +19,7 @@ mod migration_prepare;
 mod monitoring;
 mod performance_compare_ci;
 mod public_deployment;
+mod public_reboot;
 mod public_recorded_release;
 mod public_templates;
 mod python_quality;

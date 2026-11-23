@@ -19,6 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub use execution::IDENTITY_KEYS;
 use execution::execute;
 pub(super) use execution::maintenance::execute as execute_maintenance;
 

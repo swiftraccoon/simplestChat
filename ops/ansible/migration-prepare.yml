@@ -361,7 +361,7 @@
             state: absent
           when: scmig_inspector.path is defined
 
-    - name: Install the reviewed helpers and exact source secrets without starting services
+    - name: Prepare private storage and exact source secrets without starting services
       when: scmig_action == 'bootstrap'
       block:
         - name: Refuse unfinished owned work and unsafe existing bootstrap paths
@@ -427,37 +427,13 @@
             - /srv/simplestchat-public/migrations
             - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}"
 
-        - name: Create the protected installed-helper directory
+        - name: Create the protected Ops executable directory
           ansible.builtin.file:
             path: /usr/local/libexec/simplestchat-public
             state: directory
             owner: root
             group: root
             mode: '0755'
-
-        - name: Install the canonical release receiver and migration helpers
-          ansible.builtin.copy:
-            src: "{{ item }}"
-            dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-            owner: root
-            group: root
-            mode: '0644'
-          loop:
-            - bounded_process.py
-            - runtime_profile.py
-            - release-public.py
-            - release_public.py
-            - release_artifact.py
-            - release_assets.py
-            - browser_assets.py
-            - release_json.py
-            - reboot-public.py
-            - reboot_public.py
-            - fetch-release.py
-            - release_fetch_receiver.py
-            - release_trust.py
-            - backup_public.py
-            - force_release.py
 
         - name: Bind a new private migration request without replacing prior evidence
           ansible.builtin.copy:

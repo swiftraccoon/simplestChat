@@ -848,7 +848,9 @@ record: no ARM image was scanned.
 
 The [runtime source review](runtime-source-review.json) binds the current `src`
 tree, `Cargo.toml`, `Cargo.lock` and `vendor/integrity.json`; the vendored
-mediasoup trees, native inventory and profile files are unchanged. The production
+mediasoup trees, native inventory and name switch are unchanged, and its profile
+file is `ops/src/release/profile.rs`, the source of `simplestchat-ops release
+profile`, in place of the retired Python profile helper. The production
 source delta since its previous binding adds no process execution, dynamic
 loading, locale conversion or outbound destination, and the server's Linux
 dependency graph only loses `jsonwebtoken`, `signature` and `zeroize_derive` and

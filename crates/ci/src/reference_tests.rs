@@ -898,11 +898,10 @@ fn backend_dependency_guard_rejects_wrong_targets_and_unsupported_rules() {
 
 /// The inputs of the restore checks and of the Rust tests that the Python
 /// test indexed without Git.
-const RESTORE_PATHS: [&str; 7] = [
+const RESTORE_PATHS: [&str; 6] = [
     "ops/src/release/attestation/restore.rs",
     "ops/src/release/attestation/restore/tests.rs",
     "ops/tests/release_backup_cli.rs",
-    "ops/ansible/tests/test_restore_verify.py",
     "ops/src/release/attestation/restore/database_tests.rs",
     "xtask/src/ci/automation.rs",
     ".github/workflows/ci.yml",
@@ -959,5 +958,5 @@ fn restore_inputs_invalidate_existing_checks_and_rust_receipts_without_git() {
             assert_eq!(fixture.verify(scope, &key, &receipt), original_revision());
         }
     }
-    assert_eq!(fixture.replayed(), [48, 0, 14]);
+    assert_eq!(fixture.replayed(), [42, 0, 12]);
 }

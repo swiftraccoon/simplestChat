@@ -22,8 +22,10 @@ use std::{collections::BTreeSet, path::Path};
 pub const REVIEW: &str = "security/runtime-source-review.json";
 /// The name switch of the managed profile, below the checkout.
 pub const NSS: &str = "security/runtime/nsswitch.conf";
-/// The runtime profile's own checks, below the checkout.
-pub const PROFILE: &str = "ops/ansible/files/runtime_profile.py";
+/// The runtime profile's own checks, below the checkout: the source of
+/// `simplestchat-ops release profile`, whose image defaults the proof applies
+/// and whose rules a launcher applies to the image and its deployment.
+pub const PROFILE: &str = "ops/src/release/profile.rs";
 /// The source trees that the review covers.
 pub const SOURCE_TREES: [&str; 5] = [
     "src",

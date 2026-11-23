@@ -6,7 +6,10 @@
 use super::*;
 use std::{collections::BTreeSet, path::Path};
 
-const IDENTITY_KEYS: [&str; 15] = [
+/// The `app.env` lines a maintenance release keeps: it refuses a candidate
+/// that sets any of them otherwise than the installed file does, an absent
+/// line counting as empty, because changing one needs full maintenance.
+pub const IDENTITY_KEYS: [&str; 15] = [
     "ALLOWED_ORIGINS",
     "ANNOUNCE_IP",
     "ANNOUNCE_IPV6",

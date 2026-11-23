@@ -1,12 +1,51 @@
 //! The public deployment's ordering and syntax, carried over from the Python
 //! deployment tests. The launcher is never executed.
 
-use super::ansible::evaluate;
-use super::{checkout_file, document, located};
+use super::ansible::{Scratch, ansible, evaluate, succeeded};
+use super::{checkout_file, document, lacks, located};
 use serde_json::{Value, json};
 use std::process::Command;
 
 const SCRIPT: &str = "ops/ansible/files/deploy-public.sh";
+/// Where a release delivers the signed Ops executable.
+const EXECUTABLES: &str = "/usr/local/libexec/simplestchat-public";
+/// The task that removes the retired helpers.
+const REMOVAL: &str = "Remove the retired Python release helpers";
+/// Every file that a playbook of this repository installed into the
+/// executable directory or the benchmark helper directory and that none
+/// installs now, by path.
+const RETIRED_HELPERS: [&str; 30] = [
+    "/usr/local/libexec/simplestchat-public/backup_offsite.py",
+    "/usr/local/libexec/simplestchat-public/backup_public.py",
+    "/usr/local/libexec/simplestchat-public/bounded_process.py",
+    "/usr/local/libexec/simplestchat-public/browser_assets.py",
+    "/usr/local/libexec/simplestchat-public/database_logging.py",
+    "/usr/local/libexec/simplestchat-public/fetch-release.py",
+    "/usr/local/libexec/simplestchat-public/force_release.py",
+    "/usr/local/libexec/simplestchat-public/migrate_public.py",
+    "/usr/local/libexec/simplestchat-public/migration_snapshot.py",
+    "/usr/local/libexec/simplestchat-public/migration_tls.py",
+    "/usr/local/libexec/simplestchat-public/monitoring_alerts.py",
+    "/usr/local/libexec/simplestchat-public/monitoring_collect.py",
+    "/usr/local/libexec/simplestchat-public/monitoring_external.py",
+    "/usr/local/libexec/simplestchat-public/monitoring_prepare.py",
+    "/usr/local/libexec/simplestchat-public/monitoring_report.py",
+    "/usr/local/libexec/simplestchat-public/reboot-public.py",
+    "/usr/local/libexec/simplestchat-public/reboot_public.py",
+    "/usr/local/libexec/simplestchat-public/release-public.py",
+    "/usr/local/libexec/simplestchat-public/release_artifact.py",
+    "/usr/local/libexec/simplestchat-public/release_assets.py",
+    "/usr/local/libexec/simplestchat-public/release_fetch_receiver.py",
+    "/usr/local/libexec/simplestchat-public/release_json.py",
+    "/usr/local/libexec/simplestchat-public/release_public.py",
+    "/usr/local/libexec/simplestchat-public/release_trust.py",
+    "/usr/local/libexec/simplestchat-public/restore_verify.py",
+    "/usr/local/libexec/simplestchat-public/runtime_profile.py",
+    "/usr/local/libexec/simplestchat-public/turn_public.py",
+    "/usr/local/libexec/simplestchat-bench/release_json.py",
+    "/usr/local/libexec/simplestchat-bench/seed-public-room.py",
+    "/usr/local/libexec/simplestchat-bench/seed_public_room.py",
+];
 /// The launcher's comparison of the database's migration ledger with the
 /// verified source checkout.
 const LEDGER: &str =
@@ -184,10 +223,75 @@ fn the_lobby_is_seeded_by_the_installed_ops_executable() {
         {"source": "deploy-public.sh", "destination": "/usr/local/bin/simplestchat-public-deploy"},
     ]);
     assert_eq!(install["loop"], installs);
-    let text = play.to_string();
+    // Outside the removal of the retired helpers nothing names a seeding helper.
+    let mut kept = play.clone();
+    let tasks = kept["tasks"].as_array_mut().unwrap();
+    tasks.retain(|task| task["name"] != REMOVAL);
+    let text = kept.to_string();
     for retired in ["seed", "simplestchat-bench/release_json.py"] {
         assert!(!text.contains(retired), "{retired}");
     }
+}
+
+/// Provisioning installs nothing beside the Ops executable and removes every
+/// retired helper by its exact path, whichever playbook once installed it,
+/// and nothing a release still installs. No other task of the playbook names
+/// a Python file.
+#[test]
+fn provisioning_installs_no_helper_and_removes_every_retired_one() {
+    let play = public();
+    let tasks = section(&play, "tasks");
+    for task in tasks {
+        for module in ["ansible.builtin.copy", "ansible.builtin.template"] {
+            let destination = task[module]["dest"].as_str().unwrap_or_default();
+            assert!(!destination.starts_with(EXECUTABLES), "{}", task["name"]);
+        }
+    }
+    let removals: Vec<&Value> = tasks
+        .iter()
+        .filter(|task| task["ansible.builtin.file"]["state"] == "absent")
+        .collect();
+    assert_eq!(removals.len(), 1);
+    let removal = removals[0];
+    assert_eq!(removal["name"], REMOVAL);
+    let each = json!({"path": "{{ item }}", "state": "absent"});
+    assert_eq!(removal["ansible.builtin.file"], each);
+    assert_eq!(removal["loop"], json!(RETIRED_HELPERS));
+    assert!(lacks(
+        removal,
+        &["when", "check_mode", "ignore_errors", "failed_when"]
+    ));
+    let text = checkout_file("ops/ansible/public.yml");
+    assert_eq!(text.matches(".py").count(), RETIRED_HELPERS.len());
+}
+
+/// The removal has a tag of its own: selecting it runs the unfinished
+/// release guard and the removal, and nothing that needs the public project
+/// stopped.
+#[test]
+fn the_retired_helper_tag_runs_the_release_guard_and_the_removal_alone() {
+    let scratch = Scratch::new();
+    let arguments = [
+        "-i",
+        "inventory.example.yml",
+        "public.yml",
+        "--list-tasks",
+        "--tags",
+        "retired-helpers",
+    ];
+    let listed = succeeded(&ansible("ansible-playbook", &arguments, &scratch));
+    let selected: Vec<&str> = listed
+        .lines()
+        .filter_map(|line| line.strip_prefix("      "))
+        .collect();
+    let guard = "Refuse public configuration changes while a release remains unfinished";
+    assert_eq!(
+        selected,
+        [
+            format!("{guard}\tTAGS: [always]"),
+            format!("{REMOVAL}\tTAGS: [retired-helpers]"),
+        ]
+    );
 }
 
 /// From `test_verified_artifacts_and_migrations_precede_runtime_privileges`.

@@ -56,6 +56,8 @@ const RECORDED_FETCH: [&str; 3] = [
     "release_fetch_receiver.py",
     "release_trust.py",
 ];
+/// The forced-release helper name one removed operation's case was built from.
+const RECORDED_FORCE: [&str; 1] = ["force_release.py"];
 fn helpers() -> Value {
     json!(
         RECORDED_BASE
@@ -365,7 +367,7 @@ fn receipt_consistency_and_redaction_match_the_recorded_controller_projection() 
 fn finished_claims_preserve_the_operational_policy() {
     let mut cases = mutations("helpers", helpers());
     cases.push(json!({"op":"helpers","value":{}}));
-    for extension in [RECORDED_FETCH.to_vec(), vec!["force_release.py"]] {
+    for extension in [RECORDED_FETCH.to_vec(), RECORDED_FORCE.to_vec()] {
         let mut selected = helpers();
         for name in extension {
             selected[name] = json!("b".repeat(64));
