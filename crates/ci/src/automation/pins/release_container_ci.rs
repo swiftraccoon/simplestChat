@@ -21,7 +21,7 @@ const RELEASE: &str = "Retain the verified production release";
 const BUILD: &str = "Build production container";
 const VERIFY: &str = "Verify production image contents and user";
 const SMOKE: &str = "Production startup, migration and database-backed API smoke";
-const GUEST: &str = "Verify the guest checker against pinned Compose JSON";
+const GUEST: &str = "Verify the guest checker and the release selection against pinned Compose";
 const TOOLCHAIN_ACTION: &str = "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d";
 const CACHE_PIN: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const ROLLOVER: &str = "${{ runner.temp }}/rollover-playwright";
@@ -342,9 +342,10 @@ fn buildx_is_verified_before_the_production_build_on_both_ci_paths() {
     assert!(!checkout_file("build/ci-local-docker.sh").contains("buildx"));
 }
 
-/// The guest's Compose check runs on the provisioned renderer and the
-/// controller environment's Ansible and cannot silently skip in
-/// production-image CI; the existing job deadline bounds cold feature builds.
+/// The guest's Compose check and the release selection's Compose preview run
+/// on the provisioned renderer and the controller environment's Ansible and
+/// cannot silently skip in production-image CI; the existing job deadline
+/// bounds cold feature builds.
 #[test]
 fn guest_compose_contract_runs_with_required_pinned_renderer() {
     let deployment = Deployment::read();
@@ -357,10 +358,13 @@ fn guest_compose_contract_runs_with_required_pinned_renderer() {
          cargo test --locked -q -p simplestchat-ci --features release-http-policy --lib \
          --target-dir \"$RUNNER_TEMP/release-http-policy-build\" -- --exact \
          automation::pins::public_templates::\
-         the_provisioned_compose_model_of_the_templates_passes_the_guest_checks";
+         the_provisioned_compose_model_of_the_templates_passes_the_guest_checks \
+         automation::pins::release_playbook::\
+         a_release_selection_changes_only_the_application_images_of_the_compose_model";
     assert!(script.contains(command), "{script}");
     assert!(!script.contains("python") && !script.contains("unittest"));
-    // The test the step names is the one this crate holds.
+    // The tests the step names are the ones this crate holds, and both take
+    // the renderer that refuses to skip when it is required.
     let source = include_str!("public_templates.rs");
     assert!(
         source.contains(
@@ -368,6 +372,18 @@ fn guest_compose_contract_runs_with_required_pinned_renderer() {
         )
     );
     assert!(source.contains("std::env::var(\"VM_COMPOSE_REQUIRED\")"));
+    let selection = include_str!("release_playbook.rs");
+    assert!(selection.contains(
+        "fn a_release_selection_changes_only_the_application_images_of_the_compose_model()"
+    ));
+    for source in [source, selection] {
+        assert_eq!(
+            source
+                .matches("let Some(renderer) = required_renderer(&environment) else {")
+                .count(),
+            1
+        );
+    }
     assert!(deployment.at(COMPOSE_TOOL) < deployment.at(GUEST));
     assert!(deployment.at(PREPARE) < deployment.at(GUEST));
     assert!(deployment.at(GUEST) < deployment.at(INTEGRATION));

@@ -109,17 +109,19 @@ pub(super) fn play(tasks: &Value, variables: &Value, vars_files: &[&str]) -> Scr
         "vars": vars,
         "tasks": tasks,
     }]);
-    run(&book, "localhost,", &scratch);
+    run(&book, "localhost,", &[], &scratch);
     scratch
 }
 
-/// Run one generated playbook against `inventory` and require it to succeed.
-fn run(book: &Value, inventory: &str, scratch: &Scratch) {
+/// Run one generated playbook against `inventory`, with `options` added to
+/// Ansible's command line, and require it to succeed.
+fn run(book: &Value, inventory: &str, options: &[&str], scratch: &Scratch) {
     // JSON is YAML, so the generated play needs no YAML writer.
     let path = scratch.path().join("play.json");
     std::fs::write(&path, serde_json::to_vec(book).unwrap()).unwrap();
-    let inventory: &OsStr = inventory.as_ref();
-    let arguments = ["-i".as_ref(), inventory, path.as_os_str()];
+    let mut arguments: Vec<&OsStr> = vec!["-i".as_ref(), inventory.as_ref()];
+    arguments.extend(options.iter().map(OsStr::new));
+    arguments.push(path.as_os_str());
     succeeded(&ansible("ansible-playbook", &arguments, scratch));
 }
 
@@ -161,6 +163,20 @@ fn rendered(names: &[&str], vars_files: &[&str], overrides: &Value) -> BTreeMap<
 /// accepted. An undefined variable, or a rule that cannot be evaluated,
 /// refuses the case, as it would on a host.
 pub(super) fn asserted(rules: &Value, cases: &[Value]) -> Vec<bool> {
+    asserted_on(&[FIXTURE_HOST], &[], rules, cases).remove(0)
+}
+
+/// Run the assert module with `rules` once per case on each of `hosts`, as a
+/// run that selected exactly those hosts with `options` (such as `--check`)
+/// on Ansible's command line, and report each host's verdicts in the order of
+/// `hosts`. Ansible itself sets the play's hosts and the check mode, which a
+/// case's variables cannot replace.
+pub(super) fn asserted_on(
+    hosts: &[&str],
+    options: &[&str],
+    rules: &Value,
+    cases: &[Value],
+) -> Vec<Vec<bool>> {
     let mut tasks = Vec::new();
     for (index, case) in cases.iter().enumerate() {
         tasks.push(json!({
@@ -175,29 +191,35 @@ pub(super) fn asserted(rules: &Value, cases: &[Value]) -> Vec<bool> {
         .collect::<Vec<_>>()
         .join(", ");
     let scratch = Scratch::new();
+    // Each host writes its own verdicts, in a check run as well.
     tasks.push(json!({
         "ansible.builtin.copy": {
             "content": format!("{{{{ [{verdicts}] | to_json }}}}"),
-            "dest": scratch.path().join("verdicts.json"),
+            "dest": scratch.path().join("{{ inventory_hostname }}.json"),
             "mode": "0600",
         },
+        "check_mode": false,
         "delegate_to": "localhost",
         "vars": {
             "ansible_connection": "local",
             "ansible_python_interpreter": "{{ ansible_playbook_python }}",
         },
     }));
-    // The play targets a named host over the default transport, because a
+    // The play targets named hosts over the default transport, because a
     // local play defines `ansible_connection` and `ansible_host` itself and
     // would decide rules about them. Assertions run on the controller and
-    // never connect. The host's name is not a valid address, so a case is
-    // accepted only on the values it supplies.
+    // never connect. No host's name is a valid address, so a case is
+    // accepted only on the values it supplies and those Ansible sets.
     let book = json!([{"hosts": "all", "gather_facts": false, "tasks": tasks}]);
-    run(&book, &format!("{FIXTURE_HOST},"), &scratch);
-    let verdicts = std::fs::read(scratch.path().join("verdicts.json")).unwrap();
-    let verdicts: Vec<bool> = serde_json::from_slice(&verdicts).unwrap();
-    assert_eq!(verdicts.len(), cases.len());
-    verdicts
+    let inventory: String = hosts.iter().map(|host| format!("{host},")).collect();
+    run(&book, &inventory, options, &scratch);
+    let verdicts = |host: &&str| {
+        let verdicts = std::fs::read(scratch.path().join(format!("{host}.json"))).unwrap();
+        let verdicts: Vec<bool> = serde_json::from_slice(&verdicts).unwrap();
+        assert_eq!(verdicts.len(), cases.len(), "{host}");
+        verdicts
+    };
+    hosts.iter().map(verdicts).collect()
 }
 
 /// Evaluate each expression against each case's variables. The result is one

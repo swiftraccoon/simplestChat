@@ -1,10 +1,15 @@
 //! The release playbook's source selection and the public playbook's staged
-//! image selection, carried over from the Python release playbook tests. The
-//! source guard is evaluated by Ansible's own assert module.
+//! image selection, carried over from the Python release playbook tests, and
+//! what a release's image selection changes in the project the provisioned
+//! Compose renders. The source guard is evaluated by Ansible's own assert
+//! module.
 
-use super::ansible::asserted;
+use super::ansible::{Scratch, asserted};
+use super::public_templates::{engineless, required_renderer, write_project};
 use super::{checkout_file, document};
 use serde_json::{Map, Value, json};
+use std::collections::BTreeSet;
+use std::process::Command;
 
 /// The single play of one playbook.
 fn play(name: &str) -> Value {
@@ -376,4 +381,152 @@ fn a_staged_release_replaces_the_on_host_build_as_the_image_source() {
         addressed["ansible.builtin.assert"]["that"],
         "scpub_server_image is match('^sha256:[a-f0-9]{64}$')"
     );
+}
+
+/// The services of two Compose models, and their other top-level fields, in
+/// which the models differ: names only, never values, which hold a host's
+/// secrets.
+fn differing(left: &Value, right: &Value) -> Vec<String> {
+    let keys = |value: &Value| -> BTreeSet<String> {
+        let fields = value.as_object().map(|fields| fields.keys().cloned());
+        fields.into_iter().flatten().collect()
+    };
+    let mut names = Vec::new();
+    for key in keys(left).union(&keys(right)) {
+        if key == "services" {
+            let (one, other) = (&left[key], &right[key]);
+            for name in keys(one).union(&keys(other)) {
+                if one.get(name) != other.get(name) {
+                    names.push(format!("services.{name}"));
+                }
+            }
+        } else if left.get(key) != right.get(key) {
+            names.push(key.clone());
+        }
+    }
+    names
+}
+
+/// From `test_real_compose_preview_and_installed_selection_change_only_images_and_image_metadata`:
+/// a release selects another image as `release deploy` does, replacing the
+/// two image lines of the old image in the Compose file and its one line in
+/// the application's settings. The provisioned Compose, with no engine,
+/// renders the preview that the release judges, which still reads the
+/// installed settings, with only the two images changed; once installed, the
+/// project also hands the application the new image setting, and the
+/// database and proxy keep their configuration hashes while the
+/// application's hash changes. Without the provisioned Compose the case is
+/// skipped, unless `VM_COMPOSE_REQUIRED=1` (the deployment job) requires it.
+#[test]
+fn a_release_selection_changes_only_the_application_images_of_the_compose_model() {
+    let scratch = Scratch::new();
+    let directory = scratch.path().canonicalize().unwrap();
+    let environment = engineless(&directory);
+    let Some(renderer) = required_renderer(&environment) else {
+        return;
+    };
+    let (config, attempt) = (directory.join("config"), directory.join("attempt"));
+    std::fs::create_dir(&config).unwrap();
+    std::fs::create_dir(&attempt).unwrap();
+    let old = format!("sha256:{}", "a".repeat(64));
+    let new = format!("sha256:{}", "d".repeat(64));
+    let overrides = json!({
+        "scpub_config": config,
+        "scpub_root": directory.join("data"),
+        "scpub_server_image": old,
+    });
+    write_project(&config, &overrides);
+    // Compose as the release runs it: from the installed project directory,
+    // with the installed files or the candidate's.
+    let compose = |file: &str, settings: &str, arguments: &[&str]| {
+        let output = Command::new(&renderer[0])
+            .args(&renderer[1..])
+            .args([
+                "--project-name",
+                "simplestchat-public",
+                "--project-directory",
+            ])
+            .arg(&config)
+            .arg("--env-file")
+            .arg(directory.join(settings))
+            .arg("-f")
+            .arg(directory.join(file))
+            .args(arguments)
+            .current_dir(&directory)
+            .env_clear()
+            .envs(
+                environment
+                    .iter()
+                    .map(|(name, value)| (*name, value.as_str())),
+            )
+            .output()
+            .unwrap();
+        let errors = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{errors}");
+        output.stdout
+    };
+    let installed = ("config/compose.public.yml", "config/app.env");
+    let model = |(file, settings): (&str, &str)| -> Value {
+        let arguments = ["--profile", "maintenance", "config", "--format", "json"];
+        serde_json::from_slice(&compose(file, settings, &arguments)).unwrap()
+    };
+    let hashes = || {
+        ["simplestchat", "postgres", "caddy"].map(|service| {
+            let printed = compose(installed.0, installed.1, &["config", "--hash", service]);
+            let printed = String::from_utf8(printed).unwrap();
+            let prefix = format!("{service} ");
+            let digest = printed.trim_end().strip_prefix(prefix.as_str()).unwrap();
+            let hexadecimal = |byte: u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte);
+            assert!(
+                digest.len() == 64 && digest.bytes().all(hexadecimal),
+                "{printed}"
+            );
+            digest.to_owned()
+        })
+    };
+    let before = model(installed);
+    let application = &before["services"]["simplestchat"]["environment"];
+    assert_eq!(application["SIMPLESTCHAT_IMAGE"], json!(old));
+    let hashed = hashes();
+    let read = |name: &str| std::fs::read_to_string(directory.join(name)).unwrap();
+    let image = format!("image: \"{old}\"");
+    let file = read(installed.0);
+    assert_eq!(
+        file.matches(&image).count(),
+        2,
+        "the app and migration images"
+    );
+    let preview = file.replace(&image, &format!("image: \"{new}\""));
+    let setting = format!("SIMPLESTCHAT_IMAGE={old}");
+    let settings = read(installed.1);
+    assert_eq!(settings.lines().filter(|line| *line == setting).count(), 1);
+    let selected = settings.lines().map(|line| {
+        if line == setting {
+            format!("SIMPLESTCHAT_IMAGE={new}")
+        } else {
+            line.to_owned()
+        }
+    });
+    let selected = selected.collect::<Vec<_>>().join("\n") + "\n";
+    std::fs::write(attempt.join("candidate-compose.yml"), &preview).unwrap();
+    std::fs::write(attempt.join("candidate.env"), &selected).unwrap();
+    let mut expected = before.clone();
+    for service in ["simplestchat", "migrate"] {
+        expected["services"][service]["image"] = json!(new);
+    }
+    let previewed = model(("attempt/candidate-compose.yml", "attempt/candidate.env"));
+    let changed = differing(&previewed, &expected);
+    assert!(previewed == expected, "the preview differs in {changed:?}");
+    std::fs::write(directory.join(installed.0), &preview).unwrap();
+    std::fs::write(directory.join(installed.1), &selected).unwrap();
+    expected["services"]["simplestchat"]["environment"]["SIMPLESTCHAT_IMAGE"] = json!(new);
+    let replaced = model(installed);
+    let changed = differing(&replaced, &expected);
+    assert!(
+        replaced == expected,
+        "the installed project differs in {changed:?}"
+    );
+    let rehashed = hashes();
+    assert_ne!(rehashed[0], hashed[0]);
+    assert_eq!(rehashed[1..], hashed[1..]);
 }

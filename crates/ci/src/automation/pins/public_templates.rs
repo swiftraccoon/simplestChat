@@ -183,6 +183,63 @@ fn compose_renderer(environment: &[(&str, String)]) -> Option<Vec<std::path::Pat
     })
 }
 
+/// The environment of every Compose command of these pins: a fixed search
+/// path, `directory` as home, the C locale and an engine address that nothing
+/// listens on, so that rendering a project never reaches a daemon.
+pub(super) fn engineless(directory: &Path) -> [(&'static str, String); 4] {
+    [
+        ("PATH", "/usr/bin:/bin".to_owned()),
+        ("HOME", directory.to_str().unwrap().to_owned()),
+        ("LC_ALL", "C".to_owned()),
+        // No engine exists at this private path; config stays daemon-free.
+        (
+            "DOCKER_HOST",
+            format!("unix://{}", directory.join("absent.sock").display()),
+        ),
+    ]
+}
+
+/// The provisioned Compose renderer under `environment`, or `None` when it is
+/// absent and the case is skipped; with `VM_COMPOSE_REQUIRED=1` (the
+/// deployment job) its absence fails the case instead.
+pub(super) fn required_renderer(environment: &[(&str, String)]) -> Option<Vec<std::path::PathBuf>> {
+    let renderer = compose_renderer(environment);
+    if renderer.is_none() {
+        let required = std::env::var("VM_COMPOSE_REQUIRED").is_ok_and(|value| value == "1");
+        assert!(
+            !required,
+            "the provisioned Compose is required for this check"
+        );
+        eprintln!(
+            "skipped: the provisioned Compose {} is absent",
+            provisioned_compose()
+        );
+    }
+    renderer
+}
+
+/// Write the project a host renders with `overrides` into `directory`, under
+/// the names the host keeps: the Compose file and the three environment files
+/// rendered from their templates, and the base Compose file beside them.
+pub(super) fn write_project(directory: &Path, overrides: &Value) {
+    let templates = [
+        (COMPOSE, "compose.public.yml"),
+        (APP, "app.env"),
+        (MIGRATION, "migration.env"),
+        (PROXY, "proxy.env"),
+    ];
+    let names: Vec<&str> = templates.iter().map(|(template, _)| *template).collect();
+    let rendered = render_with(&names, &host(overrides));
+    for (template, name) in templates {
+        std::fs::write(directory.join(name), format!("{}\n", rendered[template])).unwrap();
+    }
+    std::fs::write(
+        directory.join("compose.base.yml"),
+        checkout_file("docker-compose.yml"),
+    )
+    .unwrap();
+}
+
 /// The disposable guest's snapshot checks the Compose model the provisioned
 /// renderer makes of the real templates: rendered as the fixture's inventory
 /// renders them, `config --format json` with the maintenance profile and no
@@ -194,26 +251,8 @@ fn compose_renderer(environment: &[(&str, String)]) -> Option<Vec<std::path::Pat
 fn the_provisioned_compose_model_of_the_templates_passes_the_guest_checks() {
     let scratch = super::ansible::Scratch::new();
     let directory = scratch.path().canonicalize().unwrap();
-    let environment = [
-        ("PATH", "/usr/bin:/bin".to_owned()),
-        ("HOME", directory.to_str().unwrap().to_owned()),
-        ("LC_ALL", "C".to_owned()),
-        // No engine exists at this private path; config stays daemon-free.
-        (
-            "DOCKER_HOST",
-            format!("unix://{}", directory.join("absent.sock").display()),
-        ),
-    ];
-    let Some(renderer) = compose_renderer(&environment) else {
-        let required = std::env::var("VM_COMPOSE_REQUIRED").is_ok_and(|value| value == "1");
-        assert!(
-            !required,
-            "the provisioned Compose is required for this check"
-        );
-        eprintln!(
-            "skipped: the provisioned Compose {} is absent",
-            provisioned_compose()
-        );
+    let environment = engineless(&directory);
+    let Some(renderer) = required_renderer(&environment) else {
         return;
     };
     let overrides = json!({
@@ -229,22 +268,7 @@ fn the_provisioned_compose_model_of_the_templates_passes_the_guest_checks() {
         "scpub_postgres_memory_mib": 1024,
         "scpub_postgres_shared_buffers_mib": 256,
     });
-    let templates = [
-        (COMPOSE, "compose.public.yml"),
-        (APP, "app.env"),
-        (MIGRATION, "migration.env"),
-        (PROXY, "proxy.env"),
-    ];
-    let names: Vec<&str> = templates.iter().map(|(template, _)| *template).collect();
-    let rendered = render_with(&names, &host(&overrides));
-    for (template, name) in templates {
-        std::fs::write(directory.join(name), format!("{}\n", rendered[template])).unwrap();
-    }
-    std::fs::write(
-        directory.join("compose.base.yml"),
-        checkout_file("docker-compose.yml"),
-    )
-    .unwrap();
+    write_project(&directory, &overrides);
     let output = std::process::Command::new(&renderer[0])
         .args(&renderer[1..])
         .arg("--env-file")

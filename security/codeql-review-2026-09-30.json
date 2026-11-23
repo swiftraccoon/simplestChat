@@ -680,7 +680,7 @@
       "number": 30,
       "severity": "high",
       "state": "open",
-      "disposition": "false-positive",
+      "disposition": "retired",
       "rationale": "The flagged StrictUndefined Environment renders tracked local configuration templates with explicit offline fixture values, never HTML or a browser response. Source re-review at 4dcb016387184179133895d457781a85dd49e8e6 confirms the flagged line moves from 82 to 75 unchanged. That change removed the module's second renderer, a NativeEnvironment that stood in for Ansible's variable resolution, with the tests that used it and its imports; the flagged renderer, its fixture values and the templates it reads are untouched, and no template source or HTML sink was added. HTML escaping is inappropriate for these formats. The hosted CodeQL 2.27.1 Python security-extended SARIF for that revision independently confirms this exact source, query, range and message identity.",
       "observedRevision": "4dcb016387184179133895d457781a85dd49e8e6",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/30",

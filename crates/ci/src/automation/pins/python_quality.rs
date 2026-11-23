@@ -222,6 +222,8 @@ fn branch_subject_checks_the_head_before_any_cached_gate() {
 
 /// From `test_configuration_has_full_rules_and_no_machine_specific_environment`:
 /// strict rule sets, no blanket type suppression and no local venv binding.
+/// The checker reads exactly the three directories that hold maintained
+/// Python, and no stub directory, since none is tracked.
 #[test]
 fn configuration_has_full_rules_and_no_machine_specific_environment() {
     let config = pyproject();
@@ -231,20 +233,12 @@ fn configuration_has_full_rules_and_no_machine_specific_environment() {
     assert!(!excluded.contains(&"build") && !excluded.contains(&"build/"));
     let based = config["tool"]["basedpyright"].as_object().unwrap();
     assert_eq!(based["typeCheckingMode"], "all");
-    for key in ["venvPath", "venv", "ignore"] {
+    for key in ["venvPath", "venv", "ignore", "stubPath"] {
         assert!(!based.contains_key(key), "{key}");
     }
-    assert_eq!(based["stubPath"], "typings");
-    let included = strings(&based["include"]);
-    for path in [
-        "build",
-        "ops/ansible/files",
-        "ops/ansible/callback_plugins",
-        "ops/ansible/tests",
-        "typings",
-    ] {
-        assert!(included.contains(&path), "{path}");
-    }
+    let roots = ["build", "ops/ansible/files", "ops/ansible/tests"];
+    assert_eq!(strings(&based["include"]), roots);
+    assert_eq!(strings(&based["extraPaths"]), roots);
     for (name, value) in based {
         if name.starts_with("report") && name != "reportImplicitRelativeImport" {
             assert!(*value != json!(false) && *value != "none", "{name}");

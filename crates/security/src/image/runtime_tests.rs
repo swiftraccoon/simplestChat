@@ -1,9 +1,10 @@
 //! Replays of `recorded_runtime.json`: what the reference in Python made
 //! of source reviews, of the image's filesystem profile, of published
 //! report digests, of whole runtime proofs, of the advisory's affected
-//! scopes, of dispositions and of their absence. Two pins hold what the
-//! proof binds in this checkout: the profile's source and the committed
-//! review's digests of the profile files.
+//! scopes, of dispositions and of their absence. Three pins hold what the
+//! proof binds in this checkout: the profile's source, the committed
+//! review's digests of the profile files, and the image recipe's removal of
+//! the loader cache and installation of the reviewed name switch.
 
 use super::{
     Evidence, Limits, PROFILE, REVIEW, affected_scopes, apply, encoded, filesystem_profile,
@@ -529,4 +530,41 @@ fn the_committed_review_binds_the_checkouts_profile_files() {
             "{path}"
         );
     }
+}
+
+/// The image recipe makes the runtime files the proof requires: the name
+/// switch it installs reads local files for every table and adds DNS for
+/// hosts alone, and its runtime stage removes the loader cache after its
+/// package installation and before that switch is copied in, with nothing
+/// from that stage onwards regenerating the cache.
+#[test]
+fn the_runtime_stage_removes_the_loader_cache_and_installs_the_reviewed_name_switch() {
+    let switch = checkout("security/runtime/nsswitch.conf");
+    let switch = String::from_utf8(switch).expect("the name switch is text");
+    let tables: Vec<(&str, &str)> = switch
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.split_once(": ").expect("a table and its sources"))
+        .collect();
+    let sources = |name: &str| {
+        let found = tables.iter().find(|(table, _)| *table == name);
+        found.map(|(_, sources)| *sources)
+    };
+    assert_eq!(sources("hosts"), Some("files dns"));
+    for name in ["passwd", "group", "shadow", "gshadow", "initgroups"] {
+        assert_eq!(sources(name), Some("files"), "{name}");
+    }
+    let local = |(table, sources): &(&str, &str)| *table == "hosts" || *sources == "files";
+    assert!(tables.iter().all(local));
+    let recipe = String::from_utf8(checkout("Dockerfile")).expect("the recipe is text");
+    let (_, stage) = recipe
+        .split_once(" AS runtime-base\n")
+        .expect("a runtime stage");
+    let at = |text: &str| {
+        let found = stage.find(text);
+        found.unwrap_or_else(|| panic!("the runtime stage holds no {text}"))
+    };
+    assert!(at("dnf install") < at("rm -f /etc/ld.so.cache"));
+    assert!(at("rm -f /etc/ld.so.cache") < at("COPY security/runtime/nsswitch.conf"));
+    assert!(!stage.contains("ldconfig"));
 }

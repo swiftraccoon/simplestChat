@@ -5,7 +5,7 @@
 //! migration tests. Each pin reads a playbook offline; the selection guards
 //! are evaluated by Ansible's own assert module.
 
-use super::ansible::asserted;
+use super::ansible::{asserted, asserted_on};
 use super::{document, first, located};
 use serde_json::{Map, Value, json};
 
@@ -394,6 +394,90 @@ fn every_data_step_runs_the_executable_the_move_keeps() {
             on("migration_source", either, true),
         ]
     );
+}
+
+/// From `test_selection_guard_refuses_check_mode_extra_hosts_and_bad_operation`:
+/// the first guard, evaluated by Ansible on the hosts a run selects, admits
+/// the controller's two hosts with well-formed identities, and refuses a
+/// check run, a third or a missing host, another host's name, an unknown
+/// action and each malformed identity, origin, evidence path or deployment.
+#[test]
+fn selection_guard_refuses_check_mode_extra_hosts_and_bad_operation() {
+    let play = play();
+    let guard = &tasks(&play["pre_tasks"])[0];
+    assert_eq!(
+        guard["name"],
+        "Require the controller's exact two-host migration selection"
+    );
+    let rules = &guard["ansible.builtin.assert"]["that"];
+    let baseline = json!({
+        "scmig_action": "inspect",
+        "scmig_run_id": "a".repeat(32),
+        "scmig_revision": "b".repeat(40),
+        "scmig_source_origin": "https://chat.example.test",
+        "scmig_destination_origin": "https://next.chat.example.test",
+        "scmig_evidence": "/private/controller/evidence",
+        "scpub_enabled": true,
+        "scpub_config": "/etc/simplestchat-public",
+        "scpub_root": "/srv/simplestchat-public",
+    });
+    let with = |key: &str, value: Value| {
+        let mut case = baseline.clone();
+        case[key] = value;
+        case
+    };
+    let mut cases = vec![
+        ("the baseline", baseline.clone(), true),
+        // A move may keep its origin.
+        (
+            "one origin",
+            with(
+                "scmig_destination_origin",
+                json!("https://chat.example.test"),
+            ),
+            true,
+        ),
+    ];
+    for (key, value) in [
+        ("inventory_hostname", json!("other")),
+        ("scmig_action", json!("deploy")),
+        ("scmig_run_id", json!("../elsewhere")),
+        ("scmig_revision", json!("main")),
+        ("scmig_source_origin", json!("http://chat.example.test")),
+        (
+            "scmig_destination_origin",
+            json!("https://next.example.test/x"),
+        ),
+        ("scmig_evidence", json!("private/controller/evidence")),
+        ("scpub_enabled", json!(false)),
+        ("scpub_config", json!("/etc/simplestchat-other")),
+        ("scpub_root", json!("/srv/simplestchat-other")),
+    ] {
+        cases.push((key, with(key, value), false));
+    }
+    let variables: Vec<Value> = cases.iter().map(|(_, case, _)| case.clone()).collect();
+    let both = ["migration_source", "migration_target"];
+    let verdicts = asserted_on(&both, &[], rules, &variables);
+    for (host, verdicts) in both.iter().zip(&verdicts) {
+        for (accepted, (label, _, expected)) in verdicts.iter().zip(&cases) {
+            assert_eq!(accepted, expected, "{host}: {label}");
+        }
+    }
+    // The check mode and the play's hosts are Ansible's own, whatever a
+    // case says.
+    let baseline = [baseline];
+    let third = ["migration_source", "migration_target", "other"];
+    for (hosts, options) in [
+        (&both[..], &["--check"][..]),
+        (&third[..], &[][..]),
+        (&["migration_target"][..], &[][..]),
+    ] {
+        let verdicts = asserted_on(hosts, options, rules, &baseline);
+        assert_eq!(verdicts.len(), hosts.len());
+        for (host, verdict) in hosts.iter().zip(&verdicts) {
+            assert_eq!(verdict, &[false], "{host} of {hosts:?} with {options:?}");
+        }
+    }
 }
 
 /// From `test_secret_copy_requires_exact_digest_without_owner_or_secret_logging`:

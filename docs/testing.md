@@ -440,7 +440,8 @@ basedpyright's `all` mode over every maintained Python file and type stub,
 including tests. It rejects a new source directory until explicitly included.
 Third-party `vendor/` sources and ignored private operator scripts are outside
 this policy. ShellCheck, `jq`, and the Ansible dependencies are required for the
-offline tests; the optional Compose renderer needs the Docker CLI, not a daemon.
+offline tests; the optional Compose checks need the provisioned Compose release,
+standalone or as the Docker CLI plugin, not a daemon.
 
 `pyproject.toml` defines the policy. Mutually exclusive formatting/docstring
 rules and standalone-module/unittest conventions have documented exceptions;
@@ -448,9 +449,8 @@ reviewed subprocess, CLI-output and transaction-complexity exceptions stay next
 to the affected code. `Any`, unknown types, untyped arguments, unchecked casts
 from decoded data, and test-wide typing exemptions are not used to pass the gate.
 JSON boundaries validate decoded values before constructing typed records;
-options and fixture state use dataclasses where appropriate. The narrow Ansible
-stubs in `typings/` describe only the pinned APIs used here and retain `object`
-for values that callers must validate.
+options and fixture state use dataclasses where appropriate. No local type stub
+remains: the maintained Python imports no Ansible API.
 
 CI uses this same gate. Set `PYTHON_CHECK_ENV` to another virtual environment
 directory to select both its pinned tools and its Python import environment.
@@ -1483,6 +1483,16 @@ It unsets the workflow's pinned OpenSSL/AWS-LC build-prefix variables for this h
 client build. Later default-feature Cargo commands cannot overwrite the selected
 binary. Compilation and package provisioning are outside the runtime step; the
 95-minute job allowance covers them. Default simplestchat-ci commands remain TLS-free.
+
+Before that build, the same step runs two daemon-free checks with the
+provisioned Compose, which `VM_COMPOSE_REQUIRED=1` forbids skipping: the guest
+checker's model of the real templates, and
+`automation::pins::release_playbook::a_release_selection_changes_only_the_application_images_of_the_compose_model`.
+The second selects another image in a rendered host project the way
+`release deploy` does; the preview it judges may change only the application
+and migration images, the installed candidate also the application's
+`SIMPLESTCHAT_IMAGE`, and the database's and proxy's configuration hashes stay
+the same.
 
 In an explicit hosted or disposable Linux CI context, the wrapper resolves the
 first executable Node in its captured `PATH` and runs the literal pinned

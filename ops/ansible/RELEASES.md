@@ -542,7 +542,7 @@ present and identical. Budget disk space for both; no retained evidence is
 automatically deleted. Check mode still performs controller-side signature
 verification, then skips remote transfer and runtime changes.
 
-### Repeated runs and timing
+### Repeated runs, pipelining and check mode
 
 Every run delivers the signed Ops executable for its own revision before
 staging, so a repeat needs no extra option. A previously downloaded signed candidate may be supplied
@@ -560,11 +560,6 @@ to reduce module-transfer round trips. Sudo configurations that require a TTY
 may need `-e ansible_pipelining=false`; the playbook does not modify sudo policy.
 Host-key and artifact checks stay enabled in either mode.
 
-To measure your own run, set `ANSIBLE_CALLBACKS_ENABLED=release_timing` alongside
-`ANSIBLE_CONFIG` in the command's environment. The optional callback reports
-bounded JSON task/playbook durations and completion status, without arguments,
-command output, inventory names or credentials. Timings include controller and
-transport overhead; they are not service downtime or an availability guarantee.
 Check mode still verifies the signed artifact on the controller, downloading it
 there unless `scpub_release_verified_directory` supplies an existing candidate.
 It skips the Ops delivery, the host preflight, transfer to the host, image

@@ -165,7 +165,8 @@ shellcheck ops/ansible/files/*.sh
 python -m unittest discover -s ops/ansible/tests -v
 ```
 
-The Python source gate includes controller commands, host helpers, callbacks,
-tests and local type stubs. It uses Ruff `ALL` and basedpyright `all`; see
+The Python source gate covers the capacity bootstrap
+(`build/vps_ops_bootstrap.py`), the remaining Python tests and the JSON reader
+they import. It uses Ruff `ALL` and basedpyright `all`; see
 [the Python test policy](../../docs/testing.md#python-automation) for scope,
 typed input boundaries and the narrowly documented exceptions.

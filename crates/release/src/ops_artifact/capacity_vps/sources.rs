@@ -29,7 +29,6 @@ pub(super) const NAMES: &[&str] = &[
     "ops/ansible/templates/docker.sources.j2",
     "ops/ansible/templates/docker.preferences.j2",
     "ops/ansible/templates/containerd-runtime.conf.j2",
-    "ops/ansible/callback_plugins/release_timing.py",
 ];
 
 pub(super) struct Sources {

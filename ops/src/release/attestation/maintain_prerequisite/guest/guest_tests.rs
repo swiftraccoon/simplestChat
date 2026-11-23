@@ -49,7 +49,7 @@ fn exact_request_keeps_fifty_sources_and_original_caps() {
     assert!(Request::decode(&serde_json::to_vec(&missing).unwrap()).is_err());
     // A helper roster is no longer part of the request.
     let mut helpers = value;
-    helpers["helperPins"] = json!({"bounded_process.py":"b".repeat(64)});
+    helpers["helperPins"] = json!({"release-helper.py":"b".repeat(64)});
     assert!(Request::decode(&serde_json::to_vec(&helpers).unwrap()).is_err());
 }
 #[test]

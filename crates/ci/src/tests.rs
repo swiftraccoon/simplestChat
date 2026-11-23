@@ -1822,14 +1822,13 @@ fn every_named_native_input_is_a_file_of_the_checkout() {
 
 /// What the native CodeQL analysis's traced build, its coverage proof and its
 /// policy actually read, each a file of the checkout.
-const NATIVE_CODEQL_INPUTS: [&str; 10] = [
+const NATIVE_CODEQL_INPUTS: [&str; 9] = [
     "build/codeql-native-build.sh",
     "build/pip-constraints.txt",
     "build/install-openssl.sh",
     "security/codeql-toolchain.json",
     "security/codeql/native-coverage/compilations.ql",
     ".github/workflows/codeql.yml",
-    "ops/ansible/files/bounded_process.py",
     "vendor/mediasoup-sys-0.19.0/tasks.py",
     "vendor/mediasoup-sys-0.19.0/meson.build",
     "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",

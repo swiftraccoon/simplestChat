@@ -101,7 +101,6 @@ pub(super) const NATIVE_FILES: &[&str] = &[
     "build/install-openssl.sh",
     "build/native-security.Dockerfile",
     "build/pip-constraints.txt",
-    "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
 ];
 
@@ -120,7 +119,6 @@ pub(super) const CODEQL_NATIVE_FILES: &[&str] = &[
     "build/codeql-native-build.sh",
     "build/install-openssl.sh",
     "build/pip-constraints.txt",
-    "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
     "security/codeql-toolchain.json",
 ];
@@ -163,7 +161,6 @@ pub(super) const BACKEND_FILES: &[&str] = &[
     "build/install-aws-lc.sh",
     "build/install-openssl.sh",
     "build/pip-constraints.txt",
-    "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
     "ops/ops-build-inputs.lock.json",
 ];

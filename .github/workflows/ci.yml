@@ -1142,7 +1142,7 @@ jobs:
           path: ${{ runner.temp }}/rollover-playwright
           key: ${{ steps.rollover-chromium.outputs.cache-primary-key }}
 
-      - name: Verify the guest checker against pinned Compose JSON
+      - name: Verify the guest checker and the release selection against pinned Compose
         env:
           VM_COMPOSE_REQUIRED: "1"
         run: |
@@ -1150,13 +1150,14 @@ jobs:
           sudo apt-get install -y libssl-dev pkg-config
           # The job's pinned prefixes belong to other native builds. This optional
           # host TLS owner uses the installed headers in a separate target tree.
-          # The guest's Compose check renders with the controller environment's Ansible.
+          # Both Compose checks render with the controller environment's Ansible.
           env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
             -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
             PATH="${RUNNER_TEMP}/release-container-controller/bin:${PATH}" \
             cargo test --locked -q -p simplestchat-ci --features release-http-policy --lib \
               --target-dir "$RUNNER_TEMP/release-http-policy-build" -- --exact \
-              automation::pins::public_templates::the_provisioned_compose_model_of_the_templates_passes_the_guest_checks
+              automation::pins::public_templates::the_provisioned_compose_model_of_the_templates_passes_the_guest_checks \
+              automation::pins::release_playbook::a_release_selection_changes_only_the_application_images_of_the_compose_model
           env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
             -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
             cargo build --locked -p simplestchat-ci --features release-http-policy \

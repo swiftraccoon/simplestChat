@@ -263,16 +263,6 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:1ee8f6e4b112d04d34a2ba87731d2bac9d7a69707504a6eba8c3b08e9829cc18",
-      "scope": "ops/ansible/tests/test_public_templates.py:75:75:9:65",
-      "owner": "swiftraccoon",
-      "rationale": "The flagged StrictUndefined Environment renders tracked local configuration templates with explicit offline fixture values, never HTML or a browser response. Source re-review at 4dcb016387184179133895d457781a85dd49e8e6 confirms the flagged line moves from 82 to 75 unchanged. That change removed the module's second renderer, a NativeEnvironment that stood in for Ansible's variable resolution, with the tests that used it and its imports; the flagged renderer, its fixture values and the templates it reads are untouched, and no template source or HTML sink was added. HTML escaping is inappropriate for these formats. The hosted CodeQL 2.27.1 Python security-extended SARIF for that revision independently confirms this exact source, query, range and message identity.",
-      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 731c2f87fa9baf70fdd39ae20908a71dc23dca8c7b8fa81fb43c3f5cb4298d5a. Original Python security-extended SARIF from 4dcb016387184179133895d457781a85dd49e8e6 independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
-      "expires": "2027-02-20",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-30"
-    },
-    {
-      "scanner": "codeql",
       "fingerprint": "codeql:af0f3efe6b17dda257d9262b35e9d54af0167e4b51f98300c9058ab7af10c7cd",
       "scope": "src/metrics.rs:1137:1137:13:21",
       "owner": "swiftraccoon",

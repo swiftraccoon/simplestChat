@@ -41,8 +41,10 @@ fn digest(value: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
-/// ASCII fingerprint grammar from release_assets.NAME; the 255-byte component
-/// cap additionally admits only representable managed Unix filenames.
+/// Whether `value` is a fingerprinted asset name: ASCII letters, digits, `_`
+/// and `-`, a hyphen before a 6 to 64 byte fingerprint, and one of the served
+/// extensions. The 255-byte cap admits only representable managed Unix
+/// filenames.
 pub(super) fn name(value: &str) -> bool {
     if value.len() > 255 {
         return false;
@@ -61,8 +63,8 @@ pub(super) fn name(value: &str) -> bool {
             .iter()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
     };
-    // The regex permits hyphens within both groups. Some earlier hyphen may
-    // delimit the suffix even when the final one has fewer than six bytes.
+    // Hyphens may occur within both parts. Some earlier hyphen may delimit
+    // the fingerprint even when the final one has fewer than six bytes.
     stem.bytes().enumerate().any(|(index, byte)| {
         byte == b'-'
             && index > 0

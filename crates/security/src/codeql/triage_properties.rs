@@ -417,7 +417,7 @@ fn every_reviewed_record_of_the_checkout_is_exact_and_fixes_stay_unwaived() {
     // permit its identity again.
     retired.sort_unstable();
     let mut retirements: Vec<u64> = vec![1, 4];
-    retirements.extend((9..=23).chain([27, 28, 29, 31, 32]).chain(59..=65));
+    retirements.extend((9..=23).chain(27..=32).chain(59..=65));
     assert_eq!(retired, retirements);
 }
 
