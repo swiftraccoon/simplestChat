@@ -6,8 +6,9 @@ ansible-compat==26.9.0 \
     --hash=sha256:6756ba0adee1a07d609ede35483fc563b9838df25ec70e57378ae8b564f185cf
 ansible-core==2.21.4 \
     --hash=sha256:ebe74d9c8fadcb41ad2151e031bf1e785e3098aaa015019b4e19a0a96f0dcc4f
-ansible-lint==26.9.0 \
-    --hash=sha256:4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50
+ansible-lint==26.10.1 \
+    --hash=sha256:a746c6f3cb5719d1c202bc14e956ef3b0eca704025d1aa92707a27fc73ed73ea \
+    --hash=sha256:cc26d405ee38c3390e80ec18c4137b5685c36d03ce7d4d8233b0470d9a0e21e9
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
 black==26.10.1 \
