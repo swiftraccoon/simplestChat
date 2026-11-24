@@ -2,8 +2,9 @@
 # Linux (x86_64/ARM64) and macOS ARM64: CPython 3.12–3.14. No source builds.
 --require-hashes
 --only-binary=:all:
-ansible-compat==26.9.0 \
-    --hash=sha256:6756ba0adee1a07d609ede35483fc563b9838df25ec70e57378ae8b564f185cf
+ansible-compat==26.11.0 \
+    --hash=sha256:35cbe829e0b5a9acb85d34b8d5da2eb45acaf767f6651f90e0ab2f3a96a060bb \
+    --hash=sha256:c06a486b39ced440f9f6fb9a99583c73d9239c94ece822a27ea2242173462dda
 ansible-core==2.21.4 \
     --hash=sha256:ebe74d9c8fadcb41ad2151e031bf1e785e3098aaa015019b4e19a0a96f0dcc4f
 ansible-lint==26.9.0 \
