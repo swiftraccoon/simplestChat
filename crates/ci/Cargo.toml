@@ -29,7 +29,7 @@ test-hooks = []
 [dependencies]
 anyhow = "1.0.104"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 futures-util = { version = "0.3.34", optional = true }
 nix = { version = "0.31.3", default-features = false }
 rawzip = "=0.5.2"
@@ -37,7 +37,7 @@ regex = "1.13.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["native-tls"], optional = true }
 rustix = { version = "1.1.5", features = ["fs", "process", "system"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "=2.1.1", default-features = false, features = ["deserialize"] }
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 sha2 = "0.11.0"
 simplestchat-ops = { path = "../../ops", default-features = false }
@@ -50,4 +50,4 @@ url = "2.5.8"
 [dev-dependencies]
 # Tests inject signal receivers; this crate's own normal and release builds leave the hooks off.
 simplestchat-toolkit = { path = "../toolkit", features = ["test-hooks"] }
-toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
+toml = { version = "=1.2.1", default-features = false, features = ["parse", "serde", "std"] }
