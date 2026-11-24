@@ -16,7 +16,7 @@ use crate::{
     Fault, Result,
     codeql::{
         tests::{items, planted, recording, text},
-        tools::AUTOMATED_LANGUAGES,
+        tools::{AUTOMATED_LANGUAGES, STORED_LANGUAGES},
     },
     document::Document,
     policy::{self, Date, permitted},
@@ -364,7 +364,110 @@ fn native_code_is_analyzed_locally_but_never_automated() {
             .iter()
             .all(|language| LANGUAGES.contains(language))
     );
-    assert_eq!(super::expected().len(), 4);
+    // The stored analyses every revision needs are the CodeQL workflow's own
+    // matrix: each a language the local runner analyzes and the pin covers.
+    assert!(
+        STORED_LANGUAGES
+            .iter()
+            .all(|language| AUTOMATED_LANGUAGES.contains(language))
+    );
+    assert_eq!(
+        super::expected(),
+        [
+            "/language:actions/security",
+            "/language:javascript-typescript/security",
+            "/language:rust/security"
+        ]
+    );
+    let workflow = fs::read_to_string(repository().join(".github/workflows/codeql.yml")).unwrap();
+    let matrix = format!("        language: [{}]\n", STORED_LANGUAGES.join(", "));
+    assert_eq!(workflow.matches(&matrix).count(), 1);
+}
+
+/// GitHub answering a branch head and one page of a revision's analyses.
+struct Analyses {
+    revision: String,
+    languages: Vec<&'static str>,
+}
+
+impl Transport for Analyses {
+    fn exchange(
+        &self,
+        _: &Path,
+        arguments: &[String],
+        _: &[(OsString, OsString)],
+        _: &[u8],
+        _: f64,
+        _: (u64, u64),
+    ) -> Result<(i32, Vec<u8>)> {
+        let endpoint = arguments.last().map_or("", String::as_str);
+        let answer = if endpoint.ends_with("/git/ref/heads/main") {
+            serde_json::json!({
+                "ref": "refs/heads/main",
+                "object": {"type": "commit", "sha": self.revision},
+            })
+        } else if endpoint.contains("/code-scanning/analyses?") {
+            let listed = self.languages.iter().zip(1_u64..).map(|(language, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "ref": "refs/heads/main",
+                    "commit_sha": self.revision,
+                    "category": format!("/language:{language}/security"),
+                    "tool": {"name": "CodeQL"},
+                    "rules_count": 7,
+                    "results_count": 0,
+                    "error": "",
+                    "warning": "",
+                })
+            });
+            serde_json::Value::Array(listed.collect())
+        } else {
+            return Ok((1, Vec::new()));
+        };
+        Ok((0, answer.to_string().into_bytes()))
+    }
+}
+
+#[test]
+fn a_revision_needs_exactly_the_stored_analyses_and_passes_over_a_python_one() {
+    let scratch = Scratch::new("codeql-triage-stored");
+    let environment = search(&scratch);
+    let clock = Virtual::new(0.0);
+    let revision = "a".repeat(40);
+    let health = |languages: Vec<&'static str>| {
+        let answers = Analyses {
+            revision: revision.clone(),
+            languages,
+        };
+        let reach = Reach {
+            clock: &clock,
+            transport: &answers,
+            environment: &environment,
+        };
+        let mut client = Github::new("owner/repository", false, reach).expect("a client");
+        super::plan::analysis_health(&mut client, &revision, "refs/heads/main")
+    };
+    let report = health(vec!["python", "rust", "javascript-typescript", "actions"]).unwrap();
+    let categories = report.get("analysisCategories").expect("categories");
+    let stored = [
+        "/language:actions/security",
+        "/language:javascript-typescript/security",
+        "/language:rust/security",
+    ];
+    assert_eq!(
+        categories,
+        &Document::List(stored.map(Document::from).to_vec())
+    );
+    let analyses = report
+        .get("analyses")
+        .and_then(Document::items)
+        .expect("analyses");
+    let ids: Vec<_> = analyses.iter().map(|analysis| analysis.get("id")).collect();
+    let [second, third, fourth] = [2_u64, 3, 4].map(Document::from);
+    assert_eq!(ids, [Some(&second), Some(&third), Some(&fourth)]);
+    // A stored Python analysis never stands in for a missing stored one.
+    let missing = health(vec!["python", "javascript-typescript", "actions"]);
+    assert_eq!(missing, Err(Fault("codeql_missing_current_analysis")));
 }
 
 /// The checkout this crate was built from.

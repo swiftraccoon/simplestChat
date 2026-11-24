@@ -300,9 +300,8 @@ fn native_suites_bind_each_helper_and_ignore_unrelated_review_changes() {
             "ops/ansible/files/deploy-public.sh",
         ])
         .collect::<Vec<_>>();
-    let native = inputs::NATIVE_FILES
-        .iter()
-        .copied()
+    let native = recorded_closure("nativeFiles")
+        .into_iter()
         .chain([
             "vendor/integrity.json",
             "vendor/native-components.json",
@@ -331,10 +330,12 @@ fn native_suites_bind_each_helper_and_ignore_unrelated_review_changes() {
     }
     for name in &native {
         fixture.write(name, b"changed\n");
+        // A file removed since the recording changes the reference's key alone.
+        let removed = REMOVED_SINCE_RECORDING.contains(name);
         for ((scope, (_, reference)), before) in suites.iter().zip(&originals).zip(&settled) {
             let (key, own) = fixture.keys(*scope).unwrap();
             assert_ne!(own, *reference, "{name}");
-            assert_ne!(key, *before, "{name}");
+            assert_eq!(key == *before, removed, "{name}");
         }
         fixture.write(name, b"original\n");
     }
@@ -397,9 +398,11 @@ fn native_codeql_binds_its_actual_build_analysis_and_policy_inputs() {
 fn rust_analysis_keeps_all_targets_embedded_data_and_tool_inputs() {
     let fixture =
         Fixture::recorded("rust_analysis_keeps_all_targets_embedded_data_and_tool_inputs");
-    let names = inputs::CODEQL_NATIVE_FILES
-        .iter()
-        .copied()
+    // The recorder kept only keys here, each over `release_json.py`, which is
+    // deleted: Rust's keys are held to their own invariants, not the reference's.
+    fixture.bare_keys_hashed_a_removed_file();
+    let names = recorded_closure("codeqlNativeFiles")
+        .into_iter()
         .chain([
             "Cargo.lock",
             "Cargo.toml",
@@ -429,12 +432,14 @@ fn rust_analysis_keeps_all_targets_embedded_data_and_tool_inputs() {
     let key = fixture.key(Scope::CodeqlRust);
     for name in &names {
         fixture.write(name, b"changed\n");
-        assert_ne!(fixture.key(Scope::CodeqlRust), key, "{name}");
+        let removed = REMOVED_SINCE_RECORDING.contains(name);
+        assert_eq!(fixture.key(Scope::CodeqlRust) == key, removed, "{name}");
         fixture.write(name, b"original\n");
     }
     fixture.git(&["update-index", "--chmod=+x", "new_target/module.rs"]);
     assert_ne!(fixture.key(Scope::CodeqlRust), key);
     assert_eq!(fixture.replayed(), [27, 0, 0]);
+    assert_eq!(fixture.unheld(), 27);
 }
 
 /// From `test_rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling`:
@@ -720,9 +725,8 @@ fn backend_closure_preserves_build_inputs_without_operational_invalidations() {
     let name = "backend_closure_preserves_build_inputs_without_operational_invalidations";
     let fixture = Fixture::recorded(name);
     let workflow = ".github/workflows/ci.yml";
-    let compiled = inputs::BACKEND_FILES
-        .iter()
-        .copied()
+    let compiled = recorded_closure("backendFiles")
+        .into_iter()
         .chain([
             "Cargo.lock",
             "Cargo.toml",
@@ -759,7 +763,8 @@ fn backend_closure_preserves_build_inputs_without_operational_invalidations() {
     }
     for name in &compiled {
         fixture.write(name, b"changed compiler input\n");
-        assert_ne!(fixture.key(Scope::Backend), original, "{name}");
+        let removed = REMOVED_SINCE_RECORDING.contains(name);
+        assert_eq!(fixture.key(Scope::Backend) == original, removed, "{name}");
         fixture.write(name, b"original\n");
     }
     assert_eq!(fixture.replayed(), [29, 0, 0]);

@@ -4,8 +4,9 @@
 its images, runs a bounded capacity experiment and collects the evidence on the
 controller. It uses the existing Ansible playbook, the image-build service and
 the `load_test capacity run` measurement engine, through an explicitly selected
-signed Ops artifact. Preparation and image building are explicit options; each
-measurement creates a new run.
+signed Ops artifact, whose executable a new run installs on the host through the
+production delivery tasks. Preparation and image building are explicit options;
+each measurement creates a new run.
 
 The controller owns preparation, SSH transport, systemd execution, collection,
 recovery and local evidence extraction; Ansible still provisions the host. The
@@ -66,32 +67,72 @@ target/debug/simplestchat-release vps-capacity \
   --server-cpus 1 --generator-cpus 4.8 --app-cpus 5
 ```
 
-The controller requires `GH_TOKEN` for authenticated acquisition. It removes
-that credential from SSH, Ansible and workload child environments. The example
+The controller requires `GH_TOKEN` for authenticated acquisition. Of its children
+only the three of a new run's install step receive it: the `gh` listing of the CI
+run's artifacts, the application verifier and the delivery playbook, whose
+production tasks export the signed Ops pair with it. SSH, Git, provisioning and
+workload children never receive it. The example
 presumes an already prepared host and images; add `--prepare` and
 `--build-images` explicitly when needed; `--help` lists every workload flag with
 its default. Running an experiment still requires selecting the target, quotas
 and duration; source tests are not a capacity measurement.
 
-Each run stages exactly the authenticated manifest, selection and musl binary
-under `/srv/simplestchat-bench/artifacts/ops-runtime.RUN`. The stdlib Python
-bootstrap handles bounded framing, hashing, sealing and execution of its original
-read-only descriptor. Successful ELF execution retires that descriptor through
-kernel `CLOEXEC`; this is not a checked Python close or a descriptor inherited by
-Rust. Rust opens `/proc/self/exe` and the fixed staged path separately and binds
-their inode, full stamp and byte identity. This requires trusted Linux procfs.
-It does not install a permanent binary or change installed release helpers.
+A new run installs the selected artifact on the host exactly as a release
+delivers Ops to a prepared host. `ops/ansible/capacity-ops-install.yml` binds the
+play to the one inventory host the controller selected, creates the release roots
+a prepared host holds before its first release (`/usr/local/libexec/simplestchat-public`
+at 0755, `/etc/simplestchat-public` and `/srv/simplestchat-public` at 0700) and
+imports the production `tasks/signed-ops.yml` unchanged: on the controller it
+exports the signed pair, and on the host it checks the copied archive and the
+candidate against the export's digests and runs `distribution install` or
+`upgrade`. A final assertion requires
+`/usr/local/libexec/simplestchat-public/simplestchat-ops` to be a root-owned
+regular file with mode 0755 and one link, with the size and SHA-256 the controller
+authenticated. The benchmark host keeps that installed executable, like any
+prepared host, and each delivery leaves its private copy under
+`/usr/local/libexec/simplestchat-ops-bootstrap/<nonce>/`, as a release does.
+
+The production tasks join the Ops selection to the signed application artifact of
+the same CI run and attempt, so a new run downloads two artifacts. The Ops artifact
+is downloaded twice: once for the controller's own authentication and pins, once
+by the tasks' export. The CI run's production artifact
+`simplestchat-production-<revision>`, its image archive included, is downloaded and
+authenticated by `simplestchat-release verify`, as `release.yml` runs it, only to
+supply that join; the measured images are still built on the host from the prepared
+source.
+
+Every request runs the installed executable,
+`[sudo -n --] /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C HOME=/root
+/usr/local/libexec/simplestchat-public/simplestchat-ops capacity-vps serve
+--transport-json HEADER`, with only the framed request on stdin. `serve` takes its
+first monotonic sample as the origin of every deadline; SSH, sudo and exec before it
+are bounded by the controller's dispatch deadline. It requires the installed file to
+be the root-owned, single-link mode 0755 executable the header pins
+(`ops_capacity_installed` otherwise), and its own running image, opened through
+`/proc/self/exe`, to be that inode with the same bytes (`ops_capacity_identity`);
+this requires trusted Linux procfs. The installed directory, the file and the running
+image must stay unchanged until the response. The systemd worker runs the same
+installed path under the same checks.
 
 Preparation retains one SSH lease while Ansible runs. EOF on either lease stream,
 extra stdout after the ready record, interruption or a failed custody check
 cancels preparation. Ansible and its streams finish before the controller sends
 the exact release line and closes stdin. All phase budgets derive from the
-original invocation; imports after the remote monotonic sample consume its
-budget, while interpreter startup is covered by the controller's parent budget.
+original invocation.
 
 Use `--collect RUN` or `--recover RUN` with the original revision and artifact
 selectors to adopt a saved run's original workload. Neither mode starts another
-workload. A lost start acknowledgement remains uncertain and is never retried
+workload or installs anything: the installer refuses while a worker holds the
+workload lock and after an unfinished journal, the states collection waits
+through and recovery resolves. Both use the installed executable, which must be
+the one the run's retained selection names; otherwise the host refuses with
+`ops_capacity_installed` and the controller stops with its fixed message, "The Ops
+executable installed on the private VPS is not the one this run's selected artifact
+names". A later new run that selects another artifact replaces the executable an
+uncollected earlier run needs (the installer refuses only while that run's worker
+still holds the lock); a new run with the earlier selectors installs it again before
+its preflight refuses the busy host, after which the earlier run can be collected.
+A lost start acknowledgement remains uncertain and is never retried
 automatically. Recovery rechecks immutable container ownership immediately before
 stopping or removing it; cleanup cannot convert a failed measurement into a pass.
 
@@ -226,7 +267,10 @@ bounds, the per-room text rate limit, and retained-evidence limits are enforced
 by the controller and generator.
 
 The controller returns zero only when every requested step is valid and passes,
-the worker exits successfully, and final container inspection confirms cleanup.
+the worker exits successfully, and final container inspection confirms cleanup:
+after the archive, the host concludes the run only when its unit is terminal with
+an empty cgroup, its journal is finalized, a fresh inspection finds no container
+beyond the run's baseline and its outcome or recovery receipt proves cleanup.
 Missing reports, invalid generator observations, workload failures, timeouts and
 uncertain cleanup return nonzero. An adaptive search may retain useful passing
 lower bounds before a failing step; its nonzero result preserves that distinction.

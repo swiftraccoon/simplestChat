@@ -162,11 +162,9 @@ for playbook in site public release reboot host-hardening proxy-config; do
   ansible-playbook -i ops/ansible/inventory.example.yml "ops/ansible/$playbook.yml" --syntax-check
 done
 shellcheck ops/ansible/files/*.sh
-python -m unittest discover -s ops/ansible/tests -v
 ```
 
-The Python source gate covers the capacity bootstrap
-(`build/vps_ops_bootstrap.py`), the remaining Python tests and the JSON reader
-they import. It uses Ruff `ALL` and basedpyright `all`; see
-[the Python test policy](../../docs/testing.md#python-automation) for scope,
-typed input boundaries and the narrowly documented exceptions.
+The repository tracks no Python of its own; `check --python` is the line
+ratchet that keeps it so (see
+[the automation checks](../../docs/testing.md#automation-checks)).
+Ansible and ansible-lint run in the pinned controller environment above.

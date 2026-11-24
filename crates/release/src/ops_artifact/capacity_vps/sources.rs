@@ -1,5 +1,7 @@
 //! Original committed sources and one closed execution projection. The selected
 //! Ansible runtime remains trusted; checkout siblings never become import paths.
+//! The projection holds the provisioning playbook, the benchmark delivery
+//! playbook and the production delivery tasks it imports unchanged.
 
 use super::super::namespace::{Budget, Chain, ChainWitness};
 use super::{
@@ -12,11 +14,12 @@ use std::{collections::BTreeMap, path::Path};
 
 pub(super) const NAMES: &[&str] = &[
     "Cargo.toml",
-    "build/vps_ops_bootstrap.py",
     "build/benchmark-container.sh",
     "build/cleanup-container-benchmark.sh",
     "ops/ansible/ansible.cfg",
     "ops/ansible/site.yml",
+    super::install::PLAYBOOK,
+    super::install::TASKS,
     "ops/ansible/group_vars/benchmark_hosts.yml",
     "ops/ansible/tasks/host.yml",
     "ops/ansible/tasks/docker.yml",
@@ -128,9 +131,6 @@ impl Sources {
     }
     pub fn directory(&self) -> &Path {
         self.projection.path()
-    }
-    pub fn bootstrap(&self) -> Result<&str> {
-        std::str::from_utf8(self.body("build/vps_ops_bootstrap.py")?).map_err(|_| failure(1))
     }
     pub fn package_version(&self) -> Result<String> {
         let source = std::str::from_utf8(self.body("Cargo.toml")?).map_err(|_| failure(1))?;

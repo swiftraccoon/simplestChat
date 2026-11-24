@@ -101,7 +101,8 @@ After [build setup](docs/development.md):
 cargo run --locked -q -p xtask -- check
 ```
 
-This runs Rust, web and Python quality gates plus web/helper tests. Native Rust,
+This runs the Rust and web quality gates, the line ratchet that keeps the
+repository free of Python, and the web/helper tests. Native Rust,
 database and browser integration tests are documented in [testing](docs/testing.md).
 
 ## Deploying

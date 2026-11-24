@@ -25,7 +25,7 @@ const RECORDED: &[u8] = include_bytes!("recorded_cargo.json");
 /// Files of the native analysis that were deleted after the recording was
 /// made: the recording lists them among the files every CodeQL key binds
 /// and judged each an input, and none is one any longer.
-const REMOVED_SINCE_RECORDING: [&str; 8] = [
+const REMOVED_SINCE_RECORDING: [&str; 9] = [
     "build/ci_verified.py",
     "build/security_context.py",
     "build/security_findings.py",
@@ -34,6 +34,7 @@ const REMOVED_SINCE_RECORDING: [&str; 8] = [
     "build/security_tools.py",
     "build/security_vendor.py",
     "ops/ansible/files/bounded_process.py",
+    "ops/ansible/files/release_json.py",
 ];
 
 /// The code here of what the reference's interpreter raised.
@@ -99,7 +100,7 @@ fn every_recorded_name_is_judged_an_input_alike() {
         assert_eq!(dependency_input(name), held != removed, "{name}");
         judged[usize::from(removed)] += 1;
     }
-    assert_eq!(judged, [43, 8]);
+    assert_eq!(judged, [42, 9]);
     let listed = |name: &str| -> Vec<String> {
         let words = items(&recorded, name)
             .iter()

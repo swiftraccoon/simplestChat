@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-const LANGUAGES: [&str; 4] = ["actions", "javascript-typescript", "python", "rust"];
+const LANGUAGES: [&str; 3] = ["actions", "javascript-typescript", "rust"];
 pub(super) const NAMES: [&str; 3] = ["ci.yml", "security.yml", "codeql.yml"];
 
 #[derive(Deserialize)]

@@ -15,7 +15,7 @@ use crate::{
                 Reach,
                 tests::{Logged, answers, calls, environment, install, same_calls, same_limits},
             },
-            tests::{Served, Virtual, placed, seconds},
+            tests::{Served, Virtual, placed, recorded_categories, seconds},
         },
     },
     document::Document,
@@ -143,10 +143,12 @@ fn every_recorded_main_leaves_the_same_evidence() {
             transport: &logged,
             environment: &variables,
         };
+        let categories = recorded_categories();
         let host = Host {
             reach,
             git: &git,
             today,
+            categories: &categories,
         };
         let spelled = place.to_string_lossy();
         let arguments: Vec<String> = items(case, "arguments")

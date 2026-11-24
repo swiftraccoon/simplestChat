@@ -32,9 +32,16 @@ pub const LANGUAGES: [&str; 5] = [
     "rust",
     "c-cpp",
 ];
-/// The languages that automation analyzes: every one but the vendored
-/// native sources.
+/// The first-party languages the local runner may analyze without a vendor
+/// scan, and whose reports it may upload: every one but the vendored native
+/// sources.
 pub const AUTOMATED_LANGUAGES: [&str; 4] = ["actions", "javascript-typescript", "python", "rust"];
+/// The languages the checkout has sources of: those whose security analysis
+/// the CodeQL workflow stores for every revision, which the health and triage
+/// gates require, and which a first-party local run covers when it names no
+/// language. The checkout tracks no Python, and the CodeQL extractor refuses a
+/// language with no source.
+pub const STORED_LANGUAGES: [&str; 3] = ["actions", "javascript-typescript", "rust"];
 /// The configuration of a first-party analysis, below the checkout.
 pub const FIRST_PARTY_CONFIG: &str = "security/codeql/first-party.yml";
 /// The most bytes of the pin.

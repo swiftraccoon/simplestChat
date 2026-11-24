@@ -10,8 +10,7 @@ fn header() -> Header {
     };
     Header {
         schema_version: 1,
-        scope: "OpsCapacityBootstrap".into(),
-        mode: Mode::Stage,
+        scope: "OpsCapacityInvocation".into(),
         run: "b".repeat(32),
         selection: Source {
             repository: "owner/repo".into(),
@@ -23,12 +22,7 @@ fn header() -> Header {
             run_attempt: 2,
         },
         artifact_id: 29,
-        transfer: pin(),
-        members: Members {
-            manifest: pin(),
-            selection: pin(),
-            binary: pin(),
-        },
+        binary: pin(),
         request: pin(),
     }
 }
@@ -85,7 +79,7 @@ fn wire(action: Action, result: Value) -> Vec<u8> {
     let mut bytes = serde_json::to_vec(&json!({
         "schemaVersion":1,"scope":"OpsCapacityResponse","action":action,"run":h.run,
         "revision":h.selection.revision,"artifactId":h.artifact_id,
-        "binarySha256":h.members.binary.sha256,"result":result
+        "binarySha256":h.binary.sha256,"result":result
     }))
     .unwrap();
     bytes.push(b'\n');
@@ -274,7 +268,7 @@ fn unit_empty_observations_remain_negative_and_null_is_not_omitted() {
 }
 
 #[test]
-fn lookup_and_retirement_bind_workload_bytes_rather_than_envelope_pin() {
+fn lookup_and_conclusion_bind_workload_bytes_rather_than_envelope_pin() {
     let original = request();
     let lookup = json!({
         "requestJson":String::from_utf8(original.clone()).unwrap(),
@@ -286,15 +280,14 @@ fn lookup_and_retirement_bind_workload_bytes_rather_than_envelope_pin() {
         bad[field] = json!("d".repeat(64));
         assert!(!check(Action::Lookup, bad));
     }
-    let retirement = ResultData::Retire(Retirement {
-        retired: true,
-        lifecycle: RetirementPhase::Terminal,
+    let conclusion = ResultData::Conclude(Conclusion {
+        concluded: true,
         request_sha256: sha(&original),
     });
     let response = Response::decode(
-        &Response::encode(&header(), &retirement).unwrap(),
+        &Response::encode(&header(), &conclusion).unwrap(),
         &header(),
-        Action::Retire,
+        Action::Conclude,
     )
     .unwrap();
     response.bind_workload(&header(), &original).unwrap();
@@ -302,9 +295,80 @@ fn lookup_and_retirement_bind_workload_bytes_rather_than_envelope_pin() {
     same_semantics.push(b' ');
     assert!(response.bind_workload(&header(), &same_semantics).is_err());
     assert!(!check(
-        Action::Retire,
-        json!({"retired":false,"lifecycle":"terminal","requestSha256":sha(&original)})
+        Action::Conclude,
+        json!({"concluded":false,"requestSha256":sha(&original)})
     ));
+    assert!(!check(
+        Action::Conclude,
+        json!({"concluded":true,"lifecycle":"terminal","requestSha256":sha(&original)})
+    ));
+}
+
+/// The one header `serve` receives is refused at every declared bound, and a
+/// header naming the staging fields it no longer has is refused as well.
+#[test]
+fn header_refuses_every_declared_bound_and_the_removed_staging_fields() {
+    let valid = header().encode().unwrap();
+    let mut padded = valid.clone();
+    padded.truncate(padded.len() - 1);
+    padded.resize(MAX_HEADER - 2, b' ');
+    padded.push(b'}');
+    assert_eq!(padded.len(), MAX_HEADER - 1);
+    assert_eq!(Header::decode(&padded).unwrap(), header());
+    let mut long = padded.clone();
+    long.insert(long.len() - 1, b' ');
+    assert_eq!(Header::decode(&long), Err(Failure::Framing));
+    let original: Value = serde_json::from_slice(&valid).unwrap();
+    let changed = |path: &[&str], value: Value| {
+        let mut changed = original.clone();
+        let (last, parents) = path.split_last().unwrap();
+        let mut node = &mut changed;
+        for parent in parents {
+            node = &mut node[*parent];
+        }
+        node[*last] = value;
+        serde_json::to_vec(&changed).unwrap()
+    };
+    for (row, (path, value)) in [
+        (&["schemaVersion"][..], json!(2)),
+        (&["scope"][..], json!("OpsCapacityBootstrap")),
+        (&["run"][..], json!("B".repeat(32))),
+        (&["artifactId"][..], json!(9_007_199_254_740_992_u64)),
+        (&["selection", "runAttempt"][..], json!(0)),
+        (
+            &["selection", "buildRunId"][..],
+            json!(9_007_199_254_740_992_u64),
+        ),
+        (&["selection", "packageVersion"][..], json!("00.1.0")),
+        (
+            &["selection", "packageVersion"][..],
+            json!("4294967296.1.0"),
+        ),
+        (
+            &["selection", "target"][..],
+            json!("x86_64-unknown-linux-gnu"),
+        ),
+        (&["binary", "sha256"][..], json!("Z".repeat(64))),
+        (&["binary", "bytes"][..], json!(0)),
+        (&["request", "bytes"][..], json!(MAX_REQUEST + 1)),
+        (&["binary", "unexpected"][..], json!(0)),
+        (&["mode"][..], json!("stage")),
+        (&["transfer"][..], original["binary"].clone()),
+        (&["members"][..], json!({})),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert!(Header::decode(&changed(path, value)).is_err(), "row {row}");
+    }
+    let duplicate =
+        std::str::from_utf8(&valid)
+            .unwrap()
+            .replacen("\"run\":", "\"run\":\"bb\",\"run\":", 1);
+    assert_eq!(Header::decode(duplicate.as_bytes()), Err(Failure::Framing));
+    let mut invalid = valid.clone();
+    invalid.insert(1, 0xff);
+    assert_eq!(Header::decode(&invalid), Err(Failure::Framing));
 }
 
 #[test]

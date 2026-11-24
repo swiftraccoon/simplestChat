@@ -13,7 +13,9 @@
 //! value in another spelling, with its keys in the order of their names,
 //! so what `gh` read is compared as JSON and not byte for byte.
 
-use super::{Answer, Asked, COMMAND_TIME, Mode, POLICY, ROOM, asked, loaded, reconcile};
+use super::{
+    Answer, Asked, COMMAND_TIME, Mode, POLICY, ROOM, asked, healthy_analyses, loaded, reconcile,
+};
 use crate::{
     context::{Failure, Outcome},
     scratch::{Scratch, content, host_git, repository, written},
@@ -26,6 +28,9 @@ use std::{
 };
 
 const RECORDED: &str = include_str!("recorded_rulesets.json");
+/// The languages whose analysis an application required when the runs were
+/// recorded: every recorded run is replayed with them.
+const RECORDED_LANGUAGES: [&str; 4] = ["actions", "javascript-typescript", "python", "rust"];
 
 /// Policies the reference read and that are refused here: a policy is JSON
 /// in UTF-8 without a byte order mark, and the repository's number fits in
@@ -321,7 +326,7 @@ fn every_recorded_run_is_made_alike() {
                 Ok(staged.tools.join(program))
             }
         };
-        let answer = reconcile(&staged.root, &programs, mode, revision);
+        let answer = reconcile(&staged.root, &programs, &RECORDED_LANGUAGES, mode, revision);
         let made = calls(&staged.log);
         let reference = list(&case["calls"]);
         let complained = text(&case["errors"]);
@@ -405,4 +410,37 @@ fn a_mode_is_named_as_it_is_asked_for() {
         assert_eq!(mode.name(), name);
         assert_eq!(asked(&[name.to_owned()]), Some(Asked::Run(mode, None)));
     }
+}
+
+#[test]
+fn an_application_requires_exactly_the_stored_analyses_and_passes_over_a_python_one() {
+    let revision = "a".repeat(40);
+    let analysis = |language: &str, commit: &str| {
+        json!({
+            "tool": {"name": "CodeQL"},
+            "category": format!("/language:{language}/security"),
+            "commit_sha": commit,
+            "ref": "refs/heads/main",
+            "error": "",
+            "warning": "",
+            "rules_count": 7,
+        })
+    };
+    let older = "b".repeat(40);
+    let stored = crate::codeql::tools::STORED_LANGUAGES;
+    let current =
+        ["rust", "javascript-typescript", "actions"].map(|language| analysis(language, &revision));
+    let mut answer: Vec<Value> = vec![analysis("python", &older)];
+    answer.extend(current.clone());
+    assert_eq!(
+        healthy_analyses(&Value::Array(answer), &revision, &stored),
+        Ok(())
+    );
+    // A Python analysis, current or not, never stands in for a stored one.
+    let mut answer = vec![analysis("python", &revision)];
+    answer.extend(current[1..].iter().cloned());
+    assert_eq!(
+        healthy_analyses(&Value::Array(answer), &revision, &stored),
+        Err(crate::Fault("ruleset_language_coverage"))
+    );
 }

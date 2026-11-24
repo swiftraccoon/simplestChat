@@ -17,7 +17,7 @@ use crate::{
     arguments::{Read, read},
     budget::detect,
     codeql::{
-        tools::{self, AUTOMATED_LANGUAGES, LANGUAGES},
+        tools::{self, LANGUAGES, STORED_LANGUAGES},
         triage::{decode, object, raised_by, write_private},
     },
     commit,
@@ -201,16 +201,16 @@ pub fn parsed(root: &Path, arguments: &[String]) -> Line<Options> {
     })
 }
 
-/// The languages a run of `language`, or of every one, covers: the native
-/// language only in a vendor scan.
-fn languages(language: Option<&str>, include_vendor: bool) -> Vec<String> {
+/// The languages a run of `language`, or of every one, covers: every
+/// supported one in a vendor scan, otherwise the `first_party` ones.
+fn languages(language: Option<&str>, include_vendor: bool, first_party: &[&str]) -> Vec<String> {
     if let Some(language) = language.filter(|language| !language.is_empty()) {
         return vec![language.to_owned()];
     }
     let every: &[&str] = if include_vendor {
         &LANGUAGES
     } else {
-        &AUTOMATED_LANGUAGES
+        first_party
     };
     every
         .iter()
@@ -220,18 +220,20 @@ fn languages(language: Option<&str>, include_vendor: bool) -> Vec<String> {
 
 /// The languages a run analyzes, once a vendor scan is proved local where
 /// `automated` says automation runs, and the native language is asked for
-/// only in a vendor scan.
+/// only in a vendor scan; a first-party run of every language covers the
+/// `first_party` ones.
 pub fn selected_languages(
     language: Option<&str>,
     include_vendor: bool,
     automated: bool,
+    first_party: &[&str],
 ) -> Result<Vec<String>> {
     require_local_vendor(include_vendor, automated)?;
     require(
         language != Some("c-cpp") || include_vendor,
         "codeql_vendor_opt_in_required",
     )?;
-    Ok(languages(language, include_vendor))
+    Ok(languages(language, include_vendor, first_party))
 }
 
 /// Whether `byte` is white space as the reference's bytes strip it.
@@ -304,6 +306,7 @@ pub fn execute(
         options.language.as_deref(),
         options.include_vendor,
         automated(present),
+        host.first_party,
     )?;
     source_identity(context, host, &options.revision)?;
     let source = snapshot(context, host)?;
@@ -369,12 +372,14 @@ fn checks(context: &Context) -> Document {
 }
 
 /// Write `summary.json` of the run of `options` against the checkout
-/// `root`: whether it passed, the reason it failed, what it covered, the
+/// `root`: whether it passed, the reason it failed, what it covered (the
+/// first-party languages of `host` when it named none), the
 /// identities of the pin and of the copy of the sources, every report and
 /// every check.
 fn summarize(
     root: &Path,
     options: &Options,
+    host: &Host<'_>,
     context: &Context,
     failure: Option<String>,
     reports: Vec<Document>,
@@ -392,7 +397,11 @@ fn summarize(
     } else {
         vec!["vendor/**".into()]
     };
-    let covered = languages(options.language.as_deref(), options.include_vendor);
+    let covered = languages(
+        options.language.as_deref(),
+        options.include_vendor,
+        host.first_party,
+    );
     let summary = Document::record([
         ("schemaVersion", 1_u64.into()),
         ("passed", failure.is_none().into()),
@@ -456,7 +465,7 @@ pub fn main(
         Err(failure) => (Some(reason(&failure)), Vec::new()),
     };
     let passed = failure.is_none();
-    if let Err(failure) = summarize(root, options, &context, failure, reports) {
+    if let Err(failure) = summarize(root, options, host, &context, failure, reports) {
         return stopped(err, &failure);
     }
     let status = if passed { "passed" } else { "failed" };
@@ -518,6 +527,7 @@ pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
         budget: &detect,
         private: &private,
         witness: &|_, _, _| {},
+        first_party: &STORED_LANGUAGES,
     };
     let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
     ExitCode::from(command(root, arguments, &host, &mut out, &mut err))

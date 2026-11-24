@@ -328,9 +328,9 @@ pub(crate) fn truthy(value: &Document) -> bool {
     }
 }
 
-/// The categories of the automated security analyses.
+/// The categories of the stored security analyses every revision needs.
 pub(crate) fn expected() -> Vec<String> {
-    let languages = super::tools::AUTOMATED_LANGUAGES;
+    let languages = super::tools::STORED_LANGUAGES;
     languages
         .iter()
         .map(|language| format!("/language:{language}/security"))

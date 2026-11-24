@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, "9.88.7").unwrap();
-    assert_eq!(steps.len(), 16);
+    assert_eq!(steps.len(), 15);
     // xtask's own Python gate, never this binary: it hosts no `check` command.
     assert_eq!(steps[0].program, "rustup");
     assert_eq!(
@@ -80,7 +80,6 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "ops/ansible/migration-data.yml"
         ]
     );
-    assert_eq!(steps.last().unwrap().program, "python");
     assert_eq!(steps[14].program, "cargo");
     assert_eq!(
         text(&steps[14].arguments),
@@ -123,25 +122,17 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
     );
 }
 
+/// The repository tracks no Python suite, so no automation step runs a Python
+/// interpreter or a unittest discovery; the Python gate is xtask's line ratchet.
 #[test]
-fn automation_runs_one_discovery_child_without_routing() {
+fn automation_runs_no_python_suite() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, "9.88.7").unwrap();
-    let python = steps
-        .iter()
-        .filter(|step| step.program == "python")
-        .collect::<Vec<_>>();
-    assert_eq!(python.len(), 1);
-    assert_eq!(
-        text(&python[0].arguments),
-        ["-m", "unittest", "discover", "-s", "ops/ansible/tests"]
-    );
-    // No step selects, shards or reroutes individual Python tests.
-    assert!(
-        steps
-            .iter()
-            .all(|step| !text(&step.arguments).contains(&"-k"))
-    );
+    for step in &steps {
+        let program = step.program.to_str().unwrap();
+        assert!(!program.starts_with("python"), "{program}");
+        assert!(!text(&step.arguments).contains(&"unittest"), "{program}");
+    }
 }
 
 #[test]

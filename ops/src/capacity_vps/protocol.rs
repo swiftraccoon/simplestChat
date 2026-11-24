@@ -14,7 +14,6 @@ pub const MAX_HEADER: usize = 64 * 1024;
 pub const MAX_REQUEST: usize = 512 * 1024;
 pub const MAX_RESPONSE: usize = 8 * 1024 * 1024;
 pub const MAX_STATUS: usize = 64 * 1024;
-pub const MAX_TRANSFER: u64 = 281 * 1024 * 1024;
 pub const BUILD_UNIT: &str = "simplestchat-image-build.service";
 const MAX_ID: u64 = 9_007_199_254_740_991;
 
@@ -116,25 +115,6 @@ impl Pin {
     }
 }
 
-/// The fixed three transport members, with no path-selection field.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Members {
-    #[serde(rename = "ops-release.json")]
-    pub manifest: Pin,
-    #[serde(rename = "ops-selection.json")]
-    pub selection: Pin,
-    #[serde(rename = "simplestchat-ops")]
-    pub binary: Pin,
-}
-impl Members {
-    pub fn validate(&self) -> Result<()> {
-        self.manifest.validate(64 * 1024)?;
-        self.selection.validate(16 * 1024)?;
-        self.binary.validate(crate::distribution::MAX_BYTES)
-    }
-}
-
 /// Seven caller declarations validated by the existing distribution selection.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -166,50 +146,42 @@ impl Source {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Mode {
-    Stage,
-    Invoke,
-}
-
-/// Closed transport data. Construction or decoding supplies no acquisition proof.
+/// The closed invocation declaration `capacity-vps serve` receives as its one
+/// `--transport-json` argument. `binary` pins the executable installed at the
+/// fixed path; construction or decoding supplies no acquisition proof.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Header {
     pub schema_version: u8,
     pub scope: String,
-    pub mode: Mode,
     pub run: String,
     pub selection: Source,
     pub artifact_id: u64,
-    pub transfer: Pin,
-    pub members: Members,
+    pub binary: Pin,
     pub request: Pin,
 }
 impl Header {
     pub fn validate(&self) -> Result<()> {
         if self.schema_version != 1
-            || self.scope != "OpsCapacityBootstrap"
+            || self.scope != "OpsCapacityInvocation"
             || !hex(&self.run, 32)
             || !(1..=MAX_ID).contains(&self.artifact_id)
         {
             return Err(Failure::Identity);
         }
         self.selection.validate()?;
-        self.transfer.validate(MAX_TRANSFER)?;
-        self.members.validate()?;
+        self.binary.validate(crate::distribution::MAX_BYTES)?;
         self.request.validate(MAX_REQUEST as u64)
     }
 
-    /// Decode one header value without its framing LF.
+    /// Decode one header value of at most [`MAX_HEADER`] - 1 bytes.
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         let value: Self = decode(bytes, MAX_HEADER - 1)?;
         value.validate()?;
         Ok(value)
     }
 
-    /// Encode validated data; the transport appends the one bounded header LF.
+    /// Encode validated data as the one compact `--transport-json` argument.
     pub fn encode(&self) -> Result<Vec<u8>> {
         self.validate()?;
         bounded(self, MAX_HEADER - 1)
@@ -239,7 +211,7 @@ pub enum Action {
     Collect,
     Recover,
     Archive,
-    Retire,
+    Conclude,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -600,17 +572,13 @@ pub struct Recovery {
     )]
     pub after: Option<Residuals>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RetirementPhase {
-    Prestart,
-    Terminal,
-}
+/// The final proof that a collected run left nothing behind: its unit is
+/// terminal with an empty cgroup, no stray container remains and its cleanup
+/// is proven. A refusal, never a false `concluded`, reports anything else.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Retirement {
-    pub retired: bool,
-    pub lifecycle: RetirementPhase,
+pub struct Conclusion {
+    pub concluded: bool,
     pub request_sha256: String,
 }
 
@@ -626,7 +594,7 @@ pub enum ResultData {
     Lookup(Lookup),
     Collect(Collect),
     Recover(Recovery),
-    Retire(Retirement),
+    Conclude(Conclusion),
 }
 
 /// Decoded action result, bound to the caller's separately retained header data.
@@ -671,7 +639,7 @@ impl ResultData {
             Self::Lookup(_) => Action::Lookup,
             Self::Collect(_) => Action::Collect,
             Self::Recover(_) => Action::Recover,
-            Self::Retire(_) => Action::Retire,
+            Self::Conclude(_) => Action::Conclude,
         }
     }
 
@@ -780,9 +748,9 @@ impl ResultData {
                     return Err(Failure::Ownership);
                 }
             }
-            Self::Retire(value) => {
-                if !value.retired || !hex(&value.request_sha256, 64) {
-                    return Err(Failure::Retirement);
+            Self::Conclude(value) => {
+                if !value.concluded || !hex(&value.request_sha256, 64) {
+                    return Err(Failure::Conclusion);
                 }
             }
         }
@@ -802,7 +770,7 @@ impl Response {
             run: &header.run,
             revision: &header.selection.revision,
             artifact_id: header.artifact_id,
-            binary_sha256: &header.members.binary.sha256,
+            binary_sha256: &header.binary.sha256,
             result,
         };
         let mut bytes = bounded(&wire, response_limit(wire.action) - 1)?;
@@ -832,7 +800,7 @@ impl Response {
             || wire.run != header.run
             || wire.revision != header.selection.revision
             || wire.artifact_id != header.artifact_id
-            || wire.binary_sha256 != header.members.binary.sha256
+            || wire.binary_sha256 != header.binary.sha256
         {
             return Err(Failure::Identity);
         }
@@ -863,8 +831,8 @@ impl Response {
             Action::Recover => {
                 ResultData::Recover(serde_json::from_value(value).map_err(|_| invalid())?)
             }
-            Action::Retire => {
-                ResultData::Retire(serde_json::from_value(value).map_err(|_| invalid())?)
+            Action::Conclude => {
+                ResultData::Conclude(serde_json::from_value(value).map_err(|_| invalid())?)
             }
             Action::Archive => return Err(Failure::Framing),
         };
@@ -884,7 +852,7 @@ impl Response {
             ResultData::Collect(value) if value.request_json.as_bytes() != original => {
                 Err(Failure::Identity)
             }
-            ResultData::Retire(value) if value.request_sha256 != sha(original) => {
+            ResultData::Conclude(value) if value.request_sha256 != sha(original) => {
                 Err(Failure::Identity)
             }
             _ => Ok(()),

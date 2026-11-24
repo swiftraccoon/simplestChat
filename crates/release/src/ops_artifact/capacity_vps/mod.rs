@@ -1,12 +1,17 @@
 //! One explicitly selected private-VPS operation. Parsed records are data;
 //! authenticated acquisition, retained files and the original invocation own
-//! execution authority. No candidate runs on the controller.
+//! execution authority. No candidate runs on the controller. A new run
+//! installs the selected signed Ops executable through the production
+//! delivery tasks; every remote request runs that installed executable.
 
 mod archive;
 #[cfg(test)]
 mod controller_tests;
 mod execute;
 mod files;
+mod install;
+#[cfg(test)]
+mod install_tests;
 pub(crate) mod inventory;
 mod options;
 mod plan;
@@ -26,11 +31,18 @@ const MAX_JSON: u64 = 8 * 1024 * 1024;
 const MAX_STATUS: u64 = 65536;
 const MAX_STDERR: u64 = 2 * 1024 * 1024;
 const MAX_ARCHIVE: u64 = 512 * 1024 * 1024;
-const MAX_TRANSFER: u64 = 281 * 1024 * 1024;
 pub(crate) const USAGE: &str = options::USAGE;
+/// What the operator reads when the host refuses its installed executable
+/// as not the one this run selects or its retained identity names.
+const INSTALLED_MISMATCH: &str = "The Ops executable installed on the private VPS is not the one \
+     this run's selected artifact names; collect or recover a run with its original artifact \
+     installed.";
 
 fn failure(code: u8) -> Failure {
     Failure::new(code, "Private VPS capacity operation is unproven.")
+}
+fn installed_mismatch() -> Failure {
+    Failure::new(1, INSTALLED_MISMATCH)
 }
 fn io<T>(value: std::io::Result<T>) -> Result<T> {
     value.map_err(|_| failure(1))

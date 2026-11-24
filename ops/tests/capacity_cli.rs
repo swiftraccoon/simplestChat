@@ -69,6 +69,16 @@ fn invalid_host_shapes_and_offline_commands_refuse_before_any_host_operation() {
             "--transport-json",
             "PRIVATE-INVOCATION-DATA",
         ],
+        // The origin is serve's own first sample; no caller may supply one.
+        vec![
+            "capacity-vps",
+            "serve",
+            "--transport-json",
+            "PRIVATE-INVOCATION-DATA",
+            "--origin-monotonic-ns",
+            "PRIVATE-INVOCATION-DATA",
+        ],
+        vec!["capacity-vps", "serve"],
         vec![
             "capacity-vps",
             "worker",

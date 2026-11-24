@@ -902,31 +902,6 @@ impl Fs {
         let event = self.access.event("unlink");
         removed.and(transition).and(event)
     }
-    pub fn retired(&self, id: FileId) -> bool {
-        self.entries[id].retired
-    }
-    pub fn remove_directory(&mut self, id: usize, owner: &mut Owner) -> Result<()> {
-        self.check_dir(id)?;
-        if !self.names(id, 1, owner)?.is_empty() {
-            return Err(Failure::Namespace);
-        }
-        let parent = self.directories[id].parent;
-        let name = self.directories[id].name.clone();
-        let before = io(self.dir_file(id).metadata())?;
-        let removed =
-            rustix::fs::unlinkat(self.dir_file(parent), name.as_str(), AtFlags::REMOVEDIR)
-                .map_err(|_| Failure::Io);
-        let transition = io(self.dir_file(id).metadata()).and_then(|after| {
-            if !binding(&before, &after) || after.nlink() != 0 || !self.absent(parent, &name)? {
-                return Err(Failure::Changed);
-            }
-            self.directories[id].before = after;
-            self.directories[id].retired = true;
-            Ok(())
-        });
-        let event = self.access.event("rmdir");
-        removed.and(transition).and(event)
-    }
     pub fn verify(&self) -> Result<()> {
         for id in 0..self.directories.len() {
             if self.directories[id].file.is_some() {

@@ -46,9 +46,9 @@ const MAX_FILES: usize = 20000;
 const MAX_RULES: usize = 100;
 /// The last line a match may be on.
 const MAX_LINE: u64 = 1_000_000;
-/// The endings of the files that are scanned, and the language of each.
-const LANGUAGES: [(&str, &str); 4] = [
-    (".py", "python"),
+/// The endings of the files that are scanned, each with the engine's
+/// language for it: this repository's Rust and TypeScript.
+pub const LANGUAGES: [(&str, &str); 3] = [
     (".rs", "rust"),
     (".ts", "typescript"),
     (".js", "typescript"),
@@ -72,11 +72,12 @@ const FORBIDDEN: [&str; 4] = [
 /// of the system. Its details may hold sources or local paths.
 const FAILED: Fault = Fault("semgrep_check_failed");
 
-/// The language of the file `name` by its ending, when it is scanned.
-fn language(name: &str) -> Option<&'static str> {
+/// The language of the file `name` by its ending among `languages`, when it
+/// is scanned.
+fn language<'a>(languages: &[(&str, &'a str)], name: &str) -> Option<&'a str> {
     let last = name.rsplit('/').next().unwrap_or(name);
     let point = last.rfind('.').filter(|at| *at > 0)?;
-    let known = LANGUAGES
+    let known = languages
         .iter()
         .find(|(ending, _)| *ending == &last[point..]);
     known.map(|(_, language)| *language)
@@ -95,9 +96,9 @@ fn forbidden(value: &Value) -> bool {
 
 /// The names of the rules of the pack at `path`. A pack holds between one
 /// and a hundred rules, each named once under this project's prefix, each
-/// an error, each for languages that are scanned, and none with a
-/// forbidden feature.
-pub fn rules(path: &Path) -> Result<BTreeSet<String>> {
+/// an error, each for languages of `languages`, and none with a forbidden
+/// feature.
+pub fn rules(path: &Path, languages: &[(&str, &str)]) -> Result<BTreeSet<String>> {
     let content = files::bounded(path, MAX_CONFIG, false)?;
     let document = record::strict(&content).map_err(|_| FAILED)?;
     let fields = document.as_object().ok_or(FAILED)?;
@@ -126,15 +127,15 @@ pub fn rules(path: &Path) -> Result<BTreeSet<String>> {
         require(!identifiers.contains(identifier), "semgrep_duplicate_rule")?;
         let severity = rule.get("severity").and_then(Value::as_str);
         require(severity == Some("ERROR"), "semgrep_rule_severity")?;
-        let languages = rule.get("languages").and_then(Value::as_array);
-        let languages = languages.ok_or(FAILED)?;
+        let named = rule.get("languages").and_then(Value::as_array);
+        let named = named.ok_or(FAILED)?;
         let scanned = |language: &Value| {
-            LANGUAGES
+            languages
                 .iter()
                 .any(|(_, known)| language.as_str() == Some(known))
         };
         require(
-            !languages.is_empty() && languages.iter().all(scanned),
+            !named.is_empty() && named.iter().all(scanned),
             "semgrep_rule_language",
         )?;
         require(!forbidden(entry), "semgrep_forbidden_rule_feature")?;
@@ -164,8 +165,9 @@ fn shown(findings: &BTreeSet<Finding>) -> Value {
 }
 
 /// The files `paths` as the engine is given them: each named once, by a
-/// safe path below the root, with the language of its ending.
-fn targets(paths: &[String]) -> Result<Value> {
+/// safe path below the root, with the language of its ending among
+/// `languages`.
+fn targets(paths: &[String], languages: &[(&str, &str)]) -> Result<Value> {
     let distinct: BTreeSet<&String> = paths.iter().collect();
     require(
         !paths.is_empty() && paths.len() <= MAX_FILES && distinct.len() == paths.len(),
@@ -173,7 +175,7 @@ fn targets(paths: &[String]) -> Result<Value> {
     )?;
     let mut listed = Vec::new();
     for path in paths {
-        let language = language(path).filter(|_| safe_name(path));
+        let language = language(languages, path).filter(|_| safe_name(path));
         let language = language.ok_or(Fault("semgrep_target_path"))?;
         listed.push(json!(["CodeTarget", {
             "path": {"fpath": path, "ppath": format!("/{path}")},
@@ -319,16 +321,18 @@ fn annotation(line: &str) -> Option<(bool, &str)> {
 }
 
 /// Where the fixtures below `root` say each rule must match, and where it
-/// must not: the line after each annotation. Every rule of `identifiers`
-/// has both, and nothing that looks like an annotation is left unread.
+/// must not: the line after each annotation. Every fixture is of one of
+/// `languages`, every rule of `identifiers` has both, and nothing that looks
+/// like an annotation is left unread.
 fn expectations(
     root: &Path,
     identifiers: &BTreeSet<String>,
+    languages: &[(&str, &str)],
 ) -> Result<(BTreeSet<Finding>, BTreeSet<Finding>)> {
     let (mut positive, mut negative) = (BTreeSet::new(), BTreeSet::new());
     for name in listed(root)? {
         require(
-            safe_name(&name) && language(&name).is_some(),
+            safe_name(&name) && language(languages, &name).is_some(),
             "semgrep_fixture_path",
         )?;
         let content = files::bounded(&root.join(&name), MAX_CONFIG, false)?;
@@ -369,12 +373,12 @@ fn expectations(
 }
 
 /// The maintained sources of the snapshot that are scanned, in the order
-/// of their names: the scanned languages below the maintained directories,
+/// of their names: files of `languages` below the maintained directories,
 /// and below the vendored tree only when that is asked for.
-fn scope(snapshot: &Path, include_vendor: bool) -> Result<Vec<String>> {
+fn scope(snapshot: &Path, include_vendor: bool, languages: &[(&str, &str)]) -> Result<Vec<String>> {
     let maintained = |name: &String| {
         let placed = PREFIXES.iter().any(|prefix| name.starts_with(prefix));
-        language(name).is_some() && (placed || (include_vendor && vendor_path(name)))
+        language(languages, name).is_some() && (placed || (include_vendor && vendor_path(name)))
     };
     let mut paths: Vec<String> = listed(snapshot)?.into_iter().filter(maintained).collect();
     require(!paths.is_empty(), "semgrep_empty_source_scope")?;
@@ -402,7 +406,7 @@ pub fn new_output(root: &Path, output: &Path) -> Result<PathBuf> {
     Ok(output)
 }
 
-/// The engine and what the lock says of it.
+/// The engine, what the lock says of it, and what it is given to scan.
 pub struct Engine<'a> {
     /// The verified executable.
     pub path: &'a Path,
@@ -410,6 +414,9 @@ pub struct Engine<'a> {
     pub version: &'a str,
     /// The lock's digest, read anew whenever it is asked for.
     pub lock: &'a dyn Fn() -> Result<String>,
+    /// The endings of the files it scans, each with its language: the gate's
+    /// own [`LANGUAGES`].
+    pub languages: &'a [(&'a str, &'a str)],
 }
 
 /// Run the engine as the check `name` over `paths` below `root`, with the
@@ -425,7 +432,8 @@ fn scanned(
     name: &'static str,
 ) -> Outcome<BTreeSet<Finding>> {
     let given = context.output().join(format!("{name}-targets.json"));
-    files::write_private(&given, pretty(&targets(paths)?).as_bytes(), 0o600)?;
+    let listed = targets(paths, engine.languages)?;
+    files::write_private(&given, pretty(&listed).as_bytes(), 0o600)?;
     let arguments = [
         "-json_nodots",
         "-no_filter_irrelevant_rules",
@@ -456,7 +464,8 @@ fn scanned(
     };
     let (_, report) = context.run(name, &argv, &how)?;
     (engine.lock)()?;
-    Ok(findings(&report, paths, &rules(pack)?, engine.version)?)
+    let identifiers = rules(pack, engine.languages)?;
+    Ok(findings(&report, paths, &identifiers, engine.version)?)
 }
 
 /// Run the fixtures of the snapshot as sources, without their `.fixture`
@@ -482,7 +491,8 @@ fn golden(context: &mut Context, engine: &Engine<'_>, snapshot: &Path) -> Outcom
         files::write_private(&target, &content, 0o600)?;
     }
     let pack = snapshot.join(RULES);
-    let (positive, negative) = expectations(&destination, &rules(&pack)?)?;
+    let identifiers = rules(&pack, engine.languages)?;
+    let (positive, negative) = expectations(&destination, &identifiers, engine.languages)?;
     let mut paths = listed(&destination)?;
     paths.sort_unstable();
     let actual = scanned(
@@ -521,7 +531,7 @@ pub fn check(
     let locked = (engine.lock)()?;
     let snapshot = context.snapshot(Snapshot::Source, git)?;
     let assertions = golden(context, engine, &snapshot)?;
-    let paths = scope(&snapshot, include_vendor)?;
+    let paths = scope(&snapshot, include_vendor, engine.languages)?;
     let pack = snapshot.join(RULES);
     let actual = scanned(context, engine, &pack, &snapshot, &paths, "source-engine")?;
     require((engine.lock)()? == locked, "semgrep_tool_lock_changed")?;
@@ -604,7 +614,7 @@ pub fn gate(
         answered(&scanned)
     })?;
     let directory = context.output().join("semgrep");
-    let said = summary::diagnosis(context.root(), status, &line, &directory);
+    let said = summary::diagnosis(context.root(), status, &line, &directory, engine.languages);
     let passed = said.first() == Some(&("passed", Value::Bool(true)));
     let mut note: Note = vec![
         ("name", "semgrep-diagnosis".into()),

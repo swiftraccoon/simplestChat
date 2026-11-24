@@ -1,4 +1,4 @@
-//! Original nofollow witnesses and private bounded transfer/capture files.
+//! Original nofollow witnesses and private bounded request/capture files.
 
 use super::super::namespace::{self, Budget, Chain, ChainWitness, FLAGS, Held, OwnedRun, Permit};
 use super::{failure, io, worker::Checkpoint};
@@ -370,21 +370,10 @@ impl Output {
             }
         }
     }
-    /// A framed request is sealed after all writers close. The archive is copied
-    /// from its retained original read-only owner, never loaded into memory.
-    pub fn frame(
-        &mut self,
-        name: &str,
-        header: &[u8],
-        transfer: Option<&Input>,
-        request: &[u8],
-        checkpoint: &Checkpoint,
-    ) -> Result<Input> {
-        if name.contains('/')
-            || self.records.contains_key(name)
-            || header.len() > 65536
-            || request.len() > 524288
-        {
+    /// One framed stdin, sealed after its writer closes: the exact request
+    /// envelope `capacity-vps serve` reads, at most 512 KiB.
+    pub fn frame(&mut self, name: &str, request: &[u8], checkpoint: &Checkpoint) -> Result<Input> {
+        if name.contains('/') || self.records.contains_key(name) || request.len() > 524288 {
             return Err(failure(1));
         }
         let root = self.root.reopen(&self.budget)?;
@@ -392,21 +381,11 @@ impl Output {
             let writer = Held::create(root.file(), name, false, &self.budget)?;
             let written = (|| {
                 let before = namespace::private_file(&writer, false)?;
-                io(writer.file().write_all(header))?;
-                if let Some(transfer) = transfer {
-                    transfer.copy_to(&mut writer.file(), checkpoint)?;
-                }
                 io(writer.file().write_all(request))?;
                 io(writer.file().sync_all())?;
                 let after = namespace::private_file(&writer, false)?;
-                let expected = (header.len() as u64)
-                    .checked_add(request.len() as u64)
-                    .and_then(|n| n.checked_add(transfer.map_or(0, Input::bytes)))
-                    .ok_or_else(|| failure(1))?;
-                if !namespace::binding(&before, &after)
-                    || after.len() != expected
-                    || expected > super::MAX_TRANSFER + 589824
-                {
+                let expected = request.len() as u64;
+                if !namespace::binding(&before, &after) || after.len() != expected {
                     return Err(failure(1));
                 }
                 let record = Record {
@@ -456,7 +435,8 @@ impl Output {
         checkpoint.check()?;
         let run = OwnedRun::local_witness(path, budget, &witness)?;
         let result = (|| {
-            for name in ["python-cache", "tmp", "home"] {
+            // `application` is the verifier's private output parent.
+            for name in ["python-cache", "tmp", "home", "application"] {
                 run.directory(name)?.finish()?;
             }
             let chain = Chain::open(path, budget)?;
@@ -668,88 +648,6 @@ impl Output {
         let closed = root.finish();
         result.and_then(|value| closed.map(|()| value))
     }
-    pub fn transfer(
-        &mut self,
-        authenticated: &super::super::acquire::AuthenticatedAcquisition,
-        checkpoint: &Checkpoint,
-    ) -> Result<(Input, super::super::acquire::PairPins)> {
-        let root = self.root.reopen(&self.budget)?;
-        let result = (|| {
-            let writer = Held::create(root.file(), "transfer.tar", false, &self.budget)?;
-            let copied = (|| {
-                let before = namespace::private_file(&writer, false)?;
-                let pins = authenticated.export_tar(
-                    &mut writer.file(),
-                    &self.budget,
-                    &checkpoint.acquired(),
-                )?;
-                io(writer.file().sync_all())?;
-                let stamp = namespace::private_file(&writer, false)?;
-                if !namespace::binding(&before, &stamp)
-                    || stamp.nlink() != 1
-                    || stamp.len() == 0
-                    || stamp.len() > super::MAX_TRANSFER
-                {
-                    return Err(failure(1));
-                }
-                let sha = consume(writer.file(), stamp.len(), checkpoint, |_| Ok(()))?;
-                if !namespace::same(&stamp, &io(writer.file().metadata())?) {
-                    return Err(failure(1));
-                }
-                let record = Record {
-                    name: "transfer.tar".into(),
-                    bytes: stamp.len(),
-                    stamp,
-                    sha256: sha,
-                };
-                visible(root.file(), &record, &self.budget)?;
-                let reader =
-                    Held::open(root.file(), OsStr::new("transfer.tar"), FLAGS, &self.budget)?;
-                if !namespace::same(&record.stamp, &io(reader.file().metadata())?) {
-                    let _ = reader.finish();
-                    return Err(failure(1));
-                }
-                Ok((reader, record, pins))
-            })();
-            let closed = writer.finish();
-            match copied {
-                Ok((reader, record, pins)) => {
-                    if let Err(error) = closed {
-                        let _ = reader.finish();
-                        return Err(error);
-                    }
-                    Ok((
-                        Input {
-                            reader: Some(reader),
-                            root: self.root.clone(),
-                            record: record.clone(),
-                            budget: self.budget.clone(),
-                        },
-                        record,
-                        pins,
-                    ))
-                }
-                Err(error) => {
-                    let _ = closed;
-                    Err(error)
-                }
-            }
-        })();
-        let closed = root.finish();
-        let (input, record, pins) = match result {
-            Ok(value) => value,
-            Err(error) => {
-                let _ = closed;
-                return Err(error);
-            }
-        };
-        if let Err(error) = closed {
-            let _ = input.finish(checkpoint);
-            return Err(error);
-        }
-        self.records.insert("transfer.tar".into(), record);
-        Ok((input, pins))
-    }
 }
 
 pub(super) struct Input {
@@ -759,12 +657,6 @@ pub(super) struct Input {
     budget: Budget,
 }
 impl Input {
-    pub fn original(&self) -> Original {
-        Original {
-            parent: self.root.clone(),
-            record: self.record.clone(),
-        }
-    }
     pub fn consumed(&self) -> Result<()> {
         let mut file = self.reader.as_ref().ok_or_else(|| failure(1))?.file();
         if io(file.stream_position())? == self.record.bytes {
@@ -772,17 +664,6 @@ impl Input {
         } else {
             Err(failure(1))
         }
-    }
-    pub fn copy_to(&self, writer: &mut impl Write, checkpoint: &Checkpoint) -> Result<()> {
-        self.check(checkpoint)?;
-        let file = self.reader.as_ref().ok_or_else(|| failure(1))?.file();
-        let sha = consume(file, self.record.bytes, checkpoint, |part| {
-            io(writer.write_all(part))
-        })?;
-        if sha != self.record.sha256 {
-            return Err(failure(1));
-        }
-        self.check(checkpoint)
     }
     pub fn file(&self) -> Result<&File> {
         self.reader
@@ -792,9 +673,6 @@ impl Input {
     }
     pub fn sha256(&self) -> &str {
         &self.record.sha256
-    }
-    pub fn bytes(&self) -> u64 {
-        self.record.bytes
     }
     pub fn stamp(&self) -> &Metadata {
         &self.record.stamp

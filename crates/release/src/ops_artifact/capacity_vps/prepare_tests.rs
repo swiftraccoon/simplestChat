@@ -13,11 +13,8 @@ def exact(n):
         if not chunk: raise RuntimeError('short frame')
         data+=chunk
     return data
-line=b''
-while not line.endswith(b'\n'): line+=exact(1)
-header=json.loads(line)
-request=exact(header['request']['bytes'])
-with open(ROOT+'/frame-count','w') as out: out.write(str(len(line)+len(request)))
+request=exact(REQUEST)
+with open(ROOT+'/frame-count','w') as out: out.write(str(len(request)))
 os.write(1,READY)
 release=exact(8)
 assert release==b'release\n' and os.read(0,1)==b''

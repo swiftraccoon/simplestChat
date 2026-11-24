@@ -15,7 +15,7 @@ cargo test --locked --workspace --all-features -- --test-threads=1
 
 `cargo run --locked -q -p xtask -- check` shares the CI quality gates: typed web lint, formatting,
 source/helper tests, TypeScript/build, Rust Clippy, checked documentation, and
-strict Python lint/format/types. Use `--web`, `--rust`, `--helpers`, or `--python`
+the line ratchet that keeps the repository free of Python. Use `--web`, `--rust`, `--helpers`, or `--python`
 for a focused group. It requires installed development dependencies and never
 starts application services. Native tests
 are deliberately separate from the source-quality gate.
@@ -363,7 +363,7 @@ No network client, deployed target or existing database is used. Ordinary Rust
 tests run the dispatcher and capture checks; CI's disposable database suite also
 runs the ignored authentication case.
 
-### Python automation
+### Automation checks
 
 The automation job checks the actual branch-tip subject, including a pull
 request's head commit, with `cargo run --locked -q -p simplestchat-ci -- commit-subject`.
@@ -402,22 +402,21 @@ stops at the first failure with that step's exit status: xtask's
 `rustup run <channel> cargo run --locked -q -p xtask -- check --python`),
 strict offline ansible-lint over `ops/ansible` and `security/vm/stage.yml`, the
 syntax check of each listed playbook, shellcheck over `ops/ansible/files/*.sh`,
-the standalone Ops library and CLI tests, and one
-`python -m unittest discover -s ops/ansible/tests` child that runs the whole
-Python suite against the current playbooks and workflows. Every step is an
-ordinary child of the checkout with the inherited environment, so `python` and
-the Ansible tools are the ones on `PATH` (the environment above locally, the
-installed controller environment in CI), and its output goes straight to the
-terminal or job log. The driver adds no deadline or output limit of its own; the
-hosted job's ten-minute limit bounds the whole command. The same discovery run
-directly is the complete Python suite.
+and the standalone Ops library and CLI tests. No step runs a Python suite: the
+repository has none. Every step is an ordinary child of the checkout with the
+inherited environment, so the Ansible tools are the ones on `PATH` (the
+environment above locally, the installed controller environment in CI), and its
+output goes straight to the terminal or job log. The driver adds no deadline or
+output limit of its own; the hosted job's ten-minute limit bounds the whole
+command.
 
-The Python group of `check`, run by default and by `--python`, starts with the
-Python line ratchet, `cargo run -q -p xtask -- python-lines`, which `check` runs
+The Python group of `check`, run by default and by `--python`, is the Python
+line ratchet alone, `cargo run -q -p xtask -- python-lines`, which `check` runs
 as `rustup run <channel> cargo run --locked -q -p xtask -- python-lines` with
 the channel pinned in `rust-toolchain.toml`. The step needs Git and that pinned
-toolchain through rustup, nothing from the Python environment, so it runs
-before the Python environment is required. It counts the lines of every tracked
+toolchain through rustup, nothing from a Python environment. The repository
+tracks no Python, so its allowance is `total 0` and no linter, formatter or type
+checker has a source to read. It counts the lines of every tracked
 `*.py` and `*.pyi` outside `vendor/`
 (`git ls-files -z -- '*.py' '*.pyi' ':!vendor/'`; an unterminated last line
 counts as one) and compares each file with its row in
@@ -429,31 +428,14 @@ number in both modes, leaving the file unchanged. The check fails, listing the
 offending paths, when a tracked file has no row, a row names a file that is no
 longer tracked, a file has more lines than its row, or the total exceeds the
 allowance's `total` line; a missing allowance is an error. New code is written
-in Rust, so tracked Python may shrink but never grow. A commit that deletes or
-shrinks Python runs `cargo run -q -p xtask -- python-lines --update`, which
-only removes rows and lowers counts: it refuses, changing nothing, while any
-file is unlisted or grew or the total would rise. A renamed Python file is
-recorded by editing its row by hand.
+in Rust, so the allowance of zero refuses any new tracked Python file.
+`cargo run -q -p xtask -- python-lines --update` only removes rows and lowers
+counts: it refuses, changing nothing, while any file is unlisted or grew or the
+total would rise.
 
-The source gate runs Ruff's complete stable rule set, its formatter, and
-basedpyright's `all` mode over every maintained Python file and type stub,
-including tests. It rejects a new source directory until explicitly included.
-Third-party `vendor/` sources and ignored private operator scripts are outside
-this policy. ShellCheck, `jq`, and the Ansible dependencies are required for the
-offline tests; the optional Compose checks need the provisioned Compose release,
-standalone or as the Docker CLI plugin, not a daemon.
-
-`pyproject.toml` defines the policy. Mutually exclusive formatting/docstring
-rules and standalone-module/unittest conventions have documented exceptions;
-reviewed subprocess, CLI-output and transaction-complexity exceptions stay next
-to the affected code. `Any`, unknown types, untyped arguments, unchecked casts
-from decoded data, and test-wide typing exemptions are not used to pass the gate.
-JSON boundaries validate decoded values before constructing typed records;
-options and fixture state use dataclasses where appropriate. No local type stub
-remains: the maintained Python imports no Ansible API.
-
-CI uses this same gate. Set `PYTHON_CHECK_ENV` to another virtual environment
-directory to select both its pinned tools and its Python import environment.
+ShellCheck, `jq`, and the Ansible dependencies are required for the offline
+tests; the optional Compose checks need the provisioned Compose release,
+standalone or as the Docker CLI plugin, not a daemon. CI uses this same gate.
 The checks do not install packages, contact deployment hosts, or start services.
 Routine releases install no Python helper: the release playbook delivers the
 signed Ops executable and verifies, receives and stages through it. No playbook

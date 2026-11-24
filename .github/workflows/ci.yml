@@ -96,7 +96,6 @@ jobs:
         if: steps.verified.outputs.cache-hit != 'true'
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
-          PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
         run: cargo run --locked -q -p simplestchat-ci -- automation --checks
 
       - name: Verify operational alert history in disposable PostgreSQL

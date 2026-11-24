@@ -43,6 +43,16 @@ fn recording() -> &'static Value {
         .get_or_init(|| serde_json::from_str(include_str!("recorded_fingerprint.json")).unwrap())
 }
 
+/// Files the recording's closures name that were deleted after it was made:
+/// the reference keyed each, and Rust's closures no longer hold one.
+const REMOVED_SINCE_RECORDING: [&str; 1] = ["ops/ansible/files/release_json.py"];
+
+/// The closure `name` as the recorder walked it, removed files included.
+fn recorded_closure(name: &str) -> Vec<&'static str> {
+    let names = recording()["closures"][name].as_array().unwrap().iter();
+    names.map(|name| name.as_str().unwrap()).collect()
+}
+
 /// A recording's text field.
 fn text<'a>(value: &'a Value, name: &str) -> &'a str {
     value[name].as_str().unwrap_or_else(|| panic!("{name}"))
@@ -73,6 +83,11 @@ struct Tape {
     next: usize,
     omitting: usize,
     refused: usize,
+    /// Whether the tape records bare keys over a fixture that holds a file
+    /// removed since: the reference hashed it, and with no recorded inputs
+    /// there is no reference key without it to hold Rust's key to.
+    removed_bare: bool,
+    unheld: usize,
 }
 
 struct Fixture {
@@ -130,6 +145,8 @@ impl Fixture {
             next: 0,
             omitting: 0,
             refused: 0,
+            removed_bare: false,
+            unheld: 0,
         };
         let workflow = text(recording, "workflow").as_bytes();
         Self::checkout(context, Some(RefCell::new(tape)), workflow)
@@ -255,6 +272,17 @@ impl Fixture {
             .iter()
             .map(|input| self.rooted(input.as_str().unwrap()))
             .collect::<Vec<_>>();
+        // The reference hashed a file removed since; Rust keys it no longer.
+        let current = recorded
+            .iter()
+            .filter(|input| {
+                let name = framed_name(input);
+                let removed = REMOVED_SINCE_RECORDING.contains(&name);
+                assert!(!removed || !inputs::selected(scope, name), "{scope:?}");
+                !removed
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         assert!(recorded.is_sorted_by_key(|input| framed_name(input).to_owned()));
         let prefix = match entry.get("key") {
             Some(key) => {
@@ -273,7 +301,7 @@ impl Fixture {
         if let Some(recorded) = entry.get("key") {
             assert_eq!(reference, recorded.as_str().unwrap(), "the recorded hash");
         }
-        let mut held = recorded.clone();
+        let mut held = current;
         for omitted in entry
             .get("omitted")
             .into_iter()
@@ -360,8 +388,24 @@ impl Fixture {
         }
         let (reference, held) = self.implied(entry, scope);
         let key = outcome.unwrap();
-        assert_eq!(key, held, "{scope:?}");
+        let mut tape = self.tape.as_ref().unwrap().borrow_mut();
+        if tape.removed_bare && entry.get("inputs").is_none() {
+            tape.unheld += 1;
+        } else {
+            assert_eq!(key, held, "{scope:?}");
+        }
         Some((key, reference))
+    }
+
+    /// Declare that this tape's bare keys hashed a file removed since, so
+    /// they are consumed and counted but no longer held to the reference.
+    fn bare_keys_hashed_a_removed_file(&self) {
+        self.tape.as_ref().unwrap().borrow_mut().removed_bare = true;
+    }
+
+    /// How many recorded keys could not be held to the reference.
+    fn unheld(&self) -> usize {
+        self.tape.as_ref().unwrap().borrow().unheld
     }
 
     /// The reference's last answer replayed.
@@ -1855,6 +1899,7 @@ fn every_recorded_closure_is_the_rust_one() {
         let names = closures[name].as_array().unwrap().iter();
         names.map(|name| name.as_str().unwrap()).collect()
     };
+    let mut removed = 0;
     for (name, list) in [
         ("nativeFiles", inputs::NATIVE_FILES),
         ("codeqlNativeFiles", inputs::CODEQL_NATIVE_FILES),
@@ -1862,8 +1907,14 @@ fn every_recorded_closure_is_the_rust_one() {
         ("backendFiles", inputs::BACKEND_FILES),
         ("backendEnvironment", inputs::BACKEND_ENVIRONMENT),
     ] {
-        assert_eq!(list, recorded(name), "{name}");
+        let mut kept = recorded(name);
+        let before = kept.len();
+        kept.retain(|name| !REMOVED_SINCE_RECORDING.contains(name));
+        removed += before - kept.len();
+        assert_eq!(list, kept, "{name}");
     }
+    // The removed file was in the native, native CodeQL and backend closures.
+    assert_eq!(removed, 3);
     assert_eq!(recorded("ciToolPrefixes"), ["xtask/", ".cargo/"]);
     for prefix in ["xtask/", ".cargo/", "crates/"] {
         let name = format!("{prefix}any.md");

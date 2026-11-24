@@ -139,7 +139,6 @@ fn real_workflows_complete_with_byte_identical_receipts_and_exclusive_publicatio
             "browser-stress",
             "codeql-actions",
             "codeql-javascript-typescript",
-            "codeql-python",
             "codeql-rust",
             "security-fast",
         ])
@@ -343,7 +342,7 @@ fn actual_workflow_matrices_keep_numeric_parallelism_and_all_declared_entries() 
     let fixture = Fixture::new();
     for (name, job, dimension, limit) in [
         ("ci.yml", "browser", "group", 3),
-        ("codeql.yml", "source-analysis", "language", 4),
+        ("codeql.yml", "source-analysis", "language", 3),
     ] {
         let bytes = files::bounded(&fixture.path.join(".github/workflows").join(name)).unwrap();
         let jobs = workflows::jobs(&bytes).unwrap();
@@ -373,20 +372,20 @@ fn filtered_duplicate_or_expanded_matrices_and_vendor_scans_fail_before_evidence
         ),
         (
             "codeql.yml",
-            "language: [actions, javascript-typescript, python, rust]",
-            "language: [actions, javascript-typescript, python]",
+            "language: [actions, javascript-typescript, rust]",
+            "language: [actions, javascript-typescript]",
             "local_ci_codeql_coverage",
         ),
         (
             "codeql.yml",
-            "language: [actions, javascript-typescript, python, rust]",
-            "language: [actions, javascript-typescript, python, rust, rust]",
+            "language: [actions, javascript-typescript, rust]",
+            "language: [actions, javascript-typescript, rust, rust]",
             "local_ci_codeql_coverage",
         ),
         (
             "codeql.yml",
-            "language: [actions, javascript-typescript, python, rust]",
-            "language: [actions, javascript-typescript, python, rust]\n        include: []",
+            "language: [actions, javascript-typescript, rust]",
+            "language: [actions, javascript-typescript, rust]\n        include: []",
             "local_ci_codeql_matrix_shape",
         ),
         (

@@ -123,11 +123,6 @@ fn steps(root: &Path, channel: &str) -> std::io::Result<Vec<Step>> {
             "--test-threads=1",
         ],
     ));
-    // One discovery runs the whole Python suite, as a direct run would.
-    steps.push(Step::new(
-        "python",
-        &["-m", "unittest", "discover", "-s", "ops/ansible/tests"],
-    ));
     Ok(steps)
 }
 

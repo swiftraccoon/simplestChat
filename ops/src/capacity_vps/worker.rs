@@ -4,9 +4,9 @@ use super::{
     Failure, Result,
     control::{Owner, now},
     files::{self, Access, Fs},
-    host::{self, CURRENT, Identity, Session, Stage},
+    host::{self, CURRENT, Identity, Installed, Session},
     process::{self, Runner},
-    protocol::{self, Header, Mode, Unit, Workload},
+    protocol::{self, Header, Unit, Workload},
 };
 use serde_json::{Value, json};
 use simplestchat_load_test::capacity::vps;
@@ -24,7 +24,7 @@ fn arguments<'a>(run: &'a OsStr, sha: &'a OsStr) -> Result<(&'a str, &'a str)> {
 fn execute(
     header: &Header,
     workload: &Workload,
-    stage: &Stage,
+    installed: &Installed,
     session: &mut Session<'_>,
 ) -> Result<()> {
     let directory = header.evidence_path();
@@ -67,7 +67,7 @@ fn execute(
             .create(&format!("{directory}/images.json"), &images, session.owner)?;
         let mut args = vec!["capacity".into()];
         args.extend(vps::capacity_arguments(workload, &images).map_err(|_| Failure::Request)?);
-        let mut command = vec![stage.binary.clone()];
+        let mut command = vec![installed.binary.clone()];
         command.extend(args.iter().cloned());
         session.save(
             &format!("{directory}/command.json"),
@@ -78,9 +78,9 @@ fn execute(
         let mut environment = process::environment();
         environment.insert("DOCKER_HOST".into(), "unix:///var/run/docker.sock".into());
         environment.insert("DOCKER_CONFIG".into(), docker_config);
-        stage.check(session.fs, session.owner)?;
+        installed.check(session.fs, session.owner)?;
         let output = session.runner.capacity(
-            Path::new(&stage.binary),
+            Path::new(&installed.binary),
             &args,
             &environment,
             workload
@@ -111,7 +111,7 @@ fn execute(
         session
             .fs
             .create(&format!("{directory}/capacity.log"), &log, session.owner)?;
-        stage.check(session.fs, session.owner)?;
+        installed.check(session.fs, session.owner)?;
         let report = session.read(
             &format!("{directory}/workload/calibration.json"),
             protocol::MAX_RESPONSE,
@@ -196,12 +196,12 @@ fn execute(
     if let Err(error) = &journal_saved {
         session.owner.latch(*error);
     }
-    let stage_checked = stage.check(session.fs, session.owner);
+    let installed_checked = installed.check(session.fs, session.owner);
     body?;
     cleanup?;
     outcome_saved?;
     journal_saved?;
-    stage_checked?;
+    installed_checked?;
     if !passed {
         return Err(Failure::Collection);
     }
@@ -212,11 +212,11 @@ fn execute(
 pub(super) fn fixture_execute(
     header: &Header,
     workload: &Workload,
-    stage: &Stage,
+    installed: &Installed,
     session: &mut Session<'_>,
 ) -> Result<()> {
     session.owner.worker(workload.runtime_seconds())?;
-    execute(header, workload, stage, session)
+    execute(header, workload, installed, session)
 }
 
 pub(super) fn run(run: &OsStr, sha: &OsStr) -> ExitCode {
@@ -224,7 +224,7 @@ pub(super) fn run(run: &OsStr, sha: &OsStr) -> ExitCode {
     let result = (|| {
         let (run, sha) = arguments(run, sha)?;
         let origin = now()?;
-        let mut owner = Owner::new(origin, Mode::Invoke)?;
+        let mut owner = Owner::new(origin)?;
         let mut fs = match Fs::new(Access::default()) {
             Ok(fs) => fs,
             Err(error) => {
@@ -262,14 +262,14 @@ pub(super) fn run(run: &OsStr, sha: &OsStr) -> ExitCode {
             }
             let workload = Workload::decode(&bytes).map_err(|_| Failure::Request)?;
             owner.worker(workload.runtime_seconds())?;
-            let stage = Stage::open(&header, &mut fs, &mut owner)?;
+            let installed = Installed::open(&header, &mut fs, &mut owner)?;
             let mut session = Session {
                 header: &header,
                 fs: &mut fs,
                 owner: &mut owner,
                 runner: &mut runner,
             };
-            execute(&header, &workload, &stage, &mut session)
+            execute(&header, &workload, &installed, &mut session)
         })();
         if let Err(error) = &body {
             owner.latch(*error);

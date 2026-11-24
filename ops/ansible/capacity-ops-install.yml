@@ -1,0 +1,85 @@
+---
+# The private benchmark host receives the signed Ops executable through the same delivery
+# tasks a release gives a prepared host; only the binding to the host and run the capacity
+# controller selected and the release roots a host holds before its first release precede them.
+- name: Deliver the signed Ops executable to the selected private benchmark host
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require the selected benchmark host and the controller's delivery inputs
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == capacity_host
+          - ansible_play_hosts_all | length == 1
+          - not (scpub_enabled | default(false))
+          - capacity_run is match('^[a-f0-9]{32}$')
+          - scpub_release_expected_revision is match('^[a-f0-9]{40}$')
+          - capacity_application_directory is match('^/')
+          - capacity_ops_binary.sha256 is match('^[a-f0-9]{64}$')
+          - capacity_ops_binary.bytes is integer
+          - capacity_ops_binary.bytes > 0
+
+    - name: Provision the release roots a prepared host holds before its first release
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: /usr/local/libexec/simplestchat-public, mode: '0755'}
+        - {path: /etc/simplestchat-public, mode: '0700'}
+        - {path: /srv/simplestchat-public, mode: '0700'}
+
+    - name: Snapshot the controller-authenticated application predicate
+      ansible.builtin.stat:
+        path: "{{ capacity_application_directory }}/release-predicate.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_app_predicate_file
+
+    - name: Snapshot the controller-authenticated application manifest
+      ansible.builtin.stat:
+        path: "{{ capacity_application_directory }}/release.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_app_manifest_file
+
+    - name: Read the controller-authenticated application predicate
+      ansible.builtin.slurp:
+        src: "{{ capacity_application_directory }}/release-predicate.json"
+      delegate_to: localhost
+      become: false
+      register: scpub_app_predicate_bytes
+      no_log: true
+
+  tasks:
+    - name: Deliver the signed current Ops executable through native policy
+      ansible.builtin.import_tasks: tasks/signed-ops.yml
+
+    - name: Snapshot the installed executable
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: ops_installed
+
+    - name: Require the executable the controller authenticated, installed by root
+      ansible.builtin.assert:
+        that:
+          - ops_installed.stat.isreg | default(false)
+          - not (ops_installed.stat.islnk | default(false))
+          - ops_installed.stat.nlink == 1
+          - ops_installed.stat.uid == 0
+          - ops_installed.stat.gid == 0
+          - ops_installed.stat.mode == '0755'
+          - ops_installed.stat.size == capacity_ops_binary.bytes
+          - ops_installed.stat.checksum == capacity_ops_binary.sha256

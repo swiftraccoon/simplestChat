@@ -61,6 +61,7 @@ fn every_recorded_selection_is_made_alike() {
             case.get("language").and_then(Document::text),
             case.get("includeVendor") == Some(&Document::Bool(true)),
             automated(present),
+            &super::super::tests::RECORDED_FIRST_PARTY,
         );
         let held = |languages: Vec<String>| {
             Document::List(languages.into_iter().map(Document::from).collect())
@@ -75,6 +76,19 @@ fn every_recorded_selection_is_made_alike() {
         reworded: 0,
     };
     assert_eq!(tally, expected);
+}
+
+#[test]
+fn a_first_party_run_of_every_language_covers_only_the_stored_languages() {
+    use crate::codeql::tools::{LANGUAGES, STORED_LANGUAGES};
+    let first_party = selected_languages(None, false, false, &STORED_LANGUAGES).unwrap();
+    assert_eq!(first_party, ["actions", "javascript-typescript", "rust"]);
+    // A vendor scan still covers every supported language, the vendored
+    // Python sources among them.
+    let vendor = selected_languages(None, true, false, &STORED_LANGUAGES).unwrap();
+    assert_eq!(vendor, LANGUAGES);
+    let named = selected_languages(Some("python"), false, false, &STORED_LANGUAGES).unwrap();
+    assert_eq!(named, ["python"]);
 }
 
 #[test]

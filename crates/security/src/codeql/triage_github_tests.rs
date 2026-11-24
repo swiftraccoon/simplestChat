@@ -15,7 +15,10 @@ use crate::{
         triage::{
             Ledger,
             plan::{Checkout, analysis_health, api_plan, apply_plan},
-            tests::{Count, Served, Virtual, exceptions, number, placed, scrubbed, seconds},
+            tests::{
+                Count, Served, Virtual, exceptions, number, placed, recorded_categories, scrubbed,
+                seconds,
+            },
         },
     },
     document::Document,
@@ -407,6 +410,7 @@ fn every_recorded_client_asks_github_alike() {
         made_count.judge(name, case.get("made").expect("made"), &shown, &[]);
         let mut journal = Vec::new();
         if let Ok(mut client) = made {
+            client.categories = recorded_categories();
             let native = case.get("native") == Some(&Document::Bool(true));
             let cache = place.join("cache");
             let mut sources = native.then(|| {

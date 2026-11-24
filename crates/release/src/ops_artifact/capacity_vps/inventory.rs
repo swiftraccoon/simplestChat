@@ -373,6 +373,11 @@ impl Inventory {
         Ok(())
     }
 }
+/// The installed executable's request entry, with the environment it runs in.
+pub(super) const SERVE: &str = concat!(
+    "/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C HOME=/root ",
+    "/usr/local/libexec/simplestchat-public/simplestchat-ops capacity-vps serve --transport-json"
+);
 pub(crate) fn quote(value: &str) -> String {
     if !value.is_empty()
         && value
@@ -416,11 +421,15 @@ impl Target {
         .collect::<Vec<_>>()
         .join(" ")
     }
-    pub fn ssh(&self, bootstrap: &str) -> Vec<std::ffi::OsString> {
+    /// The SSH command that serves one request on the host: the installed Ops
+    /// executable under a fixed environment, as root (through `sudo -n` for
+    /// another user), with `header` as its one quoted `--transport-json`.
+    pub fn ssh(&self, header: &str) -> Vec<std::ffi::OsString> {
+        let served = format!("{SERVE} {}", quote(header));
         let remote = if self.user == "root" {
-            format!("/usr/bin/python3 -I -B -c {}", quote(bootstrap))
+            served
         } else {
-            format!("sudo -n -- /usr/bin/python3 -I -B -c {}", quote(bootstrap))
+            format!("sudo -n -- {served}")
         };
         let mut args = vec![
             "-F".into(),

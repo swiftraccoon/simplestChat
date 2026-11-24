@@ -19,9 +19,7 @@ logging remediation, the nightly backup and the offsite upload and restore
 drill run through this executable as well.
 The separate Ops install/upgrade commands publish one original-pinned executable
 at its fixed helper path. Both signed host callers authenticate its
-delivery through the native controller before that executable runs. The only
-Python file left in `ansible/files` is `release_json.py`, the JSON reader the
-remaining Python tests import; no playbook installs it.
+delivery through the native controller before that executable runs.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json

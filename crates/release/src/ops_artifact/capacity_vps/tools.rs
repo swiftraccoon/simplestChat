@@ -26,14 +26,11 @@ struct Context {
     environment: Environment,
     sources: Arc<Sources>,
     inventory: Arc<Inventory>,
-    artifact: Option<Arc<Artifact>>,
+    artifact: Option<Arc<super::super::acquire::AuthenticatedAcquisition>>,
+    application: Option<Arc<super::install::Application>>,
     budget: Budget,
     #[cfg(test)]
     inert_fixture: bool,
-}
-struct Artifact {
-    acquired: Arc<super::super::acquire::AuthenticatedAcquisition>,
-    transfer: super::files::Original,
 }
 pub(crate) struct Invocation {
     executable: Arc<Executable>,
@@ -113,11 +110,11 @@ impl Invocation {
         };
         self.context.sources.check(&checkpoint)?;
         self.context.inventory.check(&checkpoint)?;
-        if let Some(artifact) = &self.context.artifact {
-            artifact
-                .acquired
-                .check(&self.context.budget, &checkpoint.acquired())?;
-            artifact.transfer.check(&self.context.budget, &checkpoint)?;
+        if let Some(application) = &self.context.application {
+            application.check(&self.context.budget, &checkpoint)?;
+        }
+        if let Some(acquired) = &self.context.artifact {
+            acquired.check(&self.context.budget, &checkpoint.acquired())?;
         } else if self.program != Program::OpsVpsGit {
             #[cfg(test)]
             if self.context.inert_fixture {
@@ -190,7 +187,7 @@ impl Invocation {
     ) -> Result<(&Path, &Environment)> {
         self.validate(program, args)?;
         Ok((
-            if program == Program::OpsVpsAnsible {
+            if matches!(program, Program::OpsVpsAnsible | Program::OpsVpsInstall) {
                 self.context.sources.directory()
             } else {
                 &self.context.caller
@@ -262,15 +259,29 @@ impl ReleaseProof for Invocation {
     }
 }
 
+/// The programs given the caller's `GH_TOKEN`: the application artifact's
+/// listing and verifier, and the playbook whose production tasks export the
+/// signed Ops pair. No SSH, Git or provisioning child receives it.
+pub(super) fn credential(program: Program) -> bool {
+    matches!(
+        program,
+        Program::OpsVpsGh | Program::OpsVpsController | Program::OpsVpsInstall
+    )
+}
+
 pub(super) struct Tools {
     git: Option<Arc<Executable>>,
     ssh: Option<Arc<Executable>>,
     ansible: Option<Arc<Executable>>,
+    gh: Option<Arc<Executable>>,
+    controller: Option<Arc<Executable>>,
+    credential: Option<OsString>,
     caller: PathBuf,
     home: PathBuf,
     source: Arc<Sources>,
     inventory: Arc<Inventory>,
-    artifact: Option<Arc<Artifact>>,
+    artifact: Option<Arc<super::super::acquire::AuthenticatedAcquisition>>,
+    application: Option<Arc<super::install::Application>>,
     budget: Budget,
     #[cfg(test)]
     inert_fixture: bool,
@@ -308,23 +319,27 @@ impl Tools {
             git,
             ssh,
             ansible,
+            gh: None,
+            controller: None,
+            credential: None,
             caller: caller.into(),
             home: home.into(),
             source: sources,
             inventory,
             artifact: None,
+            application: None,
             budget: budget.clone(),
             inert_fixture: true,
             _permits: permits,
         })
     }
+    /// The fixed tools of every invocation: Git and SSH.
     pub fn open(
         caller: &Path,
         home: &Path,
         environment: &Environment,
         sources: Arc<Sources>,
         inventory: Arc<Inventory>,
-        prepare: bool,
         budget: &Budget,
     ) -> Result<Self> {
         let permits = budget.reserve(6)?;
@@ -336,43 +351,98 @@ impl Tools {
                 return Err(e);
             }
         };
-        let ansible = if prepare {
-            match Executable::open(&caller.join("ops/ansible/.venv/bin/ansible-playbook")) {
-                Ok(v) => Some(Arc::new(v)),
-                Err(e) => {
-                    let _ = git.close();
-                    let _ = ssh.close();
-                    return Err(e);
-                }
-            }
-        } else {
-            None
-        };
         Ok(Self {
             git: Some(Arc::new(git)),
             ssh: Some(Arc::new(ssh)),
-            ansible,
+            ansible: None,
+            gh: None,
+            controller: None,
+            credential: None,
             caller: caller.into(),
             home: home.into(),
             source: sources,
             inventory,
             artifact: None,
+            application: None,
             budget: budget.clone(),
             #[cfg(test)]
             inert_fixture: false,
             _permits: permits,
         })
     }
+    /// Hold a new run's install tools from its install step to the end:
+    /// `ansible-playbook`, the `gh` the caller's search path selects, this
+    /// controller's own `executable` and the caller's nonempty `GH_TOKEN`.
+    /// Collection and recovery never install and never hold them.
+    pub fn install(
+        &mut self,
+        caller: &Path,
+        environment: &Environment,
+        executable: &Path,
+    ) -> Result<()> {
+        let credential = environment
+            .get(OsStr::new("GH_TOKEN"))
+            .filter(|token| !token.is_empty())
+            .cloned()
+            .ok_or_else(|| failure(1))?;
+        if self.ansible.is_some() || self.gh.is_some() || self.controller.is_some() {
+            return Err(failure(1));
+        }
+        let permits = self.budget.reserve(6)?;
+        let mut opened = Vec::new();
+        let result = (|| {
+            opened.push(Executable::open(
+                &caller.join("ops/ansible/.venv/bin/ansible-playbook"),
+            )?);
+            opened.push(executable::select(caller, environment, OsStr::new("gh"))?);
+            opened.push(Executable::open(executable)?);
+            Ok(())
+        })();
+        if let Err(error) = result {
+            for tool in opened {
+                let _ = tool.close();
+            }
+            return Err(error);
+        }
+        let mut opened = opened.into_iter().map(Arc::new);
+        self.ansible = opened.next();
+        self.gh = opened.next();
+        self.controller = opened.next();
+        self.credential = Some(credential);
+        self._permits.extend(permits);
+        Ok(())
+    }
     pub fn bind_artifact(
         &mut self,
         acquired: Arc<super::super::acquire::AuthenticatedAcquisition>,
-        transfer: super::files::Original,
     ) -> Result<()> {
         if self.artifact.is_some() {
             return Err(failure(1));
         }
-        self.artifact = Some(Arc::new(Artifact { acquired, transfer }));
+        self.artifact = Some(acquired);
         Ok(())
+    }
+    /// Hold the verified application originals in every later dispatch's check.
+    pub fn bind_application(
+        &mut self,
+        application: Arc<super::install::Application>,
+    ) -> Result<()> {
+        if self.application.is_some() {
+            return Err(failure(1));
+        }
+        self.application = Some(application);
+        Ok(())
+    }
+    /// The held `gh`, as the production delivery tasks are given it.
+    pub fn gh_path(&self) -> Result<&Path> {
+        let gh = self.gh.as_ref().ok_or_else(|| failure(1))?;
+        gh.selected_path().map_err(|_| failure(1))
+    }
+    /// This controller's own held executable, which the production delivery
+    /// tasks run to export the signed Ops pair.
+    pub fn controller_path(&self) -> Result<&Path> {
+        let controller = self.controller.as_ref().ok_or_else(|| failure(1))?;
+        controller.selected_path().map_err(|_| failure(1))
     }
     fn environment(&self, program: Program) -> Environment {
         let mut env: Environment = [
@@ -398,7 +468,15 @@ impl Tools {
                 env.insert(k.into(), v.into());
             }
         }
-        if program == Program::OpsVpsAnsible {
+        if program == Program::OpsVpsController
+            && let Some(directory) = self.gh_path().ok().and_then(Path::parent)
+        {
+            // The verifier finds the held `gh` first, as `release.yml` runs it.
+            let mut path = directory.as_os_str().to_owned();
+            path.push(":/usr/bin:/bin:/usr/sbin:/sbin");
+            env.insert("PATH".into(), path);
+        }
+        if matches!(program, Program::OpsVpsAnsible | Program::OpsVpsInstall) {
             env.insert("LC_ALL".into(), "C.UTF-8".into());
             env.insert("LANG".into(), "C.UTF-8".into());
             env.insert(
@@ -416,6 +494,11 @@ impl Tools {
             );
             env.insert("PYTHONDONTWRITEBYTECODE".into(), "1".into());
         }
+        if credential(program)
+            && let Some(token) = &self.credential
+        {
+            env.insert("GH_TOKEN".into(), token.clone());
+        }
         env
     }
     pub fn invocation(&self, spec: Spec, plan: &plan::Plan) -> Result<Arc<Invocation>> {
@@ -432,13 +515,18 @@ impl Tools {
         let selected = match program {
             Program::OpsVpsGit => &self.git,
             Program::OpsVpsSsh => &self.ssh,
-            Program::OpsVpsAnsible => &self.ansible,
+            Program::OpsVpsAnsible | Program::OpsVpsInstall => &self.ansible,
+            Program::OpsVpsGh => &self.gh,
+            Program::OpsVpsController => &self.controller,
             _ => return Err(failure(1)),
         };
         let executable = selected.as_ref().ok_or_else(|| failure(1))?.clone();
         let start = plan.now()?;
         if latest < start || end <= latest || maximum > super::MAX_ARCHIVE {
             return Err(failure(124));
+        }
+        if credential(program) && self.credential.is_none() {
+            return Err(failure(1));
         }
         Ok(Arc::new(Invocation {
             executable,
@@ -448,6 +536,7 @@ impl Tools {
                 sources: self.source.clone(),
                 inventory: self.inventory.clone(),
                 artifact: self.artifact.clone(),
+                application: self.application.clone(),
                 budget: self.budget.clone(),
                 #[cfg(test)]
                 inert_fixture: self.inert_fixture,
@@ -472,7 +561,13 @@ impl Tools {
     }
     pub fn finish(mut self) -> Result<()> {
         let mut primary = None;
-        for tool in [&mut self.ansible, &mut self.ssh, &mut self.git] {
+        for tool in [
+            &mut self.controller,
+            &mut self.gh,
+            &mut self.ansible,
+            &mut self.ssh,
+            &mut self.git,
+        ] {
             if let Some(tool) = tool.take() {
                 match Arc::try_unwrap(tool) {
                     Ok(tool) => {

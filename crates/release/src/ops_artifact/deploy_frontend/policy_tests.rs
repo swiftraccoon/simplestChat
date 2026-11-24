@@ -188,6 +188,21 @@ fn every_used_run_identity_refuses_drift_types_and_same_name_foreign_repositorie
 }
 
 #[test]
+fn a_named_run_and_attempt_are_each_within_the_safe_positive_range() {
+    for (id, attempt) in [(1, 1), (SAFE, SAFE), (123, 2)] {
+        let named = Run::named(id, attempt).unwrap();
+        assert_eq!((named.id.get(), named.attempt.get()), (id, attempt));
+    }
+    for (id, attempt) in [(0, 1), (1, 0), (SAFE + 1, 1), (1, SAFE + 1)] {
+        let refused = Run::named(id, attempt).expect_err("a refusal");
+        assert_eq!(
+            (refused.code, refused.message.as_str()),
+            (1, "ci_identity_mismatch")
+        );
+    }
+}
+
+#[test]
 fn listing_counts_and_record_bounds_prevent_first_page_or_missing_candidate_selection() {
     for value in [
         json!({"total_count":0,"workflow_runs":[]}),

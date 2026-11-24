@@ -1,9 +1,6 @@
 //! One calling-thread signal owner and original Linux monotonic action budget.
 
-use super::{
-    Failure, Result,
-    protocol::{Action, Mode},
-};
+use super::{Failure, Result, protocol::Action};
 #[cfg(target_os = "linux")]
 use std::{marker::PhantomData, rc::Rc};
 
@@ -127,7 +124,6 @@ pub(super) struct Owner {
     last: u64,
     active: u64,
     end: u64,
-    mode: Mode,
     action: Option<Action>,
     signals: Option<Signals>,
     primary: Option<Failure>,
@@ -181,7 +177,6 @@ impl Owner {
             last: origin,
             active: origin + 60 * SECOND,
             end: origin + 90 * SECOND,
-            mode: Mode::Invoke,
             action: None,
             signals: Some(signals),
             primary: None,
@@ -210,22 +205,19 @@ impl Owner {
         }
         self.signals.as_ref().ok_or(Failure::Unproven)?.pending()
     }
-    pub fn new(origin: u64, mode: Mode) -> Result<Self> {
+    /// Admit one invocation whose windows count from `origin`, the process's
+    /// own first monotonic sample: 60 seconds of work and 90 in all until an
+    /// action selects its own window.
+    pub fn new(origin: u64) -> Result<Self> {
         let current = now()?;
         if origin == 0 || origin > current {
             return Err(Failure::Deadline);
         }
-        let (body, whole) = if mode == Mode::Stage {
-            (300, 360)
-        } else {
-            (60, 90)
-        };
         let mut value = Self {
             origin,
             last: current,
-            active: origin.checked_add(body * SECOND).ok_or(Failure::Bounds)?,
-            end: origin.checked_add(whole * SECOND).ok_or(Failure::Bounds)?,
-            mode,
+            active: origin.checked_add(60 * SECOND).ok_or(Failure::Bounds)?,
+            end: origin.checked_add(90 * SECOND).ok_or(Failure::Bounds)?,
             action: None,
             signals: Some(Signals::new()?),
             primary: None,
@@ -245,7 +237,7 @@ impl Owner {
         }
     }
 
-    /// Domain-selected fixed end; the bootstrap origin never changes at exec.
+    /// Domain-selected fixed end, still counted from the original origin.
     pub fn admit(&mut self, action: Action) -> Result<()> {
         self.check(false)?;
         if self.action.is_some() {
@@ -255,7 +247,6 @@ impl Owner {
             Action::Reserve => (1740, 1800),
             Action::Archive => (300, 360),
             Action::Recover => (600, 660),
-            _ if self.mode == Mode::Stage => (300, 360),
             _ => (60, 90),
         };
         self.active = self

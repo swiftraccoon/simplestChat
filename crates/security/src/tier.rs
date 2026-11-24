@@ -353,6 +353,7 @@ fn fast(
         path: &programs.program("semgrep-core")?,
         version: &version,
         lock: &|| host.engine().map(|(_, lock)| lock),
+        languages: &semgrep::LANGUAGES,
     };
     semgrep::gate(context, &engine, git, vendor)?;
     let new = findings::new_migrations(context.root())?;

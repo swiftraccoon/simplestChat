@@ -5,9 +5,9 @@
 //! policy and the reviews are each read again unchanged.
 
 use super::{
-    Ledger, MAX_APPLY, MAX_POLICY, NO_ITEMS, among, array, bounded_file, decode, digest, expected,
-    field, findings::finding, findings::verdict, get, get_or, github::Github, holds, object,
-    positive, same, string,
+    Ledger, MAX_APPLY, MAX_POLICY, NO_ITEMS, among, array, bounded_file, decode, digest, field,
+    findings::finding, findings::verdict, get, get_or, github::Github, holds, object, positive,
+    same, string,
 };
 use crate::{
     Result,
@@ -99,7 +99,7 @@ pub fn analysis_health(
         "codeql_ref_head_changed",
     )?;
     let analyses = client.pages("analyses", reference, Some(revision))?;
-    let expected = expected();
+    let expected = client.categories.clone();
     let mut categories = BTreeSet::new();
     let mut records = Vec::new();
     for item in &analyses {
@@ -205,7 +205,7 @@ pub fn api_plan(
     ledger: &Ledger,
 ) -> Result<Document> {
     let health = analysis_health(client, revision, reference)?;
-    let expected = expected();
+    let expected = client.categories.clone();
     let mut findings = Vec::new();
     let mut seen = BTreeSet::new();
     for raw in client.pages("alerts", reference, None)? {

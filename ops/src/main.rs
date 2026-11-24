@@ -53,7 +53,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops distribution prepare-artifact --manifest PATH --path PATH ",
     "--selection PATH --evidence PATH --output PATH\n",
     "       simplestchat-ops capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]\n",
-    "       simplestchat-ops capacity-vps serve --transport-json JSON --origin-monotonic-ns N\n",
+    "       simplestchat-ops capacity-vps serve --transport-json JSON\n",
     "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
     "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
     "       simplestchat-ops database logging disable\n",
@@ -183,16 +183,15 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
     if args.first().is_some_and(|arg| arg == "capacity-vps") {
-        if args.len() == 6 {
-            if args[1] == "serve"
-                && args[2] == "--transport-json"
-                && args[4] == "--origin-monotonic-ns"
-            {
-                return simplestchat_ops::capacity_vps::serve(&args[3], &args[5]);
-            }
-            if args[1] == "worker" && args[2] == "--run" && args[4] == "--request-sha256" {
-                return simplestchat_ops::capacity_vps::worker(&args[3], &args[5]);
-            }
+        if args.len() == 4 && args[1] == "serve" && args[2] == "--transport-json" {
+            return simplestchat_ops::capacity_vps::serve(&args[3]);
+        }
+        if args.len() == 6
+            && args[1] == "worker"
+            && args[2] == "--run"
+            && args[4] == "--request-sha256"
+        {
+            return simplestchat_ops::capacity_vps::worker(&args[3], &args[5]);
         }
         eprintln!("{USAGE}");
         return ExitCode::from(2);

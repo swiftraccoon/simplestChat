@@ -207,6 +207,7 @@ impl Replay {
             budget: &budget,
             private: &private,
             witness: &witness,
+            first_party: &RECORDED_FIRST_PARTY,
         };
         body(&host)
     }
@@ -344,6 +345,12 @@ pub(crate) fn statuses(context: &crate::context::Context) -> Document {
     });
     Document::List(checks.collect())
 }
+
+/// The first-party languages a run of every language covered when the runs
+/// were recorded: every recorded run is replayed with them. The checkout has
+/// tracked no Python since.
+pub(crate) const RECORDED_FIRST_PARTY: [&str; 4] =
+    ["actions", "javascript-typescript", "python", "rust"];
 
 /// How the recorded cases came out here: held alike, refused with the
 /// reference's code, refused with the class the reference raised, refused

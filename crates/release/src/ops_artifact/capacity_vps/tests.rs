@@ -196,16 +196,38 @@ fn saved_runtime_tightens_original_entry_and_cannot_restart_the_clock() {
     *clock.0.lock().unwrap() = start + Duration::from_secs(59);
     assert!(plan.now().is_err());
 }
+#[test]
+fn only_a_new_run_installs_and_its_window_covers_listing_verification_and_delivery() {
+    let start = Instant::now();
+    let clock = Arc::new(FakeClock(Mutex::new(start)));
+    let collect = options(&["--collect", &"1".repeat(32)]).unwrap();
+    for (options, installs) in [(options(&[]).unwrap(), true), (collect, false)] {
+        let plan = Plan::new(clock.clone(), &options, start);
+        for phase in [Phase::Admission, Phase::Acquisition] {
+            let end = plan.begin(phase).unwrap();
+            plan.complete(phase, end).unwrap();
+        }
+        let install = plan.begin(Phase::Install);
+        assert_eq!(install.is_ok(), installs);
+        if let Ok(end) = install {
+            // The listing's 30 s, the verifier's 690 s and the delivery's 2,010 s,
+            // with 30 s to settle between them.
+            assert_eq!(end - start, Duration::from_secs(30 + 690 + 2010 + 30));
+            plan.complete(Phase::Install, end).unwrap();
+        }
+        assert!(plan.begin(Phase::Contact).is_ok());
+    }
+}
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
-struct Fixture {
-    root: PathBuf,
+pub(super) struct Fixture {
+    pub(super) root: PathBuf,
     caller: PathBuf,
-    budget: Budget,
-    checkpoint: Checkpoint,
+    pub(super) budget: Budget,
+    pub(super) checkpoint: Checkpoint,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
             "vps-local-test-{}-{}",
             std::process::id(),
@@ -273,7 +295,7 @@ fn extraction_streams_real_gzip_tar_and_keeps_changed_originals_negative() {
     let mut output = fixture.output();
     let bytes = gzip(&tar(&[("workload/outcome.json", b"{}"), ("empty", b"")]));
     let source = output
-        .frame("archive.gz", &bytes, None, &[], &fixture.checkpoint)
+        .frame("archive.gz", &bytes, &fixture.checkpoint)
         .unwrap();
     let extracted =
         archive::extract(&source, &output, &fixture.budget, &fixture.checkpoint).unwrap();
@@ -307,7 +329,7 @@ fn malformed_gzip_trailers_and_duplicate_tar_members_cannot_be_success() {
         let fixture = Fixture::new();
         let mut output = fixture.output();
         let source = output
-            .frame("archive.gz", &bytes, None, &[], &fixture.checkpoint)
+            .frame("archive.gz", &bytes, &fixture.checkpoint)
             .unwrap();
         assert!(archive::extract(&source, &output, &fixture.budget, &fixture.checkpoint).is_err());
         source.finish(&fixture.checkpoint).unwrap();
@@ -341,7 +363,7 @@ fn unix_archive_names_keep_original_bytes_without_utf8_replacement() {
     builder.finish().unwrap();
     let bytes = gzip(&builder.into_inner().unwrap());
     let source = output
-        .frame("archive.gz", &bytes, None, &[], &fixture.checkpoint)
+        .frame("archive.gz", &bytes, &fixture.checkpoint)
         .unwrap();
     let extracted =
         archive::extract(&source, &output, &fixture.budget, &fixture.checkpoint).unwrap();
@@ -373,7 +395,7 @@ fn physical_tar_header_strings_keep_the_reference_strict_utf8_boundary() {
     builder.finish().unwrap();
     let bytes = gzip(&builder.into_inner().unwrap());
     let source = output
-        .frame("archive.gz", &bytes, None, &[], &fixture.checkpoint)
+        .frame("archive.gz", &bytes, &fixture.checkpoint)
         .unwrap();
     assert!(archive::extract(&source, &output, &fixture.budget, &fixture.checkpoint).is_err());
     assert!(!output.path("remote").exists());
@@ -403,7 +425,7 @@ pub(crate) struct PreparationFixture {
 impl PreparationFixture {
     pub async fn new(lease_source: &str, ansible_source: &str, seconds: u64) -> Self {
         use simplestchat_ops::capacity_vps::protocol::{
-            Action, Envelope, Header, Members, Mode, Pin, Ready, Response, ResultData, Source,
+            Action, Envelope, Header, Pin, Ready, Response, ResultData, Source,
         };
         let mut fixture = Fixture::new();
         let root = fixture.root.clone();
@@ -497,17 +519,11 @@ impl PreparationFixture {
         };
         let header = Header {
             schema_version: 1,
-            scope: "OpsCapacityBootstrap".into(),
-            mode: Mode::Invoke,
+            scope: "OpsCapacityInvocation".into(),
             run: "1".repeat(32),
             selection: source,
             artifact_id: 456,
-            transfer: pin.clone(),
-            members: Members {
-                manifest: pin.clone(),
-                selection: pin.clone(),
-                binary: pin,
-            },
+            binary: pin,
             request: Pin {
                 sha256: super::super::sha(&envelope),
                 bytes: envelope.len() as u64,
@@ -521,10 +537,8 @@ impl PreparationFixture {
             }),
         )
         .unwrap();
-        let mut bytes = header.encode().unwrap();
-        bytes.push(b'\n');
         let frame = output
-            .frame("lease-frame.bin", &bytes, None, &envelope, &checkpoint)
+            .frame("lease-frame.bin", &envelope, &checkpoint)
             .unwrap();
         let lease_pending = output.capture(1, super::MAX_STATUS).await.unwrap();
         let ansible_pending = output.capture(2, super::MAX_JSON).await.unwrap();
@@ -533,10 +547,11 @@ impl PreparationFixture {
         let prefix = format!(
             concat!(
                 "#!/usr/bin/python3\nimport os,sys,time,json,signal\n",
-                "ROOT={}\nREADY=bytes.fromhex('{}')\n",
+                "ROOT={}\nREADY=bytes.fromhex('{}')\nREQUEST={}\n",
             ),
             serde_json::to_string(root.to_str().unwrap()).unwrap(),
-            ready_hex
+            ready_hex,
+            envelope.len()
         );
         let paths = [root.join("git"), root.join("ssh"), root.join("ansible")];
         fs::write(&paths[0], b"#!/bin/sh\nexit 99\n").unwrap();
@@ -620,7 +635,7 @@ impl PreparationFixture {
             reader,
             [lease_proof.clone(), ansible_proof.clone()],
         );
-        let frame_bytes = frame.bytes();
+        let frame_bytes = envelope.len() as u64;
         Self {
             root,
             caller,

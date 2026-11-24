@@ -24,8 +24,9 @@ workflow.
 The gate's shared context (`Context::snapshot` in
 `crates/security/src/context.rs`) takes a bounded copy of Git-tracked and
 nonignored source files. It rejects symbolic links and special files and records
-each copied file's SHA-256. This pack selects `.rs`, `.py`, `.ts` and `.js` files
-under these maintained production paths:
+each copied file's SHA-256. This pack selects `.rs`, `.ts` and `.js` files under
+these maintained production paths (today `build/`, `ops/ansible/files/` and
+`ops/ansible/callback_plugins/` hold none):
 
 - `src/`
 - `build/`
@@ -33,10 +34,10 @@ under these maintained production paths:
 - `ops/ansible/callback_plugins/`
 - `web/src/`
 
-Rust tests embedded in these modules are included. Standalone Python/browser test
-suites and this pack's intentionally unsafe examples are outside the production
-scan. Vendor source scanning is optional and local; the default scope excludes
-it. C/C++ source analysis is also optional and local. Shell, first-party workflow
+Rust tests embedded in these modules are included. Standalone browser test suites
+and this pack's intentionally unsafe examples are outside the production scan.
+Vendor source scanning is optional and local; the default scope excludes it.
+C/C++ source analysis is also optional and local. Shell, first-party workflow
 YAML, SQL migrations, dependency advisories and image contents retain their
 separate checks. An unsupported language or a newly added
 production directory requires a deliberate scope/rule update; this pack does not
@@ -67,17 +68,10 @@ these checks supplement code review and compiler/tests.
 
 | Rule suffix | Checked behavior | Limits |
 | --- | --- | --- |
-| `python-credential-url` | Literal URL user/password fields passed to `urllib.request.urlopen` or `requests.get/post` | Does not resolve arbitrary URL builders or every HTTP library. |
 | `javascript-credential-url` | Literal credential-bearing URLs passed to `fetch` | Covers JavaScript/TypeScript call syntax, not all client wrappers. |
 | `rust-credential-url` | Literal credential-bearing URLs passed to `reqwest::get` | Does not model every client builder. |
-| `python-secret-log` | Known credential variable/property names passed to common logger methods | Names are explicit; renamed or transformed secrets require review. |
 | `javascript-secret-log` | Known credential variable/property names passed to `console` methods | Does not model every logging abstraction. |
 | `rust-secret-log` | Known credential arguments in logging macros and named credential fields inside those macros | Tracing field syntax is additionally matched inside the parsed macro range; it is not a whole-program secret-flow model. |
-| `python-network-timeout` | Missing or explicit `None` timeout on supported `urllib`/`requests` calls | Does not prove a variable timeout is positive or cap response sizes. |
-| `python-process-timeout` | Missing or explicit `None` timeout on `run`, `check_call` and `check_output` | `Popen` ownership, output limits and descendant cleanup need separate review/tests. |
-| `python-request-to-process` | Local data flow from `request.args/form.get` or `request.json[...]` to process execution | Known Python request shapes only; arbitrary aliases, frameworks and cross-function flows are not proved. |
-| `python-request-to-file` | The same request shapes reaching supported file-read/open paths | A sanitizer must be explicitly reviewed before the rule is expanded to recognize it. |
-| `python-archive-extractall` | Calls to bulk archive extraction | Reviewed bounded readers inspect members without filesystem extraction. |
 | `javascript-location-to-html` | Local flow from location search/hash to `innerHTML` or `document.write` | Other input sources and sinks need additional rules and fixtures. |
 | `rust-assert-sql-safe` | `sqlx::AssertSqlSafe` outside the two reviewed files | Does not prove query parameterization by itself. |
 | `rust-assert-sql-safe-db` | The assertion outside `verify_schema` in exactly `src/db.rs` | Changes within that function still require SQL/data-flow review. |

@@ -51,8 +51,6 @@ const OBSOLETE: [&str; 2] = ["Main pull request review", "Main security gates"];
 const GATE: &str = "Required security and correctness checks";
 /// The application that reports the checks of GitHub Actions.
 const GITHUB_ACTIONS: u64 = 15368;
-/// The languages whose analysis is required.
-const LANGUAGES: [&str; 4] = ["actions", "javascript-typescript", "python", "rust"];
 /// How many records one page holds, and how many pages are read.
 const PAGE: usize = 100;
 /// How long one command has.
@@ -244,10 +242,10 @@ fn healthy_run(answer: &Value, revision: &str) -> Result<()> {
     require(passed, "ruleset_trusted_ci_not_successful")
 }
 
-/// Every required language has an analysis, and the newest of each is of
-/// `revision` on `main`, without error or warning, and ran rules. The
-/// answer lists the newest first.
-fn healthy_analyses(answer: &Value, revision: &str) -> Result<()> {
+/// Every one of the required `languages` has an analysis, and the newest of
+/// each is of `revision` on `main`, without error or warning, and ran rules.
+/// The answer lists the newest first.
+fn healthy_analyses(answer: &Value, revision: &str, languages: &[&str]) -> Result<()> {
     let entries = records(answer)?;
     require(entries.len() <= PAGE, "ruleset_analysis_window")?;
     let mut newest: Vec<(&str, &Map<String, Value>)> = Vec::new();
@@ -259,12 +257,12 @@ fn healthy_analyses(answer: &Value, revision: &str) -> Result<()> {
         let language = category
             .strip_prefix("/language:")
             .and_then(|rest| rest.strip_suffix("/security"));
-        let required = language.is_some_and(|language| LANGUAGES.contains(&language));
+        let required = language.is_some_and(|language| languages.contains(&language));
         if required && newest.iter().all(|(seen, _)| *seen != category) {
             newest.push((category, entry));
         }
     }
-    require(newest.len() == LANGUAGES.len(), "ruleset_language_coverage")?;
+    require(newest.len() == languages.len(), "ruleset_language_coverage")?;
     for (_, entry) in newest {
         require(
             is(entry.get("commit_sha"), revision) && is(entry.get("ref"), "refs/heads/main"),
@@ -287,11 +285,13 @@ fn healthy_analyses(answer: &Value, revision: &str) -> Result<()> {
 pub type Programs<'a> = &'a dyn Fn(&'static str) -> Outcome<PathBuf>;
 
 /// The questions of one run: the checkout they are asked from, where the
-/// programs are, and the repository they are about.
+/// programs are, the repository they are about and the languages whose
+/// analysis it requires.
 struct Asking<'a> {
     root: &'a Path,
     programs: Programs<'a>,
     repository: &'a str,
+    languages: &'a [&'a str],
 }
 
 impl Asking<'_> {
@@ -413,7 +413,7 @@ impl Asking<'_> {
         healthy_run(&self.api(&runs, None)?, revision)?;
         let analyses = "code-scanning/analyses?ref=refs%2Fheads%2Fmain&per_page=100\
                         &tool_name=CodeQL&sort=created&direction=desc";
-        healthy_analyses(&self.api(analyses, None)?, revision)?;
+        healthy_analyses(&self.api(analyses, None)?, revision, self.languages)?;
         self.alerts()
     }
 }
@@ -441,6 +441,7 @@ fn sorted(held: &[(String, Map<String, Value>)]) -> (Vec<String>, Option<&Map<St
 fn reconciled(
     root: &Path,
     programs: Programs<'_>,
+    languages: &[&str],
     mode: Mode,
     revision: Option<&str>,
 ) -> Outcome<Found> {
@@ -449,6 +450,7 @@ fn reconciled(
         root,
         programs,
         repository: &policy.repository,
+        languages,
     };
     let repository = asking.api("", None)?;
     let repository = object(&repository)?;
@@ -505,16 +507,18 @@ pub struct Answer {
     pub status: u8,
 }
 
-/// Run the command in the checkout at `root`. A check that finds the
+/// Run the command in the checkout at `root`, requiring a current analysis
+/// of each of `languages` before an application. A check that finds the
 /// managed ruleset different or an obsolete one present ends with 1 and
 /// still says what it found.
 pub fn reconcile(
     root: &Path,
     programs: Programs<'_>,
+    languages: &[&str],
     mode: Mode,
     revision: Option<&str>,
 ) -> Answer {
-    let found = match reconciled(root, programs, mode, revision) {
+    let found = match reconciled(root, programs, languages, mode, revision) {
         Ok(found) => found,
         Err(failure) => {
             return Answer {
@@ -599,7 +603,9 @@ pub fn run(root: &Path, arguments: &[String], search: Option<&std::ffi::OsStr>) 
         }
     };
     let programs = |name: &'static str| context::executable(name, search);
-    let answer = reconcile(root, &programs, mode, revision);
+    // The analyses the CodeQL workflow stores for every revision.
+    let languages = crate::codeql::tools::STORED_LANGUAGES;
+    let answer = reconcile(root, &programs, &languages, mode, revision);
     let printed = std::io::stdout().write_all(answer.output.as_bytes());
     let complained = std::io::stderr().write_all(answer.errors.as_bytes());
     match printed.and(complained) {

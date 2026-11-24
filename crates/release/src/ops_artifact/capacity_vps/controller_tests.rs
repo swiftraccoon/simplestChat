@@ -7,26 +7,30 @@ use super::{
     execute::{self, Inputs},
     options::Options,
     plan::{self, Clock, Plan},
-    sources,
+    sources, tools,
 };
 use simplestchat_ci::{
     command::{Command, Program, ReleaseRole},
     process::Executor,
 };
 use simplestchat_ops::capacity_vps::protocol::{
-    Action, Build, Collect, Envelope, Header, Inspection, Lifecycle, Lookup, Mode, Preflight,
-    Recovery, Residual, Residuals, Response, ResultData, Retirement, RetirementPhase, Start, Unit,
-    UnitState,
+    Action, Build, Collect, Conclusion, Envelope, Header, Inspection, Lifecycle, Lookup, Preflight,
+    Recovery, Residual, Residuals, Response, ResultData, Start, Unit, UnitState,
 };
 use simplestchat_toolkit::tooling::Result;
 use std::{
+    ffi::OsStr,
     fs,
-    io::{Cursor, Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom, Write},
     os::unix::fs::PermissionsExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering},
     time::Instant,
 };
+
+/// The application manifest the inert verifier writes, below the output.
+const VERIFIED_MANIFEST: &str =
+    "application/release-verification.cccccccccccccccccccccccccccccccc/artifact/release.json";
 
 type Acquisition = super::super::acquire::fixture::Fixture;
 type Acquirer = super::super::acquire::fixture::Fake;
@@ -71,12 +75,17 @@ impl Fixture {
         )
         .unwrap();
         fs::write(caller.join(".git/config"), b"[core]\n bare=false\n").unwrap();
-        fs::write(acquisition.root.join("git"), b"#!/bin/sh\nexit 99\n").unwrap();
-        fs::set_permissions(
+        let ansible = caller.join("ops/ansible/.venv/bin/ansible-playbook");
+        fs::create_dir_all(ansible.parent().unwrap()).unwrap();
+        // Inert stand-ins for the selected tools: this fixture never runs them.
+        for path in [
             acquisition.root.join("git"),
-            fs::Permissions::from_mode(0o700),
-        )
-        .unwrap();
+            acquisition.root.join("simplestchat-release"),
+            ansible,
+        ] {
+            fs::write(&path, b"#!/bin/sh\nexit 99\n").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
         for name in ["key", "known_hosts"] {
             fs::write(acquisition.root.join(name), b"INERT-NOT-A-CREDENTIAL\n").unwrap();
             fs::set_permissions(
@@ -132,6 +141,7 @@ impl Fixture {
                 options,
                 caller: self.caller.clone(),
                 home: self.acquisition.root.clone(),
+                controller: self.acquisition.root.join("simplestchat-release"),
                 environment: self.acquisition.environment.clone(),
                 run: "1".repeat(32),
                 output: self.output.clone(),
@@ -177,7 +187,7 @@ enum Scenario {
     MissingOutcome,
     UnitGc,
     BuildFailure,
-    LostRetireAck,
+    LostConclusionAck,
 }
 struct Remote {
     acquirer: Acquirer,
@@ -189,16 +199,20 @@ struct Remote {
     actions: Vec<Action>,
     status_requests: Vec<Vec<u8>>,
     reports: Vec<Vec<u8>>,
-    transfer_members: Vec<String>,
+    installs: Vec<Vec<String>>,
+    credentialed: Vec<Program>,
     altered_collection: bool,
-    unavailable: bool,
+    installed_mismatch: bool,
     source_after_replay: bool,
     dirty_after_replay: bool,
     inventory_after_replay: bool,
     subordinate_start: Option<u8>,
     owner_start: Option<u8>,
-    retired: bool,
+    concluded: bool,
     mutate_before_status: Option<&'static str>,
+    /// A file changed while the final Git child runs, after its own dispatch
+    /// check and before the run's last check of its originals.
+    mutate_during_final_git: Option<&'static str>,
     malformed_status: u8,
     damaged_archive: bool,
     incomplete_input: bool,
@@ -220,16 +234,18 @@ impl Remote {
             actions: Vec::new(),
             status_requests: Vec::new(),
             reports: Vec::new(),
-            transfer_members: Vec::new(),
+            installs: Vec::new(),
+            credentialed: Vec::new(),
             altered_collection: false,
-            unavailable: false,
+            installed_mismatch: false,
             source_after_replay: false,
             dirty_after_replay: false,
             inventory_after_replay: false,
             subordinate_start: None,
             owner_start: None,
-            retired: false,
+            concluded: false,
             mutate_before_status: None,
+            mutate_during_final_git: None,
             malformed_status: 0,
             damaged_archive: false,
             incomplete_input: false,
@@ -321,7 +337,20 @@ impl Remote {
         )
         .into_bytes()
     }
+    /// The header from the remote command, which must be the installed
+    /// executable's request entry, and the envelope that is the whole stdin.
     fn frame(&mut self, command: &mut Command) -> (Header, Envelope) {
+        let remote = command.arguments.last().unwrap().to_str().unwrap();
+        let quoted = remote
+            .strip_prefix(super::inventory::SERVE)
+            .and_then(|rest| rest.strip_prefix(' '))
+            .expect("the installed executable serves every request");
+        let json = quoted
+            .strip_prefix('\'')
+            .and_then(|rest| rest.strip_suffix('\''))
+            .unwrap()
+            .replace("'\"'\"'", "'");
+        let header = Header::decode(json.as_bytes()).unwrap();
         let input = Arc::try_unwrap(command.stdin.take().unwrap()).unwrap();
         let mut bytes = Vec::new();
         (&input).read_to_end(&mut bytes).unwrap();
@@ -329,45 +358,69 @@ impl Remote {
             (&input).seek(SeekFrom::End(-1)).unwrap();
         }
         nix::unistd::close(input).unwrap();
-        let newline = bytes.iter().position(|v| *v == b'\n').unwrap();
-        let header = Header::decode(&bytes[..newline]).unwrap();
-        let mut offset = newline + 1;
-        if header.mode == Mode::Stage {
-            let end = offset + usize::try_from(header.transfer.bytes).unwrap();
-            let transfer = &bytes[offset..end];
-            assert_eq!(super::super::sha(transfer), header.transfer.sha256);
-            let mut archive = tar::Archive::new(Cursor::new(transfer));
-            let expected = [
-                ("ops-release.json", &header.members.manifest),
-                ("ops-selection.json", &header.members.selection),
-                ("simplestchat-ops", &header.members.binary),
-            ];
-            let mut entries = archive.entries().unwrap();
-            for (name, pin) in expected {
-                let mut entry = entries.next().unwrap().unwrap();
-                assert_eq!(entry.path().unwrap().to_str().unwrap(), name);
-                assert_eq!(entry.header().mode().unwrap(), 0o600);
-                let mut member = Vec::new();
-                entry.read_to_end(&mut member).unwrap();
-                assert_eq!(member.len() as u64, pin.bytes);
-                assert_eq!(super::super::sha(&member), pin.sha256);
-                self.transfer_members.push(name.into());
-            }
-            assert!(entries.next().is_none());
-            offset = end;
-        }
-        let envelope = &bytes[offset..];
-        assert_eq!(envelope.len() as u64, header.request.bytes);
-        assert_eq!(super::super::sha(envelope), header.request.sha256);
-        let envelope = Envelope::decode(envelope).unwrap();
+        assert_eq!(bytes.len() as u64, header.request.bytes);
+        assert_eq!(super::super::sha(&bytes), header.request.sha256);
+        let envelope = Envelope::decode(&bytes).unwrap();
         envelope.bind(&header).unwrap();
         (header, envelope)
+    }
+    /// One inert credential child of the install step: the run's application
+    /// artifact listing, its verification receipt, or the delivery playbook.
+    fn install_child(&mut self, command: &Command) -> Vec<u8> {
+        let args = command
+            .arguments
+            .iter()
+            .map(|value| value.to_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
+        let revision = "a".repeat(40);
+        match command.program {
+            Program::OpsVpsGh => {
+                let url =
+                    "https://api.github.com/repos/swiftraccoon/simplestChat/actions/artifacts/789";
+                serde_json::to_vec(&serde_json::json!({"total_count":1,"artifacts":[{
+                    "id":789,"name":format!("simplestchat-production-{revision}"),
+                    "url":url,"archive_download_url":format!("{url}/zip"),"expired":false,
+                    "size_in_bytes":4096,"digest":format!("sha256:{}", "d".repeat(64)),
+                    "workflow_run":{"id":123,"head_sha":revision,
+                        "repository_id":1_155_881_649_u64,
+                        "head_repository_id":1_155_881_649_u64}}]}))
+                .unwrap()
+            }
+            Program::OpsVpsController => {
+                let at = |flag: &str| {
+                    let index = args.iter().position(|value| value == flag).unwrap();
+                    args[index + 1].clone()
+                };
+                assert_eq!(at("--artifact-id"), "789");
+                let directory = Path::new(&at("--output-parent"))
+                    .join("release-verification.cccccccccccccccccccccccccccccccc/artifact");
+                fs::create_dir_all(&directory).unwrap();
+                let manifest = b"{\"fixture\":\"inert application manifest\"}\n";
+                fs::write(directory.join("release.json"), manifest).unwrap();
+                let predicate = serde_json::json!({"repository":"swiftraccoon/simplestChat",
+                    "revision":revision,"runId":123,"runAttempt":2,
+                    "fileDigests":{"release.json":super::super::sha(manifest)}});
+                fs::write(
+                    directory.join("release-predicate.json"),
+                    serde_json::to_vec(&predicate).unwrap(),
+                )
+                .unwrap();
+                serde_json::to_vec(&serde_json::json!({"revision":revision,
+                    "directory":directory,"image.tar":"e".repeat(64),
+                    "release.json":super::super::sha(manifest)}))
+                .unwrap()
+            }
+            _ => {
+                self.installs.push(args);
+                Vec::new()
+            }
+        }
     }
     fn response(&mut self, header: &Header, envelope: &Envelope) -> (Vec<u8>, Vec<u8>, i32) {
         let action = envelope.action();
         self.actions.push(action);
-        if action == Action::Lookup && header.mode == Mode::Invoke && self.unavailable {
-            return (Vec::new(), b"ops_capacity_unavailable\n".to_vec(), 1);
+        if action == Action::Lookup && self.installed_mismatch {
+            return (Vec::new(), b"ops_capacity_installed\n".to_vec(), 1);
         }
         if action == Action::Start {
             let intent: serde_json::Value = serde_json::from_slice(
@@ -394,17 +447,17 @@ impl Remote {
             }
             return (bytes, Vec::new(), 0);
         }
-        if action == Action::Retire
+        if action == Action::Conclude
             && matches!(
                 self.scenario,
                 Scenario::RecoverUnknown | Scenario::MissingOutcome
             )
         {
-            return (Vec::new(), b"ops_capacity_retirement\n".to_vec(), 1);
+            return (Vec::new(), b"ops_capacity_conclusion\n".to_vec(), 1);
         }
-        if action == Action::Retire {
-            self.retired = true;
-            if self.scenario == Scenario::LostRetireAck {
+        if action == Action::Conclude {
+            self.concluded = true;
+            if self.scenario == Scenario::LostConclusionAck {
                 return (Vec::new(), b"ops_capacity_io\n".to_vec(), 1);
             }
         }
@@ -442,7 +495,7 @@ impl Remote {
                 ResultData::Collect(Collect {
                     passed: matches!(
                         self.scenario,
-                        Scenario::Success | Scenario::UnitGc | Scenario::LostRetireAck
+                        Scenario::Success | Scenario::UnitGc | Scenario::LostConclusionAck
                     ),
                     unit: self.terminal(header, Unit::Capacity),
                     outcome_json: String::from_utf8(self.outcome()).unwrap(),
@@ -459,9 +512,8 @@ impl Remote {
                 before: Some(self.residuals(true)),
                 after: Some(self.residuals(false)),
             }),
-            Action::Retire => ResultData::Retire(Retirement {
-                retired: true,
-                lifecycle: RetirementPhase::Terminal,
+            Action::Conclude => ResultData::Conclude(Conclusion {
+                concluded: true,
                 request_sha256: super::super::sha(self.saved.as_ref().unwrap()),
             }),
             _ => panic!("unadmitted action in local fixture"),
@@ -544,6 +596,30 @@ impl Executor for Remote {
             let _ = simplestchat_ci::process::settle_unforwarded(command).await;
             return Err(error);
         }
+        // Only the install step's three children are given the caller's token.
+        let (_, environment) = proof
+            .context(command.program, &command.arguments)
+            .unwrap()
+            .unwrap();
+        let credential = environment.contains_key(OsStr::new("GH_TOKEN"));
+        assert_eq!(credential, tools::credential(command.program));
+        if credential {
+            self.credentialed.push(command.program);
+        }
+        if command.program == Program::OpsVpsGit
+            && self.actions.last() == Some(&Action::Conclude)
+            && command
+                .arguments
+                .iter()
+                .any(|argument| argument == "status")
+            && let Some(name) = self.mutate_during_final_git.take()
+        {
+            fs::write(
+                self.output.join(name),
+                b"changed original artifact after the last dispatch\n",
+            )
+            .unwrap();
+        }
         let (stdout, stderr, status) = match command.program {
             Program::OpsVpsGit => {
                 let args = command
@@ -571,6 +647,9 @@ impl Executor for Remote {
             Program::OpsVpsSsh => {
                 let (header, envelope) = self.frame(&mut command);
                 self.response(&header, &envelope)
+            }
+            Program::OpsVpsGh | Program::OpsVpsController | Program::OpsVpsInstall => {
+                (self.install_child(&command), Vec::new(), 0)
             }
             _ => panic!("selected executable is never run by this fixture"),
         };
@@ -661,7 +740,7 @@ impl Executor for Remote {
 }
 
 #[tokio::test]
-async fn whole_success_keeps_original_private_numbers_and_validates_archive_before_retirement() {
+async fn whole_success_keeps_original_private_numbers_and_validates_archive_before_conclusion() {
     let fixture = Fixture::new();
     let mut remote = Remote::new(&fixture, Scenario::Success);
     fixture
@@ -676,16 +755,22 @@ async fn whole_success_keeps_original_private_numbers_and_validates_archive_befo
             Action::Status,
             Action::Collect,
             Action::Archive,
-            Action::Retire
+            Action::Conclude
         ]
     );
     assert_eq!(remote.acquirer.calls, 9);
-    assert!(remote.retired);
+    assert!(remote.concluded);
     assert_eq!(remote.reports.len(), 1);
+    // The new run verified its application artifact and installed once, first.
     assert_eq!(
-        remote.transfer_members,
-        vec!["ops-release.json", "ops-selection.json", "simplestchat-ops"]
+        remote.credentialed,
+        [
+            Program::OpsVpsGh,
+            Program::OpsVpsController,
+            Program::OpsVpsInstall
+        ]
     );
+    assert_eq!(remote.installs.len(), 1);
     let report = fixture.report();
     for token in ["NaN", "9007199254740993", "-0", "1.00", "collected"] {
         assert!(report.contains(token));
@@ -704,7 +789,7 @@ async fn whole_success_keeps_original_private_numbers_and_validates_archive_befo
     );
 }
 #[tokio::test]
-async fn quality_failure_archives_and_retires_but_never_becomes_a_passing_measurement() {
+async fn quality_failure_archives_and_concludes_but_never_becomes_a_passing_measurement() {
     let fixture = Fixture::new();
     let mut remote = Remote::new(&fixture, Scenario::QualityFailure);
     assert_eq!(
@@ -715,12 +800,16 @@ async fn quality_failure_archives_and_retires_but_never_becomes_a_passing_measur
             .code,
         1
     );
-    assert!(remote.retired);
-    assert!(remote.actions.ends_with(&[Action::Archive, Action::Retire]));
+    assert!(remote.concluded);
+    assert!(
+        remote
+            .actions
+            .ends_with(&[Action::Archive, Action::Conclude])
+    );
     assert!(fixture.report().contains("collected"));
 }
 #[tokio::test]
-async fn lost_start_ack_keeps_durable_uncertainty_and_never_retries_or_retires() {
+async fn lost_start_ack_keeps_durable_uncertainty_and_never_retries_or_concludes() {
     let fixture = Fixture::new();
     let mut remote = Remote::new(&fixture, Scenario::LostStartAck);
     assert_eq!(
@@ -732,7 +821,7 @@ async fn lost_start_ack_keeps_durable_uncertainty_and_never_retries_or_retires()
         1
     );
     assert_eq!(remote.actions, vec![Action::Preflight, Action::Start]);
-    assert!(!remote.retired);
+    assert!(!remote.concluded);
     assert!(fixture.report().contains("start_requested"));
     assert!(remote.saved.is_some());
 }
@@ -743,7 +832,6 @@ async fn explicit_recovery_adopts_saved_runtime_and_preserves_unknown_or_clean_f
         let mut remote = Remote::new(&fixture, scenario);
         let saved = fixture.options(&[]).request(&"1".repeat(32)).unwrap();
         remote.saved = Some(saved.clone());
-        remote.unavailable = true;
         let selected =
             fixture.options(&["--recover", &"1".repeat(32), "--runtime-seconds", "7200"]);
         assert_eq!(
@@ -754,22 +842,23 @@ async fn explicit_recovery_adopts_saved_runtime_and_preserves_unknown_or_clean_f
             remote.actions,
             vec![
                 Action::Lookup,
-                Action::Lookup,
                 Action::Status,
                 Action::Recover,
                 Action::Collect,
                 Action::Archive,
-                Action::Retire
+                Action::Conclude
             ]
         );
         assert_eq!(remote.status_requests, vec![saved]);
-        assert_eq!(remote.retired, scenario == Scenario::RecoverClean);
+        assert_eq!(remote.concluded, scenario == Scenario::RecoverClean);
+        // Recovery adopts the installed executable; it never installs.
+        assert!(remote.credentialed.is_empty() && remote.installs.is_empty());
         assert!(fixture.report().contains("collected"));
     }
 }
 #[tokio::test]
-async fn missing_outcome_and_lost_retirement_ack_keep_failure_evidence() {
-    for scenario in [Scenario::MissingOutcome, Scenario::LostRetireAck] {
+async fn missing_outcome_and_lost_conclusion_ack_keep_failure_evidence() {
+    for scenario in [Scenario::MissingOutcome, Scenario::LostConclusionAck] {
         let fixture = Fixture::new();
         let mut remote = Remote::new(&fixture, scenario);
         assert_eq!(
@@ -780,8 +869,12 @@ async fn missing_outcome_and_lost_retirement_ack_keep_failure_evidence() {
                 .code,
             1
         );
-        assert!(remote.actions.ends_with(&[Action::Archive, Action::Retire]));
-        assert_eq!(remote.retired, scenario == Scenario::LostRetireAck);
+        assert!(
+            remote
+                .actions
+                .ends_with(&[Action::Archive, Action::Conclude])
+        );
+        assert_eq!(remote.concluded, scenario == Scenario::LostConclusionAck);
         assert!(fixture.report().contains("collected"));
     }
 }
@@ -804,10 +897,37 @@ async fn retained_terminal_unit_can_collect_without_starting_again() {
             Action::Status,
             Action::Collect,
             Action::Archive,
-            Action::Retire
+            Action::Conclude
         ]
     );
     assert!(!fixture.output.join("start-requested.json").exists());
+    assert!(remote.credentialed.is_empty() && remote.installs.is_empty());
+}
+
+/// Collection adopts the run's installed executable. When the host refuses it
+/// as not the one the run's retained selection names, the controller says so
+/// in its one fixed message, without installing anything or starting work.
+#[tokio::test]
+async fn collection_with_another_installed_executable_is_refused_with_a_fixed_message() {
+    let fixture = Fixture::new();
+    let mut remote = Remote::new(&fixture, Scenario::UnitGc);
+    remote.saved = Some(fixture.options(&[]).request(&"1".repeat(32)).unwrap());
+    remote.installed_mismatch = true;
+    let error = fixture
+        .run(
+            fixture.options(&["--collect", &"1".repeat(32)]),
+            &mut remote,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, 1);
+    assert_eq!(
+        error.message,
+        "The Ops executable installed on the private VPS is not the one this run's selected \
+         artifact names; collect or recover a run with its original artifact installed."
+    );
+    assert_eq!(remote.actions, vec![Action::Lookup]);
+    assert!(remote.credentialed.is_empty() && remote.installs.is_empty());
 }
 #[tokio::test]
 async fn failed_build_never_starts_a_workload_and_equal_semantics_do_not_replace_original_bytes() {
@@ -825,6 +945,7 @@ async fn failed_build_never_starts_a_workload_and_equal_semantics_do_not_replace
         remote.actions,
         vec![Action::Preflight, Action::Build, Action::Status]
     );
+    assert_eq!(remote.installs.len(), 1);
     let fixture = Fixture::new();
     let mut remote = Remote::new(&fixture, Scenario::Success);
     remote.altered_collection = true;
@@ -837,7 +958,7 @@ async fn failed_build_never_starts_a_workload_and_equal_semantics_do_not_replace
         1
     );
     assert!(!remote.actions.contains(&Action::Archive));
-    assert!(!remote.retired);
+    assert!(!remote.concluded);
 }
 #[tokio::test]
 async fn replay_cannot_hide_changed_source_inventory_or_untracked_git_content() {
@@ -856,7 +977,7 @@ async fn replay_cannot_hide_changed_source_inventory_or_untracked_git_content() 
             1
         );
         assert_eq!(remote.reports.len(), 1);
-        assert!(remote.retired);
+        assert!(remote.concluded);
     }
 }
 #[tokio::test]
@@ -888,8 +1009,8 @@ async fn subordinate_signal_like_exit_is_not_an_owner_cancellation() {
 }
 
 #[tokio::test]
-async fn every_later_dispatch_retains_opaque_acquisition_and_original_transfer_witnesses() {
-    for name in ["acquired/simplestchat-ops", "transfer.tar"] {
+async fn every_later_dispatch_retains_opaque_acquisition_and_verified_application_witnesses() {
+    for name in ["acquired/simplestchat-ops", VERIFIED_MANIFEST] {
         let fixture = Fixture::new();
         let mut remote = Remote::new(&fixture, Scenario::Success);
         remote.mutate_before_status = Some(name);
@@ -902,8 +1023,23 @@ async fn every_later_dispatch_retains_opaque_acquisition_and_original_transfer_w
             1
         );
         assert_eq!(remote.actions, vec![Action::Preflight, Action::Start]);
-        assert!(!remote.retired);
+        assert!(!remote.concluded);
     }
+}
+
+#[tokio::test]
+async fn the_verified_application_is_held_unchanged_through_the_final_check() {
+    let fixture = Fixture::new();
+    let mut remote = Remote::new(&fixture, Scenario::Success);
+    remote.mutate_during_final_git = Some(VERIFIED_MANIFEST);
+    let error = fixture
+        .run(fixture.options(&[]), &mut remote)
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, 1);
+    // The host concluded; only the controller's last check refuses.
+    assert!(remote.concluded && remote.mutate_during_final_git.is_none());
+    assert_eq!(remote.actions.last(), Some(&Action::Conclude));
 }
 
 #[tokio::test]
@@ -932,7 +1068,7 @@ async fn lookup_and_reports_preserve_original_private_workload_bytes_and_numeric
 }
 
 #[tokio::test]
-async fn malformed_or_overflowing_status_and_damaged_archive_cannot_authorize_retirement() {
+async fn malformed_or_overflowing_status_and_damaged_archive_cannot_authorize_conclusion() {
     for fault in 1..=3 {
         let fixture = Fixture::new();
         let mut remote = Remote::new(&fixture, Scenario::Success);
@@ -946,12 +1082,14 @@ async fn malformed_or_overflowing_status_and_damaged_archive_cannot_authorize_re
                 .code,
             1
         );
-        assert!(!remote.retired);
-        assert!(!remote.actions.contains(&Action::Retire));
+        assert!(!remote.concluded);
+        assert!(!remote.actions.contains(&Action::Conclude));
         if fault < 3 {
+            // Three Git observations and one per source, then the listing, the
+            // verifier and the playbook, then preflight, start and status.
             let path = fixture
                 .output
-                .join(format!("process-{}.exit.json", sources::NAMES.len() + 6));
+                .join(format!("process-{}.exit.json", sources::NAMES.len() + 9));
             let exit: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
             assert_eq!(exit["status"], 0);
             assert_eq!(exit["settled"], true);
@@ -973,7 +1111,7 @@ async fn a_valid_response_and_sealed_output_do_not_replace_original_frame_consum
         1
     );
     assert_eq!(remote.actions, vec![Action::Preflight]);
-    assert!(!remote.retired);
+    assert!(!remote.concluded);
 }
 
 #[tokio::test]
@@ -993,7 +1131,7 @@ async fn successful_return_and_json_never_replace_status_capture_or_peer_settlem
             1
         );
         assert_eq!(remote.actions, vec![Action::Preflight]);
-        assert!(!remote.retired);
+        assert!(!remote.concluded);
     }
 }
 
@@ -1012,7 +1150,7 @@ async fn late_replay_and_unsettled_executor_cleanup_still_retire_all_local_file_
                 .code,
             if fault == 0 { 143 } else { 1 }
         );
-        assert!(remote.retired);
+        assert!(remote.concluded);
         assert_eq!(remote.reports.len(), 1);
     }
 }

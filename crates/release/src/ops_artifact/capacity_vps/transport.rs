@@ -1,4 +1,5 @@
-//! Framed finite SSH requests and the concrete paired preparation capability.
+//! Framed finite SSH requests, the install step's credential children and the
+//! concrete paired preparation capability.
 
 use super::{
     Result,
@@ -13,9 +14,7 @@ use simplestchat_ci::{
     command::{Command, Program},
     process::{self, Executor},
 };
-use simplestchat_ops::capacity_vps::protocol::{
-    Action, Envelope, Header, Mode, Pin, Response, Unit,
-};
+use simplestchat_ops::capacity_vps::protocol::{Action, Envelope, Header, Pin, Response, Unit};
 use std::{
     ffi::OsString,
     sync::Arc,
@@ -80,13 +79,9 @@ pub(super) struct Observed {
     pub header: Option<Header>,
     pub bytes: Vec<u8>,
     pub stdout: String,
-    pub unavailable: bool,
 }
 impl Observed {
     pub fn response(&self, action: Action) -> Result<Response> {
-        if self.unavailable {
-            return Err(failure(1));
-        }
         Response::decode(
             &self.bytes,
             self.header.as_ref().ok_or_else(|| failure(1))?,
@@ -98,7 +93,6 @@ impl Observed {
 fn header(
     state: &super::execute::State,
     action: Action,
-    mode: Mode,
     unit: Option<Unit>,
 ) -> Result<(Header, Vec<u8>)> {
     let envelope = if action == Action::Lookup {
@@ -107,19 +101,13 @@ fn header(
         Envelope::request(action, state.request.as_slice(), unit).map_err(|_| failure(1))?
     };
     let request = envelope.encode().map_err(|_| failure(1))?;
-    let transfer = state.transfer.as_ref().ok_or_else(|| failure(1))?;
     let header = Header {
         schema_version: 1,
-        scope: "OpsCapacityBootstrap".into(),
-        mode,
+        scope: "OpsCapacityInvocation".into(),
         run: state.run.clone(),
         selection: state.selection.clone().ok_or_else(|| failure(1))?,
         artifact_id: state.options.artifact,
-        transfer: Pin {
-            sha256: transfer.sha256().into(),
-            bytes: transfer.bytes(),
-        },
-        members: state.members.clone().ok_or_else(|| failure(1))?,
+        binary: state.binary.clone().ok_or_else(|| failure(1))?,
         request: Pin {
             sha256: super::super::sha(&request),
             bytes: request.len() as u64,
@@ -127,6 +115,49 @@ fn header(
     };
     envelope.bind(&header).map_err(|_| failure(1))?;
     Ok((header, request))
+}
+/// The SSH arguments that serve `header` with the installed executable.
+fn served(state: &super::execute::State, header: &Header) -> Result<Vec<OsString>> {
+    let json =
+        String::from_utf8(header.encode().map_err(|_| failure(1))?).map_err(|_| failure(1))?;
+    Ok(state
+        .inventory
+        .as_ref()
+        .ok_or_else(|| failure(1))?
+        .target
+        .ssh(&json))
+}
+/// One local credential child of the install step (the artifact listing, the
+/// application verifier or the delivery playbook): its sealed stdout.
+pub(super) async fn child<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    executor: &mut E,
+    end: Instant,
+    program: Program,
+    args: Vec<OsString>,
+    body: Duration,
+) -> Result<Vec<u8>> {
+    if !super::tools::credential(program) {
+        return Err(failure(1));
+    }
+    call(
+        state,
+        plan,
+        executor,
+        end,
+        Call {
+            program,
+            args,
+            wire: None,
+            body,
+            grace: Duration::from_secs(5),
+            maximum: super::MAX_JSON,
+            capture_class: CaptureClass::Ordinary,
+        },
+    )
+    .await
+    .map(|value| value.bytes)
 }
 pub(super) async fn git<E: Executor>(
     state: &Shared,
@@ -184,24 +215,12 @@ pub(super) async fn rpc<E: Executor>(
     executor: &mut E,
     end: Instant,
     action: Action,
-    mode: Mode,
     unit: Option<Unit>,
 ) -> Result<Observed> {
     let (header, request, args) = {
         let state = lock(state)?;
-        let (header, request) = header(&state, action, mode, unit)?;
-        let args = state
-            .inventory
-            .as_ref()
-            .ok_or_else(|| failure(1))?
-            .target
-            .ssh(
-                state
-                    .sources
-                    .as_ref()
-                    .ok_or_else(|| failure(1))?
-                    .bootstrap()?,
-            );
+        let (header, request) = header(&state, action, unit)?;
+        let args = served(&state, &header)?;
         (header, request, args)
     };
     let maximum = if action == Action::Archive {
@@ -211,7 +230,7 @@ pub(super) async fn rpc<E: Executor>(
     } else {
         super::MAX_JSON
     };
-    let body = Duration::from_secs(if mode == Mode::Stage || action == Action::Archive {
+    let body = Duration::from_secs(if action == Action::Archive {
         300
     } else if action == Action::Recover {
         600
@@ -232,7 +251,7 @@ pub(super) async fn rpc<E: Executor>(
             maximum,
             capture_class: if action == Action::Archive {
                 CaptureClass::Archive
-            } else if action == Action::Retire {
+            } else if action == Action::Conclude {
                 CaptureClass::Cleanup
             } else {
                 CaptureClass::Ordinary
@@ -271,24 +290,14 @@ async fn call<E: Executor>(
     let mut pending = pending?;
     let args_for_worker = args.clone();
     let (frame, header) = if let Some((header, request)) = wire {
-        let selected = header.clone();
         let framed = stage(
             state,
             plan,
             executor,
             end,
             move |state, checkpoint| {
-                let mut bytes = selected.encode().map_err(|_| failure(1))?;
-                bytes.push(b'\n');
-                let transfer = if selected.mode == Mode::Stage {
-                    state.transfer.as_ref()
-                } else {
-                    None
-                };
                 state.output.as_mut().ok_or_else(|| failure(1))?.frame(
                     &format!("frame-{index}.bin"),
-                    &bytes,
-                    transfer,
                     &request,
                     checkpoint,
                 )
@@ -424,16 +433,18 @@ async fn call<E: Executor>(
         Err(error) => Err(error),
     };
     let close = finish_frame(prepared.frame.take(), plan, executor, end).await;
-    let unavailable = read.as_ref().is_ok_and(|(bytes, error)| {
+    // The host's one fixed refusal of an installed executable that is not the
+    // pinned one becomes the controller's own fixed message.
+    let installed = read.as_ref().is_ok_and(|(bytes, error)| {
         result.as_ref().err().is_some_and(|e| e.code == 1)
             && bytes.is_empty()
-            && error == b"ops_capacity_unavailable\n"
+            && error == b"ops_capacity_installed\n"
             && exit
                 .as_ref()
                 .is_ok_and(|exit| exit.status == Some(1) && exit.settled)
     });
-    let mut primary = if unavailable {
-        None
+    let mut primary = if installed {
+        Some(super::installed_mismatch())
     } else {
         result.err().map(|error| {
             let remote_code = match read.as_ref().ok().map(|(_, error)| error.as_slice()) {
@@ -460,10 +471,9 @@ async fn call<E: Executor>(
     if let Some(owner) = owner_pending {
         super::keep(&mut primary, owner);
     }
-    if !unavailable
-        && exit
-            .as_ref()
-            .is_ok_and(|exit| exit.status != Some(0) || !exit.settled)
+    if exit
+        .as_ref()
+        .is_ok_and(|exit| exit.status != Some(0) || !exit.settled)
     {
         super::keep(&mut primary, failure(1));
     }
@@ -492,7 +502,6 @@ async fn call<E: Executor>(
         header: prepared.header,
         bytes,
         stdout,
-        unavailable,
     })
 }
 async fn settle_pending(mut pending: Pending) {
@@ -545,10 +554,10 @@ pub(super) async fn preparation<E: Executor>(
 ) -> Result<()> {
     let (header, request, ssh, ansible) = {
         let state = lock(state)?;
-        let (header, request) = header(&state, Action::Reserve, Mode::Invoke, None)?;
+        let (header, request) = header(&state, Action::Reserve, None)?;
         let sources = state.sources.as_ref().ok_or_else(|| failure(1))?;
         let inventory = state.inventory.as_ref().ok_or_else(|| failure(1))?;
-        let ssh = inventory.target.ssh(sources.bootstrap()?);
+        let ssh = served(&state, &header)?;
         let ansible = vec![
             "-i".into(),
             state
@@ -605,19 +614,14 @@ pub(super) async fn preparation<E: Executor>(
             return Err(error);
         }
     };
-    let frame_header = header.clone();
     let frame = stage(
         state,
         plan,
         executor,
         end,
         move |state, checkpoint| {
-            let mut bytes = frame_header.encode().map_err(|_| failure(1))?;
-            bytes.push(b'\n');
             state.output.as_mut().unwrap().frame(
                 &format!("frame-{index}.bin"),
-                &bytes,
-                None,
                 &request,
                 checkpoint,
             )

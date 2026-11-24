@@ -315,10 +315,8 @@ fn ci_installs_and_runs_the_same_gate_before_offline_tests() {
         gate["run"],
         "cargo run --locked -q -p simplestchat-ci -- automation --checks"
     );
-    assert_eq!(
-        gate["env"]["PYTHON_CHECK_ENV"],
-        "${{ runner.temp }}/ansible-controller"
-    );
+    // The Python gate is xtask's line ratchet alone; it needs no environment.
+    assert!(gate["env"].get("PYTHON_CHECK_ENV").is_none());
     assert!(job.get("continue-on-error").is_none());
     assert!(gate.get("continue-on-error").is_none());
     assert!(job.get("if").is_none());

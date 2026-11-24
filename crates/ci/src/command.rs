@@ -33,6 +33,9 @@ pub enum Program {
     OpsVpsGit,
     OpsVpsSsh,
     OpsVpsAnsible,
+    OpsVpsGh,
+    OpsVpsController,
+    OpsVpsInstall,
     FrontendGit,
     FrontendGh,
     FrontendInventory,
@@ -79,6 +82,9 @@ impl Program {
             Self::OpsVpsGit => "git",
             Self::OpsVpsSsh => "ssh",
             Self::OpsVpsAnsible => "ansible-playbook",
+            Self::OpsVpsGh => "gh",
+            Self::OpsVpsController => "simplestchat-release",
+            Self::OpsVpsInstall => "ansible-playbook",
             Self::FrontendGit => "git",
             Self::FrontendGh => "gh",
             Self::FrontendInventory => "ansible-inventory",
@@ -140,7 +146,12 @@ impl ReleaseRole {
             ),
             Self::Vps => matches!(
                 program,
-                Program::OpsVpsGit | Program::OpsVpsSsh | Program::OpsVpsAnsible
+                Program::OpsVpsGit
+                    | Program::OpsVpsSsh
+                    | Program::OpsVpsAnsible
+                    | Program::OpsVpsGh
+                    | Program::OpsVpsController
+                    | Program::OpsVpsInstall
             ),
             Self::Frontend => matches!(
                 program,

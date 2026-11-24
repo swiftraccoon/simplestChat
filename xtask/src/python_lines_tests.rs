@@ -257,6 +257,26 @@ fn update_lowers_the_allowance_and_refuses_to_raise_it() {
     assert_eq!(repository.allowance(), "total 2\n3\tops/second.py\n");
 }
 
+/// Removing the last tracked file records an allowance of zero, which then
+/// accepts the empty inventory and refuses any new Python file.
+#[test]
+fn update_records_an_allowance_of_zero_that_admits_no_new_file() {
+    let repository = Repository::new();
+    repository.track("build/last.py", "A = 1\n");
+    repository.write(ALLOWANCE_FILE, "total 1\n1\tbuild/last.py\n");
+    repository.remove("build/last.py");
+    repository.check(&["--update"]).0.unwrap();
+    assert_eq!(repository.allowance(), "total 0\n");
+    let (result, diagnostics) = repository.check(&[]);
+    result.unwrap();
+    assert_eq!(diagnostics, "");
+    repository.track("ops/new.py", "B = 2\n");
+    let (result, diagnostics) = repository.check(&[]);
+    assert!(result.is_err());
+    assert_eq!(diagnostics, "ops/new.py: 1 line, not in the allowance\n");
+    assert_eq!(repository.allowance(), "total 0\n");
+}
+
 #[test]
 fn update_refuses_an_unlisted_path_and_a_grown_file_even_when_the_total_falls() {
     let repository = Repository::new();

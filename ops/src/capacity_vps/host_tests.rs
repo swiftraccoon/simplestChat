@@ -6,9 +6,9 @@ use super::{
     Failure, Result,
     control::Owner,
     files::{self, Access, Fs},
-    host::{CURRENT, ROOT, Session, Stage},
+    host::{CURRENT, INSTALLED, INSTALLED_DIRECTORY, Installed, ROOT, Session},
     process::{Output, Runner},
-    protocol::{self, Action, Header, Members, Mode, Pin, ResultData, Source, Workload},
+    protocol::{self, Action, Header, Pin, ResultData, Source, Workload},
 };
 use serde_json::{Value, json};
 use std::{
@@ -102,8 +102,7 @@ fn workload() -> Workload {
 fn header() -> Header {
     Header {
         schema_version: 1,
-        scope: "OpsCapacityBootstrap".into(),
-        mode: Mode::Invoke,
+        scope: "OpsCapacityInvocation".into(),
         run: RUN.into(),
         selection: Source {
             repository: "owner/repo".into(),
@@ -115,12 +114,7 @@ fn header() -> Header {
             run_attempt: 2,
         },
         artifact_id: 29,
-        transfer: pin(b"transfer"),
-        members: Members {
-            manifest: pin(b"fixture manifest"),
-            selection: pin(b"fixture selection"),
-            binary: pin(b"inert candidate, never executed"),
-        },
+        binary: pin(b"inert candidate, never executed"),
         request: pin(b"frame"),
     }
 }
@@ -566,11 +560,7 @@ impl Host {
             "inert unit journal\n".into()
         } else if program == Path::new("/usr/bin/docker") {
             self.docker(args)?
-        } else if program.to_str()
-            == Some(&format!(
-                "{ROOT}/artifacts/ops-runtime.{RUN}/simplestchat-ops"
-            ))
-        {
+        } else if program == Path::new(INSTALLED) {
             self.engine_runs += 1;
             self.capacity_arguments = args.to_vec();
             let directory = format!("{}/workload", header().evidence_path());
@@ -689,25 +679,11 @@ impl Harness {
             ("/run/simplestchat-bench".into(), 0o700),
             (format!("{ROOT}/sources/{REVISION}"), 0o755),
             (format!("{ROOT}/artifacts/{REVISION}"), 0o700),
-            (format!("{ROOT}/artifacts/ops-runtime.{RUN}"), 0o700),
+            (INSTALLED_DIRECTORY.into(), 0o755),
         ] {
             temporary.directory(&directory, mode);
         }
-        for (name, bytes, mode) in [
-            ("ops-release.json", b"fixture manifest".as_slice(), 0o600),
-            ("ops-selection.json", b"fixture selection".as_slice(), 0o600),
-            (
-                "simplestchat-ops",
-                b"inert candidate, never executed".as_slice(),
-                0o755,
-            ),
-        ] {
-            temporary.file(
-                &format!("{ROOT}/artifacts/ops-runtime.{RUN}/{name}"),
-                bytes,
-                mode,
-            );
-        }
+        temporary.file(INSTALLED, b"inert candidate, never executed", 0o755);
         temporary.file("/usr/lib/os-release", b"ID=debian\nVERSION_ID=13\n", 0o644);
         temporary.file(
             "/usr/local/libexec/simplestchat-bench/build-images",
@@ -753,21 +729,24 @@ impl Harness {
             host,
         }
     }
-    fn session<T>(&self, body: impl FnOnce(&mut Session<'_>, &Stage) -> Result<T>) -> Result<T> {
+    fn session<T>(
+        &self,
+        body: impl FnOnce(&mut Session<'_>, &Installed) -> Result<T>,
+    ) -> Result<T> {
         self.session_with(access(&self.temporary), None, body)
     }
     fn session_with<T>(
         &self,
         access: Access,
         pending: Option<Rc<Cell<Option<Failure>>>>,
-        body: impl FnOnce(&mut Session<'_>, &Stage) -> Result<T>,
+        body: impl FnOnce(&mut Session<'_>, &Installed) -> Result<T>,
     ) -> Result<T> {
         let mut fs = Fs::new(access)?;
         let mut owner = Owner::fixture(clock());
         if let Some(pending) = pending {
             owner.fixture_control(pending);
         }
-        let stage = Stage::fixture(&self.header, &mut fs, &mut owner)?;
+        let installed = Installed::fixture(&self.header, &mut fs, &mut owner)?;
         let host = self.host.clone();
         let mut runner =
             Runner::fixture(Box::new(move |program, args, environment, seconds, _| {
@@ -782,7 +761,7 @@ impl Harness {
                 owner: &mut owner,
                 runner: &mut runner,
             },
-            &stage,
+            &installed,
         );
         if let Err(error) = &result {
             owner.latch(*error);
@@ -797,11 +776,11 @@ impl Harness {
         })
     }
     fn rpc(&self, action: Action) -> Result<ResultData> {
-        self.session(|session, stage| {
-            let result = if action == Action::Retire {
-                session.retire(&self.workload, stage)?
+        self.session(|session, installed| {
+            let result = if action == Action::Conclude {
+                session.conclude(&self.workload)?
             } else {
-                session.dispatch(action, Some(&self.workload), stage)?
+                session.dispatch(action, Some(&self.workload), installed)?
             };
             protocol::Response::encode(&self.header, &result)?;
             Ok(result)
@@ -814,8 +793,8 @@ impl Harness {
             "running",
             &rustix::process::getpid().as_raw_pid().to_string(),
         );
-        let result = self.session(|session, stage| {
-            super::worker::fixture_execute(&self.header, &self.workload, stage, session)
+        let result = self.session(|session, installed| {
+            super::worker::fixture_execute(&self.header, &self.workload, installed, session)
         });
         let mut host = self.host.borrow_mut();
         host.unit = unit("loaded", "active", "exited", "0");
@@ -971,31 +950,6 @@ fn recovery_rechecks_exact_owned_identity_and_retains_unknown_residual_and_old_f
 }
 
 #[test]
-fn prestart_retirement_unlinks_only_same_pinned_three_files_and_finishes_aliases() {
-    let harness = Harness::new();
-    let ResultData::Retire(receipt) = harness.rpc(Action::Retire).unwrap() else {
-        panic!("retire")
-    };
-    assert!(receipt.retired);
-    assert_eq!(
-        receipt.request_sha256,
-        files::sha(harness.workload.as_json())
-    );
-    assert!(
-        !harness
-            .temporary
-            .path(&format!("{ROOT}/artifacts/ops-runtime.{RUN}"))
-            .exists()
-    );
-    assert!(
-        !harness
-            .temporary
-            .path(&harness.header.evidence_path())
-            .exists()
-    );
-}
-
-#[test]
 fn cleanup_failure_precedes_late_control_and_all_evidence_and_peer_finalizers_are_attempted() {
     let harness = Harness::new();
     harness.start();
@@ -1021,7 +975,7 @@ fn cleanup_failure_precedes_late_control_and_all_evidence_and_peer_finalizers_ar
         "running",
         &rustix::process::getpid().as_raw_pid().to_string(),
     );
-    let result = harness.session_with(hooked, Some(pending), |session, stage| {
+    let result = harness.session_with(hooked, Some(pending), |session, installed| {
         let host = harness.host.clone();
         let fail = armed.clone();
         *session.runner = Runner::fixture(Box::new(move |program, args, _, _, cleanup| {
@@ -1031,7 +985,7 @@ fn cleanup_failure_precedes_late_control_and_all_evidence_and_peer_finalizers_ar
             }
             host.borrow_mut().command(program, args)
         }));
-        super::worker::fixture_execute(&harness.header, &harness.workload, stage, session)
+        super::worker::fixture_execute(&harness.header, &harness.workload, installed, session)
     });
     assert_eq!(result, Err(Failure::Ownership));
     assert!(attempted.get() >= 2);
@@ -1044,8 +998,13 @@ fn cleanup_failure_precedes_late_control_and_all_evidence_and_peer_finalizers_ar
 }
 
 #[test]
-fn terminal_retirement_requires_original_cleanup_receipt_and_empty_fixed_cgroup() {
+fn conclusion_requires_original_cleanup_receipt_empty_fixed_cgroup_and_no_stray_container() {
     let harness = Harness::new();
+    // Nothing can be concluded before the run's evidence exists.
+    assert_eq!(
+        harness.rpc(Action::Conclude).err(),
+        Some(Failure::Conclusion)
+    );
     harness.start();
     harness.worker().unwrap();
     harness.rpc(Action::Collect).unwrap();
@@ -1054,53 +1013,30 @@ fn terminal_retirement_requires_original_cleanup_receipt_and_empty_fixed_cgroup(
         harness.header.capacity_unit()
     );
     harness.temporary.file(&group, b"123\n", 0o644);
-    assert!(harness.rpc(Action::Retire).is_err());
-    assert!(
-        harness
-            .temporary
-            .path(&format!(
-                "{ROOT}/artifacts/ops-runtime.{RUN}/simplestchat-ops"
-            ))
-            .is_file()
-    );
+    assert!(harness.rpc(Action::Conclude).is_err());
     harness.temporary.file(&group, b"", 0o644);
-    harness.rpc(Action::Retire).unwrap();
+    harness.host.borrow_mut().containers.push(unknown());
+    assert_eq!(
+        harness.rpc(Action::Conclude).err(),
+        Some(Failure::Conclusion)
+    );
+    harness.host.borrow_mut().containers.clear();
+    let ResultData::Conclude(conclusion) = harness.rpc(Action::Conclude).unwrap() else {
+        panic!("conclusion")
+    };
+    assert!(conclusion.concluded);
+    assert_eq!(
+        conclusion.request_sha256,
+        files::sha(harness.workload.as_json())
+    );
+    // Concluding removes nothing: the evidence and the installed file remain.
     assert!(
         harness
             .temporary
             .path(&format!("{}/request.json", harness.header.evidence_path()))
             .is_file()
     );
-}
-
-#[test]
-fn owned_retirement_after_effect_errors_still_finish_all_proven_remaining_unlinks() {
-    for event in ["unlink", "rmdir"] {
-        let harness = Harness::new();
-        let failed = Rc::new(Cell::new(false));
-        let marker = failed.clone();
-        let access = Access {
-            root: Some(harness.temporary.0.clone()),
-            hook: Some(Rc::new(move |name| {
-                if name == event && !marker.replace(true) {
-                    Err(Failure::Io)
-                } else {
-                    Ok(())
-                }
-            })),
-        };
-        let result = harness.session_with(access, None, |session, stage| {
-            session.retire(&harness.workload, stage).map(|_| ())
-        });
-        assert_eq!(result, Err(Failure::Io));
-        assert!(failed.get());
-        assert!(
-            !harness
-                .temporary
-                .path(&format!("{ROOT}/artifacts/ops-runtime.{RUN}"))
-                .exists()
-        );
-    }
+    assert!(harness.temporary.path(INSTALLED).is_file());
 }
 
 #[test]
@@ -1122,69 +1058,6 @@ fn malformed_positive_outcome_never_persists_a_positive_collection_before_wire_r
             ))
             .exists()
     );
-}
-
-#[test]
-fn each_retirement_member_hash_is_proven_before_its_own_unlink() {
-    let harness = Harness::new();
-    let result = harness.session(|session, stage| {
-        let mut mismatched = harness.header.clone();
-        mismatched.members.selection.sha256 = "f".repeat(64);
-        stage.retire(&mismatched, session.fs, session.owner)
-    });
-    assert_eq!(result, Err(Failure::Changed));
-    let directory = format!("{ROOT}/artifacts/ops-runtime.{RUN}");
-    assert!(
-        !harness
-            .temporary
-            .path(&format!("{directory}/ops-release.json"))
-            .exists()
-    );
-    assert!(
-        harness
-            .temporary
-            .path(&format!("{directory}/ops-selection.json"))
-            .is_file()
-    );
-    assert!(
-        harness
-            .temporary
-            .path(&format!("{directory}/simplestchat-ops"))
-            .is_file()
-    );
-}
-
-#[test]
-fn after_effect_retirement_exchange_retains_foreign_equal_bytes_and_stops_ambiguous_unlinks() {
-    let harness = Harness::new();
-    let changed = Rc::new(Cell::new(false));
-    let marker = changed.clone();
-    let binary = harness.temporary.path(&format!(
-        "{ROOT}/artifacts/ops-runtime.{RUN}/simplestchat-ops"
-    ));
-    let original = harness.temporary.path("/original-binary");
-    let foreign = binary.clone();
-    let access = Access {
-        root: Some(harness.temporary.0.clone()),
-        hook: Some(Rc::new(move |event| {
-            if event == "unlink" && !marker.replace(true) {
-                fs::rename(&binary, &original).unwrap();
-                fs::write(&binary, b"inert candidate, never executed").unwrap();
-                fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
-            }
-            Ok(())
-        })),
-    };
-    let result = harness.session_with(access, None, |session, stage| {
-        stage.retire(&harness.header, session.fs, session.owner)
-    });
-    assert_eq!(result, Err(Failure::Changed));
-    assert!(changed.get());
-    assert_eq!(
-        fs::read(foreign).unwrap(),
-        b"inert candidate, never executed"
-    );
-    assert!(harness.temporary.path("/original-binary").is_file());
 }
 
 #[test]
@@ -1254,13 +1127,11 @@ fn same_inode_changed_bytes_with_restored_mtime_are_not_rebased_as_our_rename() 
 }
 
 #[test]
-fn a_staged_candidate_that_is_not_the_running_image_is_refused_without_effects() {
-    // The bootstrap executes the staged binary itself. An exchanged, unlinked or foreign
-    // copy running instead cannot open the stage, whatever bytes it holds.
+fn an_installed_executable_that_is_not_the_running_image_is_refused_without_effects() {
+    // This test process runs another file than the installed one. However equal its
+    // bytes, a copy, an exchanged or an unlinked image cannot open the installed file.
     let harness = Harness::new();
-    let stage = harness
-        .temporary
-        .path(&format!("{ROOT}/artifacts/ops-runtime.{RUN}"));
+    let installed = harness.temporary.path(INSTALLED_DIRECTORY);
     let snapshot = |path: &Path| {
         let mut entries = fs::read_dir(path)
             .unwrap()
@@ -1278,7 +1149,7 @@ fn a_staged_candidate_that_is_not_the_running_image_is_refused_without_effects()
         entries.sort();
         entries
     };
-    let before = snapshot(&stage);
+    let before = snapshot(&installed);
     let events = Rc::new(RefCell::new(Vec::new()));
     let seen = events.clone();
     let mut fs = Fs::new(Access {
@@ -1291,7 +1162,7 @@ fn a_staged_candidate_that_is_not_the_running_image_is_refused_without_effects()
     .unwrap();
     let mut owner = Owner::fixture(clock());
     assert_eq!(
-        Stage::open(&harness.header, &mut fs, &mut owner).err(),
+        Installed::open(&harness.header, &mut fs, &mut owner).err(),
         Some(Failure::Identity)
     );
     let _ = fs.finish();
@@ -1301,7 +1172,35 @@ fn a_staged_candidate_that_is_not_the_running_image_is_refused_without_effects()
         "{:?}",
         events.borrow()
     );
-    assert_eq!(snapshot(&stage), before);
+    assert_eq!(snapshot(&installed), before);
+}
+
+/// A collection or recovery whose installed executable is not the run's own,
+/// or is missing, is refused with the one fixed code before any action.
+#[test]
+fn an_absent_or_other_installed_executable_is_refused_with_the_fixed_installed_code() {
+    let harness = Harness::new();
+    let path = harness.temporary.path(INSTALLED);
+    for case in ["other", "longer", "absent"] {
+        match case {
+            "other" => harness
+                .temporary
+                .file(INSTALLED, b"other candidate, never executed", 0o755),
+            "longer" => {
+                harness
+                    .temporary
+                    .file(INSTALLED, b"inert candidate, never executed, longer", 0o755)
+            }
+            _ => fs::remove_file(&path).unwrap(),
+        }
+        let mut fs = Fs::new(access(&harness.temporary)).unwrap();
+        let mut owner = Owner::fixture(clock());
+        let refused = Installed::open(&harness.header, &mut fs, &mut owner).err();
+        assert_eq!(refused, Some(Failure::Installed), "{case}");
+        fs.finish().unwrap();
+        owner.finish().unwrap();
+    }
+    assert!(!path.exists());
 }
 
 #[test]

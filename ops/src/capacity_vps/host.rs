@@ -7,7 +7,6 @@ use super::{
     process::{self, Runner},
     protocol::{self, Header, Unit, UnitState, Workload},
 };
-use crate::distribution::manifest::{ArtifactManifest, Selection, verify_pair};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -19,182 +18,91 @@ pub(super) const ROOT: &str = "/srv/simplestchat-bench";
 pub(super) const STATE: &str = "/run/simplestchat-bench";
 pub(super) const CURRENT: &str = "/run/simplestchat-bench/current.json";
 pub(super) const LOCK: &str = "/run/simplestchat-bench/workload.lock";
+/// The directory the production installer publishes the executable into.
+pub(super) const INSTALLED_DIRECTORY: &str = "/usr/local/libexec/simplestchat-public";
+/// The one executable every invocation and worker runs.
+pub(super) const INSTALLED: &str = "/usr/local/libexec/simplestchat-public/simplestchat-ops";
 
-pub(super) struct Stage {
+/// The installed executable, held as the running image of this process.
+///
+/// Opening it proves that the fixed installed file is the root-owned, single
+/// link, mode 0755 executable the header pins and that `/proc/self/exe` is that
+/// same inode with the same bytes. [`Installed::check`] proves that neither the
+/// file, the running image nor the installed directory changed since.
+pub(super) struct Installed {
     pub binary: String,
-    pub directory: usize,
+    directory: usize,
     before: Metadata,
-    files: [FileId; 3],
+    file: FileId,
     executed: FileId,
 }
-impl Stage {
+impl Installed {
     /// Inert action fixtures exercise real file custody, not image authentication.
     #[cfg(test)]
     pub fn fixture(header: &Header, fs: &mut Fs, owner: &mut Owner) -> Result<Self> {
-        let path = format!("{ROOT}/artifacts/ops-runtime.{}", header.run);
-        let directory = fs.directory(&path, true)?;
+        let directory = fs.directory(INSTALLED_DIRECTORY, false)?;
         let before = fs.dir_stamp(directory)?;
-        let mut files = Vec::new();
-        for (name, pin, mode) in [
-            ("ops-release.json", &header.members.manifest, 0o600),
-            ("ops-selection.json", &header.members.selection, 0o600),
-            ("simplestchat-ops", &header.members.binary, 0o755),
-        ] {
-            let id = fs.open(&format!("{path}/{name}"), pin.bytes, Some(mode))?;
-            if fs.hash(id, owner)? != pin.sha256 {
-                return Err(Failure::Identity);
-            }
-            files.push(id);
-        }
-        let executed = fs.alias(files[2])?;
+        let file = Self::pinned(header, fs, owner)?;
+        let executed = fs.alias(file)?;
         let value = Self {
-            binary: format!("{path}/simplestchat-ops"),
+            binary: INSTALLED.into(),
             directory,
             before,
-            files: files.try_into().map_err(|_| Failure::Unproven)?,
+            file,
             executed,
         };
         value.check(fs, owner)?;
         Ok(value)
     }
+    /// # Errors
+    /// [`Failure::Installed`] when the installed file is absent or holds other
+    /// bytes than the header's pin; [`Failure::Identity`] when this process is
+    /// not running that file; `Namespace`, `Changed` or `Io` for an unsafe or
+    /// changing path.
     pub fn open(header: &Header, fs: &mut Fs, owner: &mut Owner) -> Result<Self> {
-        fs.directory(&format!("{ROOT}/artifacts"), true)?;
-        let path = format!("{ROOT}/artifacts/ops-runtime.{}", header.run);
-        let directory = fs.directory(&path, true)?;
+        let directory = fs.directory(INSTALLED_DIRECTORY, false)?;
         let before = fs.dir_stamp(directory)?;
-        let mut ids = Vec::new();
-        for (name, pin, mode) in [
-            ("ops-release.json", &header.members.manifest, 0o600),
-            ("ops-selection.json", &header.members.selection, 0o600),
-            ("simplestchat-ops", &header.members.binary, 0o755),
-        ] {
-            let id = fs.open(&format!("{path}/{name}"), pin.bytes, Some(mode))?;
-            if fs.stamp(id).len() != pin.bytes || fs.hash(id, owner)? != pin.sha256 {
-                return Err(Failure::Identity);
-            }
-            ids.push(id);
-        }
+        let file = Self::pinned(header, fs, owner)?;
         let executed = fs.executed()?;
-        if !files::same(fs.stamp(ids[2]), fs.stamp(executed))
-            || fs.hash(executed, owner)? != header.members.binary.sha256
+        if !files::same(fs.stamp(file), fs.stamp(executed))
+            || fs.hash(executed, owner)? != header.binary.sha256
         {
             return Err(Failure::Identity);
         }
-        let manifest = ArtifactManifest::decode(&fs.read(ids[0], 64 * 1024, owner)?)
-            .map_err(|_| Failure::Identity)?;
-        let selection_bytes = fs.read(ids[1], 16 * 1024, owner)?;
-        let selection = Selection::decode(&selection_bytes).map_err(|_| Failure::Identity)?;
-        let expected = serde_json::to_value(&header.selection).map_err(|_| Failure::Identity)?;
-        if serde_json::to_value(selection.identity()).map_err(|_| Failure::Identity)? != expected {
-            return Err(Failure::Identity);
-        }
-        let binary = format!("{path}/simplestchat-ops");
-        verify_pair(&manifest, Path::new(&binary), &selection).map_err(|_| Failure::Identity)?;
         let value = Self {
-            binary,
+            binary: INSTALLED.into(),
             directory,
             before,
-            files: ids.try_into().map_err(|_| Failure::Unproven)?,
+            file,
             executed,
         };
         value.check(fs, owner)?;
         Ok(value)
+    }
+    /// The installed file, admitted only with the header's exact size and digest.
+    fn pinned(header: &Header, fs: &mut Fs, owner: &mut Owner) -> Result<FileId> {
+        if !fs.exists(INSTALLED)? {
+            return Err(Failure::Installed);
+        }
+        let file = fs.open(INSTALLED, crate::distribution::MAX_BYTES, Some(0o755))?;
+        if fs.stamp(file).len() != header.binary.bytes
+            || fs.hash(file, owner)? != header.binary.sha256
+        {
+            return Err(Failure::Installed);
+        }
+        Ok(file)
     }
     pub fn check(&self, fs: &mut Fs, owner: &mut Owner) -> Result<()> {
         owner.check(false)?;
-        let names = fs.names(self.directory, 3, owner)?;
-        if names != ["ops-release.json", "ops-selection.json", "simplestchat-ops"]
-            || !files::same(&self.before, &fs.dir_stamp(self.directory)?)
-        {
+        if !files::same(&self.before, &fs.dir_stamp(self.directory)?) {
             return Err(Failure::Changed);
         }
-        for id in self.files {
-            fs.check(id)?;
-        }
+        fs.check(self.file)?;
         fs.check(self.executed)?;
-        if !files::same(fs.stamp(self.files[2]), fs.stamp(self.executed)) {
+        if !files::same(fs.stamp(self.file), fs.stamp(self.executed)) {
             return Err(Failure::Changed);
         }
         Ok(())
-    }
-    pub fn original_metadata(&self, fs: &mut Fs, owner: &mut Owner) -> Result<[Vec<u8>; 2]> {
-        Ok([
-            fs.read(self.files[0], 64 * 1024, owner)?,
-            fs.read(self.files[1], 16 * 1024, owner)?,
-        ])
-    }
-    pub fn retire(&self, header: &Header, fs: &mut Fs, owner: &mut Owner) -> Result<()> {
-        self.check(fs, owner)?;
-        let mut primary = None;
-        let pins = [
-            &header.members.manifest,
-            &header.members.selection,
-            &header.members.binary,
-        ];
-        let names = ["ops-release.json", "ops-selection.json", "simplestchat-ops"];
-        for (index, id) in self.files.into_iter().enumerate() {
-            let removed = (|| {
-                let expected = self
-                    .files
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, id)| !fs.retired(**id))
-                    .map(|(index, _)| names[index].to_owned())
-                    .collect::<Vec<_>>();
-                if fs.names(self.directory, 3, owner)? != expected
-                    || fs.hash(id, owner)? != pins[index].sha256
-                {
-                    return Err(Failure::Changed);
-                }
-                if index == 2
-                    && (!files::same(fs.stamp(id), fs.stamp(self.executed))
-                        || fs.hash(self.executed, owner)? != pins[index].sha256)
-                {
-                    return Err(Failure::Changed);
-                }
-                fs.unlink(id)
-            })();
-            if let Err(error) = removed {
-                primary.get_or_insert(error);
-                owner.latch(error);
-                owner.begin_cleanup();
-                // A reported after-effect error can have a proven owned unlink
-                // transition. An ambiguous unchanged/foreign name stops effects.
-                if !fs.retired(id) {
-                    break;
-                }
-            }
-        }
-        let removed = if self.files.iter().all(|id| fs.retired(*id)) {
-            fs.remove_directory(self.directory, owner)
-        } else {
-            Err(Failure::Retirement)
-        };
-        if let Err(error) = removed {
-            primary.get_or_insert(error);
-            owner.latch(error);
-            owner.begin_cleanup();
-        }
-        for (id, pin) in [
-            (self.files[0], &header.members.manifest),
-            (self.files[1], &header.members.selection),
-            (self.files[2], &header.members.binary),
-            (self.executed, &header.members.binary),
-        ] {
-            let hashed = fs.hash(id, owner).and_then(|hash| {
-                if hash == pin.sha256 {
-                    Ok(())
-                } else {
-                    Err(Failure::Changed)
-                }
-            });
-            if let Err(error) = hashed {
-                primary.get_or_insert(error);
-                owner.latch(error);
-                owner.begin_cleanup();
-            }
-        }
-        primary.map_or(Ok(()), Err)
     }
 }
 
@@ -206,8 +114,7 @@ pub(super) struct Identity {
     run: String,
     selection: protocol::Source,
     artifact_id: u64,
-    transfer: protocol::Pin,
-    members: protocol::Members,
+    binary: protocol::Pin,
     workload: protocol::Pin,
 }
 impl Identity {
@@ -218,8 +125,7 @@ impl Identity {
             run: header.run.clone(),
             selection: header.selection.clone(),
             artifact_id: header.artifact_id,
-            transfer: header.transfer.clone(),
-            members: header.members.clone(),
+            binary: header.binary.clone(),
             workload: protocol::Pin {
                 sha256: files::sha(workload.as_json()),
                 bytes: workload.as_json().len() as u64,
@@ -229,13 +135,11 @@ impl Identity {
     pub fn header(&self) -> Header {
         Header {
             schema_version: 1,
-            scope: "OpsCapacityBootstrap".into(),
-            mode: protocol::Mode::Invoke,
+            scope: "OpsCapacityInvocation".into(),
             run: self.run.clone(),
             selection: self.selection.clone(),
             artifact_id: self.artifact_id,
-            transfer: self.transfer.clone(),
-            members: self.members.clone(),
+            binary: self.binary.clone(),
             request: self.workload.clone(),
         }
     }
@@ -245,8 +149,7 @@ impl Identity {
             || self.run != header.run
             || self.selection != header.selection
             || self.artifact_id != header.artifact_id
-            || self.transfer != header.transfer
-            || self.members != header.members
+            || self.binary != header.binary
             || self.workload.bytes != request.len() as u64
             || self.workload.sha256 != files::sha(request)
         {
@@ -388,30 +291,6 @@ impl Session<'_> {
             }
         }
         state.validate(self.header, selected)?;
-        Ok(state)
-    }
-    pub fn raw_capacity_unit(&mut self) -> Result<UnitState> {
-        let bytes = self.command(
-            "/usr/bin/systemctl",
-            &[
-                "show".into(),
-                self.header.capacity_unit(),
-                concat!(
-                    "--property=LoadState,ActiveState,SubState,Result,",
-                    "ExecMainCode,ExecMainStatus,MainPID"
-                )
-                .into(),
-            ],
-            30,
-            true,
-            false,
-        )?;
-        let bytes = simplestchat_load_test::capacity::vps::parse_unit_state(
-            std::str::from_utf8(&bytes).map_err(|_| Failure::Unit)?,
-        )
-        .map_err(|_| Failure::Unit)?;
-        let state: UnitState = serde_json::from_slice(&bytes).map_err(|_| Failure::Unit)?;
-        state.validate(self.header, Unit::Capacity)?;
         Ok(state)
     }
     pub fn containers(

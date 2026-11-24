@@ -250,6 +250,15 @@ pub(crate) fn scrubbed(value: &Document, place: &Path) -> Document {
     written(value, &place.to_string_lossy())
 }
 
+/// The stored analysis categories the recordings were made with, in their
+/// order: a replay of the client's own operations runs with them, so every
+/// recorded plan, dismissal and page holds exactly as recorded.
+pub(crate) fn recorded_categories() -> Vec<String> {
+    ["actions", "javascript-typescript", "python", "rust"]
+        .map(|language| format!("/language:{language}/security"))
+        .to_vec()
+}
+
 /// How the recorded cases came out here: held alike, refused with the
 /// reference's code, refused with the class its interpreter raised, and
 /// refused on purpose where the reference held.

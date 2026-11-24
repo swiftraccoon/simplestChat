@@ -63,26 +63,16 @@ const ENVIRONMENT_KEYS: &[&str] = &[
     "PKG_CONFIG_PATH",
     "PIP_CONSTRAINT",
     "RUSTDOCFLAGS",
-    "PYTHON_CHECK_ENV",
     "AWS_LC_SYS_SYSTEM_DIR",
     "AWS_LC_SYS_STATIC",
     "AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK",
-];
-const SOURCES: &[&str] = &[
-    "build/tracked.py",
-    "build/new helper.py",
-    "build/nested/untracked.py",
-    "ops/ansible/files/host.py",
-    "ops/ansible/callback_plugins/observer.py",
-    "ops/ansible/tests/test_new\ncase.py",
-    "typings/fixture/nested.pyi",
 ];
 const DISPATCH: &str = r#"
 {
     printf '%s\000' "$command" "$PWD" "$#" "$@"
     printf '%s\000' "$PATH" "${RUSTC-}" "${RUSTDOC-}" "${OPENSSL_DIR-}" \
         "${OPENSSL_STATIC-}" "${PKG_CONFIG_PATH-}" "${PIP_CONSTRAINT-}" \
-        "${RUSTDOCFLAGS-}" "${PYTHON_CHECK_ENV-}" "${AWS_LC_SYS_SYSTEM_DIR-}" \
+        "${RUSTDOCFLAGS-}" "${AWS_LC_SYS_SYSTEM_DIR-}" \
         "${AWS_LC_SYS_STATIC-}" "${AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK-}"
 } >> "$FIXTURE_LOG"
 case "$command" in
@@ -98,8 +88,6 @@ case "$command" in
         if [ "${2-}" = --test-concurrency=1 ]; then phase=serial-helper-tests
         else phase=helper-tests; fi ;;
     shellcheck) phase=shellcheck ;;
-    ruff) if [ "$1" = check ]; then phase=python-lint; else phase=python-format; fi ;;
-    basedpyright) phase=python-types ;;
     *) exit 99 ;;
 esac
 if [ "${FIXTURE_FAIL-}" = "$phase" ]; then exit "${FIXTURE_FAILURE_CODE-43}"; fi
@@ -194,37 +182,12 @@ impl Fixture {
         for name in ["npm", "rustup", "sh", "bash", "shellcheck", "node"] {
             fixture.executable(&fixture.bin.join(name), name);
         }
-        for name in ["python", "ruff", "basedpyright"] {
-            fixture.executable(&fixture.root.join("ops/ansible/.venv/bin").join(name), name);
-        }
         symlink("/usr/bin/git", fixture.bin.join("git")).unwrap();
-        fixture.write(".gitignore", "private/\nresults/\nops/ansible/.venv/\n");
-        for name in SOURCES.iter().copied().chain([
-            "private/secret.py",
-            "results/generated.py",
-            "vendor/upstream.py",
-            "reference/example.py",
-        ]) {
-            fixture.write(name, "# inert source\n");
-        }
         tooling::run(
             &fixture.root,
             &fixture.environment,
             "git",
             ["init", "--quiet"],
-        )
-        .unwrap();
-        tooling::run(
-            &fixture.root,
-            &fixture.environment,
-            "git",
-            [
-                "add",
-                "--",
-                "build/tracked.py",
-                "vendor/upstream.py",
-                "reference/example.py",
-            ],
         )
         .unwrap();
         fixture
@@ -315,15 +278,6 @@ fn phases(events: &[Event]) -> Vec<String> {
             "rustup" if event.arguments[3] == "run" => format!("cargo-{}", event.arguments[9]),
             "rustup" => format!("cargo-{}", event.arguments[3]),
             "sh" | "bash" => format!("{}:{}", event.command, event.arguments[1]),
-            "ruff" => format!(
-                "python-{}",
-                if event.arguments[0] == "check" {
-                    "lint"
-                } else {
-                    "format"
-                }
-            ),
-            "basedpyright" => "python-types".to_owned(),
             "node" => "helper-tests".to_owned(),
             _ => event.command.clone(),
         })
@@ -919,9 +873,6 @@ fn default_runs_all_groups_in_order() {
             "cargo-http-policy",
             "cargo-doc",
             "cargo-python-lines",
-            "python-lint",
-            "python-format",
-            "python-types",
             "sh:.githooks/commit-msg",
             "bash:build/helper with spaces.sh",
             "shellcheck",
@@ -989,7 +940,6 @@ fn missing_programs_preserve_status_127_without_host_fallback() {
         ("bash", "--helpers"),
         ("shellcheck", "--helpers"),
         ("node", "--helpers"),
-        ("git", "--python"),
     ] {
         let fixture = Fixture::new();
         fs::remove_file(fixture.bin.join(program)).unwrap();
@@ -1030,9 +980,6 @@ fn each_failed_phase_preserves_status_and_prevents_every_later_phase() {
         "cargo-http-policy",
         "cargo-doc",
         "cargo-python-lines",
-        "python-lint",
-        "python-format",
-        "python-types",
         "sh:.githooks/commit-msg",
         "bash:build/helper with spaces.sh",
         "shellcheck",
@@ -1067,20 +1014,14 @@ fn child_signal_status_is_preserved_without_running_next_phase() {
     assert_eq!(phases(&fixture.events()), ["npm-lint"]);
 }
 
+/// The Python group is the line ratchet alone: with no tracked Python there
+/// is nothing for a linter, formatter or type checker to read.
 #[test]
-fn python_discovers_tracked_untracked_nested_stubs_and_newline_paths() {
+fn python_runs_only_the_zero_line_ratchet_from_the_checkout() {
     let fixture = Fixture::new();
     fixture.run(&["--python"], &[]).unwrap();
     let events = fixture.events();
-    assert_eq!(
-        phases(&events),
-        [
-            "cargo-python-lines",
-            "python-lint",
-            "python-format",
-            "python-types"
-        ]
-    );
+    assert_eq!(phases(&events), ["cargo-python-lines"]);
     assert_eq!(
         events[0].arguments,
         [
@@ -1097,162 +1038,4 @@ fn python_discovers_tracked_untracked_nested_stubs_and_newline_paths() {
         ]
     );
     assert_eq!(Path::new(&events[0].cwd), fixture.root);
-    for (event, offset) in events[1..].iter().zip([2, 3, 2]) {
-        let mut sources = event.arguments[offset..].to_vec();
-        sources.sort();
-        let mut expected = SOURCES
-            .iter()
-            .map(|source| (*source).to_owned())
-            .collect::<Vec<_>>();
-        expected.sort();
-        assert_eq!(sources, expected);
-        assert_eq!(Path::new(&event.cwd), fixture.root);
-    }
-    assert_eq!(&events[1].arguments[..2], ["check", "--"]);
-    assert_eq!(&events[2].arguments[..3], ["format", "--check", "--"]);
-    assert_eq!(
-        &events[3].arguments[..2],
-        [
-            "--pythonpath",
-            fixture
-                .root
-                .join("ops/ansible/.venv/bin/python")
-                .to_str()
-                .unwrap()
-        ]
-    );
-}
-
-#[test]
-fn python_explicit_environment_with_spaces_never_uses_default_tools() {
-    let fixture = Fixture::new();
-    let selected = fixture.temporary.join("external controller environment");
-    for name in ["python", "ruff", "basedpyright"] {
-        fixture.executable(&selected.join("bin").join(name), name);
-    }
-    fs::remove_dir_all(fixture.root.join("ops/ansible/.venv")).unwrap();
-    fixture
-        .run(
-            &["--python"],
-            &[("PYTHON_CHECK_ENV", selected.clone().into_os_string())],
-        )
-        .unwrap();
-    assert_eq!(
-        fixture.events()[3].arguments[1],
-        selected.join("bin/python").to_str().unwrap()
-    );
-}
-
-#[test]
-fn python_relative_environment_is_resolved_from_checkout() {
-    let fixture = Fixture::new();
-    fixture
-        .run(
-            &["--python"],
-            &[("PYTHON_CHECK_ENV", "ops/ansible/.venv".into())],
-        )
-        .unwrap();
-    assert_eq!(
-        fixture.events()[3].arguments[1],
-        "ops/ansible/.venv/bin/python"
-    );
-}
-
-#[test]
-fn python_git_discovery_failure_stops_before_all_checkers() {
-    let fixture = Fixture::new();
-    let error = fixture
-        .run(
-            &["--python"],
-            &[(
-                "GIT_DIR",
-                fixture
-                    .temporary
-                    .join("absent git directory")
-                    .into_os_string(),
-            )],
-        )
-        .unwrap_err();
-    assert_eq!(error.code, 128);
-    assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
-}
-
-#[test]
-fn python_rejects_new_source_roots_before_any_checker() {
-    for source in [
-        "new-owned-root/module.py",
-        "build/unapproved.pyi",
-        "typings/unapproved.py",
-        "crates/ci/src/other/module.py",
-        "crates/ci/src/release_http_policy/module.py",
-        "ops/ansible/filter_plugins/module.py",
-        "xtask/src/ci/module.py",
-    ] {
-        let fixture = Fixture::new();
-        fixture.write(source, "# policy must be explicit\n");
-        let error = fixture.run(&["--python"], &[]).unwrap_err();
-        assert_eq!(error.code, 1);
-        assert!(
-            error
-                .message
-                .contains("Python source outside the checked roots")
-        );
-        assert!(error.message.contains(source));
-        assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
-    }
-}
-
-#[test]
-fn python_checks_all_tools_are_executable_before_discovery() {
-    for name in ["python", "ruff", "basedpyright"] {
-        let fixture = Fixture::new();
-        fs::set_permissions(
-            fixture.root.join("ops/ansible/.venv/bin").join(name),
-            fs::Permissions::from_mode(0o644),
-        )
-        .unwrap();
-        let error = fixture.run(&["--python"], &[]).unwrap_err();
-        assert_eq!(error.code, 1);
-        assert!(error.message.contains(&format!("Missing {name}")));
-        assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
-    }
-}
-
-#[test]
-fn python_invalid_explicit_environment_does_not_fall_back() {
-    let fixture = Fixture::new();
-    let error = fixture
-        .run(
-            &["--python"],
-            &[(
-                "PYTHON_CHECK_ENV",
-                fixture
-                    .temporary
-                    .join("absent environment")
-                    .into_os_string(),
-            )],
-        )
-        .unwrap_err();
-    assert_eq!(error.code, 1);
-    assert!(error.message.contains("Missing python"));
-    assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
-}
-
-#[test]
-fn python_empty_owned_source_set_is_not_success() {
-    let fixture = Fixture::new();
-    for source in SOURCES {
-        fs::remove_file(fixture.root.join(source)).unwrap();
-    }
-    tooling::run(
-        &fixture.root,
-        &fixture.environment,
-        "git",
-        ["rm", "--cached", "--quiet", "build/tracked.py"],
-    )
-    .unwrap();
-    let error = fixture.run(&["--python"], &[]).unwrap_err();
-    assert_eq!(error.code, 1);
-    assert!(error.message.contains("No maintained Python sources found"));
-    assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
 }

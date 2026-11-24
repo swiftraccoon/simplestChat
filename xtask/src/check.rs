@@ -5,7 +5,6 @@
 //! environment is explicit so tests can run isolated checkouts without mutating
 //! process-global state.
 
-mod python;
 #[cfg(test)]
 #[path = "check/check_tests.rs"]
 mod tests;
@@ -21,7 +20,7 @@ Usage: cargo run --locked -q -p xtask -- check [--web | --rust | --python | --he
 Default: run all four groups. Requires the development prerequisites.
 Web: typed lint, formatting, unit tests, type checking and production build.
 Rust: formatting, workspace Clippy, the over-length line ratchet and checked documentation.
-Python: per-file line ratchet, pinned Ruff lint/format, strict basedpyright over sources/stubs.
+Python: the per-file line ratchet, at zero: no tracked Python file may be added.
 Helpers: shell syntax and helper/benchmark regression tests.
 Database, native Rust tests and browser integration remain separate; see docs/testing.md.
 ";
@@ -158,11 +157,11 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
 }
 
 /// The line ratchet needs only Git and the pinned toolchain through rustup, so
-/// it runs before the Python environment is required.
+/// it needs no Python environment. The repository tracks no Python, so no
+/// linter or type checker has a source to check.
 fn python_group(root: &Path, environment: &Environment) -> tooling::Result<()> {
     let channel = tooling::pinned_toolchain(root)?;
-    tooling::run_xtask(root, environment, &channel, &["python-lines"])?;
-    python::run(root, environment)
+    tooling::run_xtask(root, environment, &channel, &["python-lines"])
 }
 
 /// Expand the maintained flat globs as separate arguments, including filenames

@@ -23,7 +23,8 @@ impl Clock for NativeClock {
 pub(super) enum Phase {
     Admission,
     Acquisition,
-    Stage,
+    Install,
+    Contact,
     Preflight,
     Prepare,
     Build,
@@ -32,7 +33,7 @@ pub(super) enum Phase {
     Collect,
     Archive,
     Extract,
-    Retire,
+    Conclude,
     Finalize,
     Replay,
     Fence,
@@ -49,12 +50,13 @@ pub(super) struct Plan {
 impl Plan {
     pub fn new(clock: Arc<dyn Clock>, options: &options::Options, start: Instant) -> Self {
         let runtime = options.runtime();
-        let mut phases = vec![
-            (Phase::Admission, 150),
-            (Phase::Acquisition, 1440),
-            (Phase::Stage, 360),
-            (Phase::Preflight, 90),
-        ];
+        let mut phases = vec![(Phase::Admission, 150), (Phase::Acquisition, 1440)];
+        // Only a new run installs: the application listing and verification,
+        // then the delivery playbook within the export's own 1,920 s bound.
+        if options.mode == options::Mode::New {
+            phases.push((Phase::Install, 2760));
+        }
+        phases.extend([(Phase::Contact, 90), (Phase::Preflight, 90)]);
         if options.prepare {
             phases.push((Phase::Prepare, 1800));
         }
@@ -69,7 +71,7 @@ impl Plan {
             (Phase::Collect, 90),
             (Phase::Archive, 360),
             (Phase::Extract, 600),
-            (Phase::Retire, 90),
+            (Phase::Conclude, 90),
             (Phase::Finalize, 120),
             (Phase::Replay, 30),
             (Phase::Fence, 30),

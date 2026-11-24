@@ -1,23 +1,14 @@
-//! Fixed bootstrap entry with exact input framing and final output fences.
+//! Fixed invocation entry with exact input framing and final output fences.
 
 use super::{
     Failure, Result,
-    control::Owner,
+    control::{self, Owner},
     files::{self, Access, Fs},
-    host::{Session, Stage},
+    host::{Installed, Session},
     process::{self, Input, Runner},
-    protocol::{self, Action, Envelope, Header, Mode, ResultData, Unit},
+    protocol::{self, Action, Envelope, Header, ResultData, Unit},
 };
 use std::{ffi::OsStr, process::ExitCode};
-
-fn origin(value: &OsStr) -> Result<u64> {
-    let value = value.to_str().ok_or(Failure::Arguments)?;
-    let parsed = value.parse::<u64>().map_err(|_| Failure::Arguments)?;
-    if parsed == 0 || parsed.to_string() != value {
-        return Err(Failure::Arguments);
-    }
-    Ok(parsed)
-}
 
 fn reserve(session: &mut Session<'_>, input: &mut Input) -> Result<()> {
     let lock = session.lock()?;
@@ -52,7 +43,7 @@ fn execute(header: Header, origin: u64) -> Result<()> {
     if uname.sysname() != c"Linux" || uname.machine() != c"x86_64" {
         return Err(Failure::Platform);
     }
-    let mut owner = Owner::new(origin, header.mode)?;
+    let mut owner = Owner::new(origin)?;
     let mut fs = match Fs::new(Access::default()) {
         Ok(fs) => fs,
         Err(error) => {
@@ -85,17 +76,13 @@ fn execute(header: Header, origin: u64) -> Result<()> {
             input.eof(&mut owner, end)?;
         }
         owner.admit(envelope.action())?;
-        let stage = Stage::open(&header, &mut fs, &mut owner)?;
-        if header.mode == Mode::Stage {
-            if !matches!(envelope.action(), Action::Preflight | Action::Lookup) {
-                return Err(Failure::Request);
-            }
-            let exists = fs.exists(&header.evidence_path())?;
-            if (envelope.action() == Action::Preflight && exists)
-                || (envelope.action() == Action::Lookup && !exists)
-            {
-                return Err(Failure::Identity);
-            }
+        let installed = Installed::open(&header, &mut fs, &mut owner)?;
+        // A new run's first contact finds no evidence; an adopted run's has it.
+        let exists = fs.exists(&header.evidence_path())?;
+        if (envelope.action() == Action::Preflight && exists)
+            || (envelope.action() == Action::Lookup && !exists)
+        {
+            return Err(Failure::Identity);
         }
         let workload = if envelope.action() == Action::Lookup {
             None
@@ -118,9 +105,7 @@ fn execute(header: Header, origin: u64) -> Result<()> {
                 session.archive(workload.as_ref().ok_or(Failure::Request)?)?;
                 None
             }
-            Action::Retire => {
-                Some(session.retire(workload.as_ref().ok_or(Failure::Request)?, &stage)?)
-            }
+            Action::Conclude => Some(session.conclude(workload.as_ref().ok_or(Failure::Request)?)?),
             Action::Status => {
                 let selected = envelope.unit().ok_or(Failure::Request)?;
                 if selected == Unit::Capacity {
@@ -128,11 +113,9 @@ fn execute(header: Header, origin: u64) -> Result<()> {
                 }
                 Some(ResultData::Status(session.unit(selected, false)?))
             }
-            _ => Some(session.dispatch(action, workload.as_ref(), &stage)?),
+            _ => Some(session.dispatch(action, workload.as_ref(), &installed)?),
         };
-        if action != Action::Retire {
-            stage.check(session.fs, session.owner)?;
-        }
+        installed.check(session.fs, session.owner)?;
         session.owner.check(false)?;
         result
             .map(|result| protocol::Response::encode(&header, &result))
@@ -163,9 +146,11 @@ fn execute(header: Header, origin: u64) -> Result<()> {
     fence.check()
 }
 
-pub(super) fn run(header: &OsStr, original_origin: &OsStr) -> ExitCode {
+/// Sample the origin of every deadline before anything else, then serve.
+pub(super) fn run(header: &OsStr) -> ExitCode {
+    let origin = control::now();
     let result = (|| {
-        let origin = origin(original_origin)?;
+        let origin = origin?;
         let header = header.to_str().ok_or(Failure::Arguments)?;
         execute(Header::decode(header.as_bytes())?, origin)
     })();

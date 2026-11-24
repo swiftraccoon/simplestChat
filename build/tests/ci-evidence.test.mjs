@@ -40,7 +40,6 @@ const checks = [
   "security-fast",
   "codeql-actions",
   "codeql-javascript-typescript",
-  "codeql-python",
   "codeql-rust",
 ];
 

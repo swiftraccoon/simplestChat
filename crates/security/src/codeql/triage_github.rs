@@ -145,6 +145,9 @@ pub struct Github<'a> {
     pub next_write: f64,
     /// The `gh` that is run.
     pub executable: PathBuf,
+    /// The stored analysis categories a revision needs: the automated
+    /// workflow's, unless a replay of an earlier recording names its own.
+    pub(crate) categories: Vec<String>,
     clock: &'a dyn Clock,
     transport: &'a dyn Transport,
     variables: Vec<(OsString, OsString)>,
@@ -224,6 +227,7 @@ impl<'a> Github<'a> {
             deadline,
             next_write: 0.0,
             executable,
+            categories: expected(),
             clock: reach.clock,
             transport: reach.transport,
             variables,
@@ -332,7 +336,7 @@ impl<'a> Github<'a> {
     ) -> Result<Vec<Document>> {
         let mut entries = Vec::new();
         let mut categories = BTreeSet::new();
-        let expected = expected();
+        let expected = self.categories.clone();
         require(
             revision.is_none() || resource == "analyses",
             "codeql_page_revision",

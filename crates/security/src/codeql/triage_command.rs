@@ -7,7 +7,7 @@
 //! pass ends with 1.
 
 use super::{
-    Ledger, MAX_POLICY, MAX_REPORT, bounded_file, classified, decode, field,
+    Ledger, MAX_POLICY, MAX_REPORT, bounded_file, classified, decode, expected, field,
     findings::verdict,
     github::{Bounded, Github, Reach, System},
     object,
@@ -245,6 +245,15 @@ pub struct Host<'a> {
     pub git: &'a dyn Shown,
     /// The day reviews are held to.
     pub today: Date,
+    /// The stored analysis categories a revision needs.
+    pub categories: &'a [String],
+}
+
+/// A client of the selected repository that needs `host`'s categories.
+fn client<'a>(options: &Options, apply: bool, host: &Host<'a>) -> Result<Github<'a>> {
+    let mut client = Github::new(&options.repository, apply, host.reach)?;
+    client.categories = host.categories.to_vec();
+    Ok(client)
 }
 
 /// The reviews of the policy of `ledger` valid on `today`, refused by the
@@ -291,7 +300,7 @@ fn triaged(root: &Path, options: &Options, host: &Host<'_>, created: &mut bool) 
             options.source_cache.is_none(),
             "codeql_unexpected_source_cache",
         )?;
-        let mut client = Github::new(&options.repository, false, host.reach)?;
+        let mut client = client(options, false, host)?;
         report(&analysis_health(&mut client, revision, reference)?)?;
         return Ok(0);
     }
@@ -327,7 +336,7 @@ fn triaged(root: &Path, options: &Options, host: &Host<'_>, created: &mut bool) 
                 same(field(raw, "revision")?, revision) && same(field(raw, "ref")?, reference),
                 "codeql_apply_selection",
             )?;
-            let mut client = Github::new(&options.repository, true, host.reach)?;
+            let mut client = client(options, true, host)?;
             let mut number = 0;
             let mut journal = |value: &Document| {
                 number += 1;
@@ -345,7 +354,7 @@ fn triaged(root: &Path, options: &Options, host: &Host<'_>, created: &mut bool) 
         }
     } else {
         require(options.input.is_none(), "codeql_unexpected_input")?;
-        let mut client = Github::new(&options.repository, false, host.reach)?;
+        let mut client = client(options, false, host)?;
         api_plan(
             &mut client,
             &mut checkout,
@@ -417,10 +426,12 @@ pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
         transport: &Bounded,
         environment: &environment,
     };
+    let categories = expected();
     let host = Host {
         reach,
         git: &Git,
         today: Date::today(),
+        categories: &categories,
     };
     let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
     ExitCode::from(command(root, arguments, &host, &mut out, &mut err))

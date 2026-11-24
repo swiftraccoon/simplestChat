@@ -8,11 +8,12 @@
 //! source run from files. Where the reference failed with an exception of
 //! its interpreter, its command printed the one general code, and `named`
 //! gives that code here. A document after a byte order mark is refused
-//! here and was read there.
+//! here and was read there. Every case is replayed with the reference's
+//! table of scanned endings, which still held Python.
 
 use super::{
-    Engine, MAX_CONFIG, MAX_FILES, MAX_LINE, MAX_RULES, answered, check, expectations, findings,
-    new_output, rules, scope, targets,
+    Engine, LANGUAGES, MAX_CONFIG, MAX_FILES, MAX_LINE, MAX_RULES, RULES, answered, check,
+    expectations, findings, new_output, rules, scope, targets,
 };
 use crate::{
     Fault,
@@ -26,6 +27,18 @@ use std::{
 };
 
 const RECORDED: &str = include_str!("recorded_semgrep.json");
+
+/// The reference's scanned endings and their languages, with which every
+/// recorded case is replayed.
+pub(super) const RECORDED_LANGUAGES: [(&str, &str); 4] = [
+    (".py", "python"),
+    (".rs", "rust"),
+    (".ts", "typescript"),
+    (".js", "typescript"),
+];
+/// The endings the reference scanned and this gate does not: the repository
+/// has tracked no Python since the recording.
+const REMOVED_SINCE_RECORDING: [&str; 1] = [".py"];
 
 /// Documents the reference read and that are refused here: a pack and a
 /// report are JSON in UTF-8 without a byte order mark.
@@ -128,7 +141,7 @@ fn every_recorded_pack_is_read_alike() {
             let mode = std::fs::Permissions::from_mode(u32::try_from(mode).expect("a mode"));
             std::fs::set_permissions(&path, mode).expect("a mode that is set");
         }
-        let read = rules(&path).map(|found| json!({"identifiers": found}));
+        let read = rules(&path, &RECORDED_LANGUAGES).map(|found| json!({"identifiers": found}));
         settle(text(&case["name"]), read, &case["result"], &mut tally);
     }
     assert_eq!(tally, Tally(13, 40, 10, 1));
@@ -143,9 +156,11 @@ fn every_recorded_list_of_targets_is_built_alike() {
             Some(count) => {
                 let paths: Vec<String> =
                     (0..count).map(|index| format!("src/f{index}.py")).collect();
-                targets(&paths).map(|value| json!({"count": value[1].as_array().map(Vec::len)}))
+                let listed = targets(&paths, &RECORDED_LANGUAGES);
+                listed.map(|value| json!({"count": value[1].as_array().map(Vec::len)}))
             }
-            None => targets(&strings(&case["paths"])).map(|value| json!({"targets": value})),
+            None => targets(&strings(&case["paths"]), &RECORDED_LANGUAGES)
+                .map(|value| json!({"targets": value})),
         };
         settle(text(&case["name"]), read, &case["result"], &mut tally);
     }
@@ -180,7 +195,8 @@ fn every_recorded_fixture_is_read_alike() {
         std::fs::create_dir_all(&root).expect("a root");
         tree(&root, &case["files"]);
         let identifiers: BTreeSet<String> = strings(&case["identifiers"]).into_iter().collect();
-        let read = expectations(&root, &identifiers).map(|(positive, negative)| {
+        let read = expectations(&root, &identifiers, &RECORDED_LANGUAGES);
+        let read = read.map(|(positive, negative)| {
             json!({"positive": shown(&positive), "negative": shown(&negative)})
         });
         settle(text(&case["name"]), read, &case["result"], &mut tally);
@@ -197,7 +213,9 @@ fn every_recorded_scope_is_chosen_alike() {
         let root = scratch.0.join(index.to_string());
         std::fs::create_dir_all(&root).expect("a root");
         tree(&root, &case["files"]);
-        let read = scope(&root, case["includeVendor"] == true).map(|paths| json!({"paths": paths}));
+        let include_vendor = case["includeVendor"] == true;
+        let read = scope(&root, include_vendor, &RECORDED_LANGUAGES);
+        let read = read.map(|paths| json!({"paths": paths}));
         settle(text(&case["name"]), read, &case["result"], &mut tally);
     }
     assert_eq!(tally, Tally(8, 2, 0, 0));
@@ -273,6 +291,7 @@ fn every_recorded_check_is_made_alike() {
             path: &program,
             version: text(&lock["version"]),
             lock: &digest,
+            languages: &RECORDED_LANGUAGES,
         };
         let include_vendor = case["includeVendor"] == true;
         let output = place.join(text(&case["output"]));
@@ -354,10 +373,81 @@ fn the_bounds_are_the_ones_the_reference_keeps() {
     assert_eq!(json!(MAX_FILES), limits["MAX_FILES"]);
     assert_eq!(json!(MAX_RULES), limits["MAX_RULES"]);
     assert_eq!(json!(MAX_LINE), limits["MAX_LINE"]);
-    let languages: serde_json::Map<String, Value> = super::LANGUAGES
+    let languages: serde_json::Map<String, Value> = RECORDED_LANGUAGES
         .iter()
         .map(|(ending, language)| ((*ending).to_owned(), json!(language)))
         .collect();
     assert_eq!(Value::Object(languages), recording["languages"]);
+    // The gate scans what the reference did but the removed endings.
+    let kept: Vec<_> = RECORDED_LANGUAGES
+        .into_iter()
+        .filter(|(ending, _)| !REMOVED_SINCE_RECORDING.contains(ending))
+        .collect();
+    assert_eq!(kept, LANGUAGES);
     assert_eq!(json!(super::PREFIXES), recording["prefixes"]);
+}
+
+#[test]
+fn the_maintained_pack_holds_no_python_rule_and_every_rule_has_both_fixtures() {
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let identifiers = rules(&checkout.join(RULES), &LANGUAGES).expect("the maintained pack");
+    let expected = [
+        "javascript-credential-url",
+        "javascript-location-to-html",
+        "javascript-secret-log",
+        "rust-assert-sql-safe",
+        "rust-assert-sql-safe-db",
+        "rust-assert-sql-safe-room-settings",
+        "rust-credential-url",
+        "rust-secret-log",
+    ]
+    .map(|name| format!("simplestchat.{name}"));
+    assert_eq!(identifiers, expected.into_iter().collect());
+    // The fixtures, staged without their ending as the golden run stages them,
+    // are all of a scanned language and cover every rule both ways.
+    let scratch = Scratch::new("sm");
+    let fixtures = checkout.join(super::FIXTURES);
+    for name in super::listed(&fixtures).expect("the fixtures") {
+        let plain = name.strip_suffix(".fixture").expect("a fixture ending");
+        let target = scratch.0.join(plain);
+        std::fs::create_dir_all(target.parent().expect("a parent")).expect("a directory");
+        std::fs::copy(fixtures.join(&name), target).expect("a staged fixture");
+    }
+    let (positive, negative) =
+        expectations(&scratch.0, &identifiers, &LANGUAGES).expect("complete fixtures");
+    assert!(!positive.is_empty() && !negative.is_empty());
+}
+
+#[test]
+fn the_gate_refuses_a_python_rule_and_scans_no_python_source() {
+    let scratch = Scratch::new("sy");
+    let pack = scratch.0.join("pack.json");
+    let rule = json!({"rules": [{
+        "id": "simplestchat.an-example",
+        "languages": ["python"],
+        "message": "An example.",
+        "severity": "ERROR",
+        "pattern": "example()",
+    }]});
+    std::fs::write(&pack, rule.to_string()).expect("a pack");
+    assert_eq!(
+        rules(&pack, &LANGUAGES),
+        Err(Fault("semgrep_rule_language"))
+    );
+    assert!(rules(&pack, &RECORDED_LANGUAGES).is_ok());
+    let python = vec!["src/example.py".to_owned()];
+    assert_eq!(
+        targets(&python, &LANGUAGES),
+        Err(Fault("semgrep_target_path"))
+    );
+    let root = scratch.0.join("root");
+    for name in ["src/example.py", "src/example.rs", "build/example.py"] {
+        let path = root.join(name);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+        std::fs::write(path, "example\n").expect("a source");
+    }
+    assert_eq!(
+        scope(&root, false, &LANGUAGES),
+        Ok(vec!["src/example.rs".to_owned()])
+    );
 }

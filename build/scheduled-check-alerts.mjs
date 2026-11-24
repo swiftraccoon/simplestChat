@@ -9,7 +9,7 @@ export const WORKFLOWS = {
   'infrastructure-security.yml': ['Disposable infrastructure security', ['Debian VM deployment and restore policy']],
   'performance.yml': ['Performance', ['Baseline versus candidate on one hosted runner', 'Adaptive path under an impaired downlink', 'Session soak with a database restart']],
   'browser-compatibility.yml': ['Browser compatibility', ['firefox on ubuntu-24.04', 'webkit on macos-26']],
-  'codeql.yml': ['CodeQL', ['CodeQL (actions)', 'CodeQL (javascript-typescript)', 'CodeQL (python)', 'CodeQL (rust)']],
+  'codeql.yml': ['CodeQL', ['CodeQL (actions)', 'CodeQL (javascript-typescript)', 'CodeQL (rust)']],
   'canary.yml': ['Canary', ['Owned browsers against the public deployment']],
   'availability.yml': ['Public availability', ['External HTTPS readiness']],
 };

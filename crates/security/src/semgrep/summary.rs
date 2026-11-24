@@ -82,10 +82,10 @@ const FIELDS: [&str; 10] = [
     "passed",
 ];
 
-/// The maintained sources of the scan's private inventory in `directory`:
-/// the only paths that may be said. An inventory that cannot be read
-/// names none.
-fn inventory(directory: &Path) -> BTreeSet<String> {
+/// The maintained sources of the scan's private inventory in `directory`,
+/// each of one of `languages`: the only paths that may be said. An inventory
+/// that cannot be read names none.
+fn inventory(directory: &Path, languages: &[(&str, &str)]) -> BTreeSet<String> {
     let read = || -> Result<BTreeSet<String>> {
         let content = files::bounded(&directory.join("source-manifest.json"), MANIFEST, true)?;
         let manifest = record::strict(&content)?;
@@ -93,7 +93,7 @@ fn inventory(directory: &Path) -> BTreeSet<String> {
         require(manifest.len() <= MAX_FILES, INVALID.0)?;
         let maintained = |name: &&String| {
             let placed = PREFIXES.iter().any(|prefix| name.starts_with(prefix));
-            safe_name(name) && language(name).is_some() && placed
+            safe_name(name) && language(languages, name).is_some() && placed
         };
         Ok(manifest.keys().filter(maintained).cloned().collect())
     };
@@ -213,9 +213,14 @@ fn coordinates(
 }
 
 /// Where the fixpoint timeouts in `reports` were, as far as they name a
-/// path of `paths` or a rule of the pack below `root`.
-fn timeouts(root: &Path, reports: &[Value], paths: &BTreeSet<String>) -> Result<Vec<Value>> {
-    let identifiers = rules(&root.join(RULES))?;
+/// path of `paths` or a rule of the pack below `root`, read for `languages`.
+fn timeouts(
+    root: &Path,
+    reports: &[Value],
+    paths: &BTreeSet<String>,
+    languages: &[(&str, &str)],
+) -> Result<Vec<Value>> {
+    let identifiers = rules(&root.join(RULES), languages)?;
     let mut result = Vec::new();
     for raw in reports {
         let entries = match raw.get("time") {
@@ -233,9 +238,15 @@ fn timeouts(root: &Path, reports: &[Value], paths: &BTreeSet<String>) -> Result<
 }
 
 /// The findings of the report `raw`, every one by a rule of the pack below
-/// `root`, in one of `paths` and on a line, and holding nothing else.
-fn findings(root: &Path, raw: &Map<String, Value>, paths: &BTreeSet<String>) -> Result<Vec<Value>> {
-    let identifiers = rules(&root.join(RULES))?;
+/// `root`, read for `languages`, in one of `paths` and on a line, and
+/// holding nothing else.
+fn findings(
+    root: &Path,
+    raw: &Map<String, Value>,
+    paths: &BTreeSet<String>,
+    languages: &[(&str, &str)],
+) -> Result<Vec<Value>> {
+    let identifiers = rules(&root.join(RULES), languages)?;
     let mut result = Vec::new();
     for item in raw["findings"].as_array().ok_or(INVALID)? {
         let entry = item.as_object().ok_or(INVALID)?;
@@ -262,9 +273,15 @@ fn shown(mut items: Vec<Value>) -> (Value, Value) {
 
 /// What a scan that failed with `code` may say: the code when it is a
 /// reviewed one, and what the engine's reports in `directory` tell, as much
-/// as is shown. When the rule pack cannot be read, nothing is said of
-/// timeouts.
-fn failure(root: &Path, code: &Value, directory: &Path, paths: &BTreeSet<String>) -> Note {
+/// as is shown. When the rule pack cannot be read for `languages`, nothing
+/// is said of timeouts.
+fn failure(
+    root: &Path,
+    code: &Value,
+    directory: &Path,
+    paths: &BTreeSet<String>,
+    languages: &[(&str, &str)],
+) -> Note {
     let listed = code
         .as_str()
         .and_then(|code| ERRORS.iter().find(|listed| **listed == code));
@@ -276,7 +293,7 @@ fn failure(root: &Path, code: &Value, directory: &Path, paths: &BTreeSet<String>
         ("engineErrors", errors),
         ("engineErrorsTruncated", more),
     ];
-    if let Ok(timeouts) = timeouts(root, &reports, paths) {
+    if let Ok(timeouts) = timeouts(root, &reports, paths, languages) {
         let (timeouts, more) = shown(timeouts);
         note.push(("fixpointTimeouts", timeouts));
         note.push(("fixpointTimeoutsTruncated", more));
@@ -285,16 +302,23 @@ fn failure(root: &Path, code: &Value, directory: &Path, paths: &BTreeSet<String>
 }
 
 /// What the line `data` of a scan that ended with `status` may say, with
-/// the scan's evidence in `directory` and the rule pack below `root`.
-fn judged(root: &Path, status: i32, data: &[u8], directory: &Path) -> Result<Note> {
+/// the scan's evidence in `directory`, the rule pack below `root` and the
+/// scan's `languages`.
+fn judged(
+    root: &Path,
+    status: i32,
+    data: &[u8],
+    directory: &Path,
+    languages: &[(&str, &str)],
+) -> Result<Note> {
     require(data.len() as u64 <= MAX_REPORT, INVALID.0)?;
     let raw = record::strict(data)?;
     let raw = raw.as_object().ok_or(INVALID)?;
-    let paths = inventory(directory);
+    let paths = inventory(directory, languages);
     if let Some(code) = raw.get("error") {
         let failed = raw.get("passed") == Some(&Value::Bool(false));
         require(raw.len() == 2 && failed && status == 1, INVALID.0)?;
-        return Ok(failure(root, code, directory, &paths));
+        return Ok(failure(root, code, directory, &paths, languages));
     }
     let counted = |name: &str| {
         let count = raw[name].as_u64();
@@ -309,7 +333,7 @@ fn judged(root: &Path, status: i32, data: &[u8], directory: &Path) -> Result<Not
             && counted("goldenAssertions"),
         INVALID.0,
     )?;
-    let entries = findings(root, raw, &paths)?;
+    let entries = findings(root, raw, &paths, languages)?;
     let passed = entries.is_empty();
     require(
         raw["passed"] == passed && status == i32::from(!passed),
@@ -325,12 +349,18 @@ fn judged(root: &Path, status: i32, data: &[u8], directory: &Path) -> Result<Not
     ])
 }
 
-/// What the gate records of a scan that ended with `status` and printed
-/// `data`: its verdict and its findings, or its failure and what the
-/// engine's reports in `directory` tell of it. A line or evidence in no
+/// What the gate records of a scan of `languages` that ended with `status`
+/// and printed `data`: its verdict and its findings, or its failure and what
+/// the engine's reports in `directory` tell of it. A line or evidence in no
 /// reviewed form, and a line that disagrees with the status, is an invalid
 /// result and never a pass.
-pub fn diagnosis(root: &Path, status: i32, data: &[u8], directory: &Path) -> Note {
+pub fn diagnosis(
+    root: &Path,
+    status: i32,
+    data: &[u8],
+    directory: &Path,
+    languages: &[(&str, &str)],
+) -> Note {
     let invalid = || vec![("passed", false.into()), ("error", INVALID.0.into())];
-    judged(root, status, data, directory).unwrap_or_else(|_| invalid())
+    judged(root, status, data, directory, languages).unwrap_or_else(|_| invalid())
 }

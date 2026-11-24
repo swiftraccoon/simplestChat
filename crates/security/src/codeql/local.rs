@@ -250,6 +250,10 @@ pub struct Host<'a> {
     pub private: &'a dyn Fn(),
     /// Told of each command a check of the run's own runs, before it runs.
     pub witness: &'a dyn Fn(&'static str, &[&OsStr], &Run<'_>),
+    /// The languages a first-party run covers when it names none: those the
+    /// checkout has sources of, which
+    /// [`STORED_LANGUAGES`](super::tools::STORED_LANGUAGES) lists.
+    pub first_party: &'a [&'a str],
 }
 
 #[cfg(test)]

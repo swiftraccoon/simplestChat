@@ -75,11 +75,9 @@ cargo run --locked -q -p simplestchat-security -- fast
 CI also uses `cargo run --locked -q -p xtask -- check`. It stops on the first failure and does not install
 dependencies, start the application, or create a database. You can run
 `--web`, `--rust`, `--python`, or `--helpers` separately while iterating.
-The Python group starts with `cargo run -q -p xtask -- python-lines`, which
-fails unless `xtask/python-allowance.txt` lists exactly the tracked `*.py` and
-`*.pyi` files outside `vendor/` with no file above its row and the total within
-its `total` line; a commit that removes Python runs it with `--update`, which only
-removes rows and lowers counts, and a renamed file's row is edited by hand.
+The Python group is `cargo run -q -p xtask -- python-lines`: the repository
+tracks no Python, `xtask/python-allowance.txt` records `total 0`, and any
+tracked `*.py` or `*.pyi` file outside `vendor/` fails the group.
 
 The separate [security gate](docs/security.md) installs checksum-pinned scanners
 and audits first-party source, workflow policy and dependency locks. Run the
@@ -91,7 +89,7 @@ explicit local opt-in. Keep full scanner evidence private.
 | --- | --- | --- |
 | Web | Type-aware lint, formatting, source-level tests, TypeScript, production build and asset-size budgets | Real-browser rendering, device permission behavior or media delivery |
 | Rust | Formatting, every first-party target/feature with Clippy, warning-free public/private Rustdoc | Database correctness, native runtime behavior or shutdown reliability |
-| Python | Pinned Ruff lint/format and strict basedpyright over maintained sources and stubs | Runtime behavior, deployment or database correctness |
+| Python | That no tracked `*.py` or `*.pyi` file exists outside `vendor/` | Anything about Ansible or the Python environment it runs in |
 | Helpers | Shell syntax, ShellCheck and helper/benchmark regression tests | Production deployment or an actual performance comparison |
 
 Run the additional checks relevant to the change, using the commands in

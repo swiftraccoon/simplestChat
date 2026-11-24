@@ -57,6 +57,20 @@ pub(crate) struct Run {
     pub id: RunId,
     pub attempt: Attempt,
 }
+impl Run {
+    /// An exact run and attempt an operation names itself. That they are a
+    /// successful CI run of the revision is the caller's separate proof.
+    pub fn named(id: u64, attempt: u64) -> Result<Self> {
+        if positive(id) && positive(attempt) {
+            Ok(Self {
+                id: RunId(id),
+                attempt: Attempt(attempt),
+            })
+        } else {
+            Err(refusal("ci_identity_mismatch"))
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Artifact {
     pub id: ArtifactId,

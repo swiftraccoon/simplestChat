@@ -1202,7 +1202,7 @@ async fn mdns_actual_interruption_stays_distinct_after_group_and_pipe_settlement
 }
 
 /// Every program, in declaration order; the declaration scan below pins it.
-const PROGRAMS: [Program; 41] = [
+const PROGRAMS: [Program; 44] = [
     Program::Git,
     Program::Docker,
     Program::Curl,
@@ -1227,6 +1227,9 @@ const PROGRAMS: [Program; 41] = [
     Program::OpsVpsGit,
     Program::OpsVpsSsh,
     Program::OpsVpsAnsible,
+    Program::OpsVpsGh,
+    Program::OpsVpsController,
+    Program::OpsVpsInstall,
     Program::FrontendGit,
     Program::FrontendGh,
     Program::FrontendInventory,
@@ -1284,7 +1287,12 @@ fn release_roles_partition_exactly_the_runner_selected_programs() {
             | Program::OpsKitShell
             | Program::OpsKitPerl
             | Program::OpsKitMake => (true, &[Hosted]),
-            Program::OpsVpsGit | Program::OpsVpsSsh | Program::OpsVpsAnsible => (true, &[Vps]),
+            Program::OpsVpsGit
+            | Program::OpsVpsSsh
+            | Program::OpsVpsAnsible
+            | Program::OpsVpsGh
+            | Program::OpsVpsController
+            | Program::OpsVpsInstall => (true, &[Vps]),
             Program::FrontendGit
             | Program::FrontendGh
             | Program::FrontendInventory
@@ -1306,7 +1314,7 @@ fn release_roles_partition_exactly_the_runner_selected_programs() {
         assert_eq!(super::selected(program), runner, "{program:?}");
         release += usize::from(!admitted.is_empty());
     }
-    assert_eq!(release, 19);
+    assert_eq!(release, 22);
     let bounded: Vec<(ReleaseRole, Program)> = ReleaseRole::ALL
         .into_iter()
         .flat_map(|role| PROGRAMS.map(|program| (role, program)))

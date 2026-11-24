@@ -226,8 +226,9 @@ obsolete run attempts and partial diagnostic runs cannot close an incident.
 The notifier reads run metadata only and publishes run links, outcomes and commit
 identities; scanner findings, artifacts and logs remain outside issue bodies.
 
-Automated CodeQL covers first-party Actions, JavaScript/TypeScript, Python and
-Rust with `vendor/` outside the configured source-analysis scope. It has no
+Automated CodeQL covers first-party Actions, JavaScript/TypeScript and Rust with
+`vendor/` outside the configured source-analysis scope; the repository tracks no
+Python, which the CodeQL Python extractor refuses to analyze. It has no
 native C/C++ job, including on scheduled and manually dispatched workflows.
 Rust can restore a complete evaluated database only when its exact source,
 tool/query, scope, build-environment and path identities match. Bundle integrity,
@@ -247,8 +248,9 @@ cargo run --locked -q -p simplestchat-security -- codeql local --revision "$(git
   --language javascript-typescript --output "$PWD/results/codeql-javascript"
 ```
 
-Use a fresh output directory. Omitting `--language` runs the four first-party
-languages; `--suite all` also runs advisory queries on the same extracted
+Use a fresh output directory. Omitting `--language` runs the three first-party
+languages the checkout has sources of (Actions, JavaScript/TypeScript and Rust);
+`--suite all` also runs advisory queries on the same extracted
 databases. Local health requires real rule coverage and complete reports. GitHub's stored-analysis
 ingestion check and OIDC signing remain hosted publication steps, not local
 security checks or locally fabricated receipts.
@@ -361,8 +363,9 @@ cargo run --locked -q -p simplestchat-security -- rulesets apply --revision FULL
 
 `plan` reports differences; `check` also exits nonzero on drift. `apply` updates
 only the named history ruleset and reads back its complete parameters. It requires
-a clean checkout at the exact remote main revision, successful main CI and all
-four current automated security CodeQL analyses. It rechecks the remote revision
+a clean checkout at the exact remote main revision, successful main CI and a
+current security CodeQL analysis of each language the CodeQL workflow stores
+(Actions, JavaScript/TypeScript and Rust). It rechecks the remote revision
 before writes and readback. Changed heads, warnings, missing query coverage and open
 first-party High/Critical alerts stop reconciliation. Historical vendor/native
 source findings are outside this automatic readiness requirement. Other

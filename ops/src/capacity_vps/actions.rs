@@ -2,7 +2,7 @@
 
 use super::{
     Failure, Result, files,
-    host::{CURRENT, Identity, LOCK, Session, Stage},
+    host::{CURRENT, Identity, Installed, LOCK, Session},
     protocol::{self, Action, Collect, Outcome, ResultData, Unit, Workload},
 };
 use serde_json::{Value, json};
@@ -56,7 +56,7 @@ impl Session<'_> {
             unit: protocol::BUILD_UNIT.into(),
         }))
     }
-    pub fn start(&mut self, workload: &Workload, stage: &Stage) -> Result<ResultData> {
+    pub fn start(&mut self, workload: &Workload, installed: &Installed) -> Result<ResultData> {
         let lock = self.lock()?;
         let directory = self.header.evidence_path();
         let body = (|| {
@@ -77,17 +77,6 @@ impl Session<'_> {
             self.fs.create(
                 &format!("{directory}/ops-identity.json"),
                 &bytes,
-                self.owner,
-            )?;
-            let metadata = stage.original_metadata(self.fs, self.owner)?;
-            self.fs.create(
-                &format!("{directory}/ops-release.json"),
-                &metadata[0],
-                self.owner,
-            )?;
-            self.fs.create(
-                &format!("{directory}/ops-selection.json"),
-                &metadata[1],
                 self.owner,
             )?;
             let unit = self.header.capacity_unit();
@@ -111,7 +100,7 @@ impl Session<'_> {
                 "--nonblock".into(),
                 "--no-fork".into(),
                 LOCK.into(),
-                stage.binary.clone(),
+                installed.binary.clone(),
                 "capacity-vps".into(),
                 "worker".into(),
                 "--run".into(),
@@ -127,7 +116,7 @@ impl Session<'_> {
                         .collect::<Vec<_>>()
                 }),
             )?;
-            stage.check(self.fs, self.owner)?;
+            installed.check(self.fs, self.owner)?;
             Ok(args)
         })();
         let unlocked = self.unlock(lock);
@@ -404,7 +393,7 @@ impl Session<'_> {
         &mut self,
         action: Action,
         workload: Option<&Workload>,
-        stage: &Stage,
+        installed: &Installed,
     ) -> Result<ResultData> {
         match action {
             Action::Lookup => self.lookup(),
@@ -417,7 +406,7 @@ impl Session<'_> {
                 Ok(ResultData::Preflight(value))
             }
             Action::Build => self.build(workload.ok_or(Failure::Request)?),
-            Action::Start => self.start(workload.ok_or(Failure::Request)?, stage),
+            Action::Start => self.start(workload.ok_or(Failure::Request)?, installed),
             Action::Collect => self.collect(workload.ok_or(Failure::Request)?),
             Action::Recover => self.recover(workload.ok_or(Failure::Request)?),
             _ => Err(Failure::Arguments),

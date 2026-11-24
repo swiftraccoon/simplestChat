@@ -62,7 +62,7 @@ fn codeql_advisory_runs_are_scheduled_or_manual_and_security_remains_reusable() 
     assert_eq!(keys(&codeql["jobs"]), [JOB].into());
     assert_eq!(
         codeql["jobs"][JOB]["strategy"]["matrix"]["language"],
-        json!(["actions", "javascript-typescript", "python", "rust"])
+        json!(["actions", "javascript-typescript", "rust"])
     );
     assert_eq!(
         codeql["concurrency"]["group"],
@@ -293,7 +293,7 @@ fn codeql_cache_publication_preserves_policy_failure_and_rejects_stale_markers()
     ] {
         assert!(condition.contains(text), "{text}");
     }
-    for (language, fresh) in [("rust", false), ("rust", true), ("python", false)] {
+    for (language, fresh) in [("rust", false), ("rust", true), ("actions", false)] {
         let directory = std::env::temp_dir().canonicalize().unwrap().join(format!(
             "codeql-step-{}-{}",
             std::process::id(),
@@ -375,7 +375,7 @@ fn local_codeql_runs_full_pinned_analysis_before_recording_success() {
         codeql["env"]["CODEQL_ACTION_DIFF_INFORMED_QUERIES"],
         "false"
     );
-    assert_eq!(codeql["jobs"][JOB]["strategy"]["max-parallel"], 4);
+    assert_eq!(codeql["jobs"][JOB]["strategy"]["max-parallel"], 3);
     assert_eq!(keys(&codeql["jobs"]), [JOB].into());
     let steps = steps(&codeql, JOB);
     let (ran, local) = located(steps, |step| script(step).contains(" codeql local "));

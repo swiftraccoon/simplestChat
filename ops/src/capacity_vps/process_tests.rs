@@ -74,7 +74,7 @@ fn inert_child_signal_mask() {
 #[test]
 fn real_posix_spawn_unblocks_child_signals_and_finishes_group_and_original_thread_mask() {
     let previous = mask();
-    let mut owner = Owner::new(now().unwrap(), super::super::protocol::Mode::Invoke).unwrap();
+    let mut owner = Owner::new(now().unwrap()).unwrap();
     let blocked = mask();
     assert!(blocked.contains(Signal::SIGINT));
     assert!(blocked.contains(Signal::SIGTERM));
@@ -150,7 +150,7 @@ fn real_posix_spawn_unblocks_child_signals_and_finishes_group_and_original_threa
 
 #[test]
 fn reported_parent_pipe_close_failure_after_real_spawn_still_finishes_all_peers_and_reaps() {
-    let mut owner = Owner::new(now().unwrap(), super::super::protocol::Mode::Invoke).unwrap();
+    let mut owner = Owner::new(now().unwrap()).unwrap();
     let (program, args, environment) = invocation();
     observe_spawn(true);
     let mut runner = Runner::new();
@@ -179,7 +179,7 @@ fn reported_parent_pipe_close_failure_after_real_spawn_still_finishes_all_peers_
 
 #[test]
 fn known_signed_reap_status_survives_a_later_reported_pipe_close_failure() {
-    let mut owner = Owner::new(now().unwrap(), super::super::protocol::Mode::Invoke).unwrap();
+    let mut owner = Owner::new(now().unwrap()).unwrap();
     let (program, args, mut environment) = invocation();
     environment.insert("SIMPLESTCHAT_OWNED_MASK_CHILD".into(), "exit7".into());
     observe_spawn(false);
@@ -221,7 +221,7 @@ fn known_signed_reap_status_survives_a_later_reported_pipe_close_failure() {
 
 #[test]
 fn real_pump_bound_failure_keeps_its_primary_and_the_actual_signed_reap_in_partial_capture() {
-    let mut owner = Owner::new(now().unwrap(), super::super::protocol::Mode::Invoke).unwrap();
+    let mut owner = Owner::new(now().unwrap()).unwrap();
     let (program, args, mut environment) = invocation();
     environment.insert("SIMPLESTCHAT_OWNED_MASK_CHILD".into(), "exit7".into());
     observe_spawn(false);

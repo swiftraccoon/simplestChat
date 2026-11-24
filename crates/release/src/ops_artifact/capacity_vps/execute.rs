@@ -3,7 +3,8 @@
 use super::super::{acquire, namespace::Budget};
 use super::{
     Result, archive, failure,
-    files::{Input, Output},
+    files::Output,
+    install,
     inventory::Inventory,
     keep,
     options::{self, Options},
@@ -16,8 +17,7 @@ use super::{
 };
 use simplestchat_ci::process::{Executor, Native};
 use simplestchat_ops::capacity_vps::protocol::{
-    Action, Members, Mode, Outcome, Pin, Response, ResultData, RetirementPhase, Source, Unit,
-    UnitState, Workload,
+    Action, Outcome, Pin, Response, ResultData, Source, Unit, UnitState, Workload,
 };
 use simplestchat_toolkit::{owned_process::Signals, tooling::Environment};
 use std::{
@@ -34,6 +34,7 @@ pub(super) struct State {
     pub run: String,
     pub caller: PathBuf,
     pub home: PathBuf,
+    pub controller: PathBuf,
     pub environment: Environment,
     pub budget: Budget,
     pub output: Option<Output>,
@@ -41,9 +42,9 @@ pub(super) struct State {
     pub inventory: Option<Arc<Inventory>>,
     pub tools: Option<Tools>,
     pub authenticated: Option<Arc<acquire::AuthenticatedAcquisition>>,
-    pub transfer: Option<Input>,
     pub selection: Option<Source>,
-    pub members: Option<Members>,
+    pub binary: Option<Pin>,
+    pub application: Option<Arc<install::Application>>,
     pub request: Vec<u8>,
     pub extracted: Option<archive::Extraction>,
     pub report: Report,
@@ -100,7 +101,7 @@ pub(super) async fn stage<T: Send + 'static, E: Executor>(
     )
     .await
 }
-fn originals(state: &State, checkpoint: &Checkpoint) -> Result<()> {
+pub(super) fn originals(state: &State, checkpoint: &Checkpoint) -> Result<()> {
     state
         .sources
         .as_ref()
@@ -119,8 +120,8 @@ fn originals(state: &State, checkpoint: &Checkpoint) -> Result<()> {
     if let Some(acquired) = &state.authenticated {
         acquired.check(&state.budget, &checkpoint.acquired())?;
     }
-    if let Some(transfer) = &state.transfer {
-        transfer.check(checkpoint)?;
+    if let Some(application) = &state.application {
+        application.check(&state.budget, checkpoint)?;
     }
     checkpoint.check()
 }
@@ -241,31 +242,16 @@ async fn acquire<E: Executor>(
         end,
         |state, checkpoint| {
             let acquired = state.authenticated.as_ref().unwrap().clone();
-            let (transfer, pins) = state
-                .output
-                .as_mut()
-                .unwrap()
-                .transfer(&acquired, checkpoint)?;
-            state.members = Some(Members {
-                manifest: Pin {
-                    sha256: pins.manifest().sha256().into(),
-                    bytes: pins.manifest().bytes(),
-                },
-                selection: Pin {
-                    sha256: pins.selection().sha256().into(),
-                    bytes: pins.selection().bytes(),
-                },
-                binary: Pin {
-                    sha256: pins.binary().sha256().into(),
-                    bytes: pins.binary().bytes(),
-                },
+            let executable = acquired.executable()?;
+            state.binary = Some(Pin {
+                sha256: executable.sha256,
+                bytes: executable.bytes,
             });
             state
                 .tools
                 .as_mut()
                 .ok_or_else(|| failure(1))?
-                .bind_artifact(acquired, transfer.original())?;
-            state.transfer = Some(transfer);
+                .bind_artifact(acquired)?;
             originals(state, checkpoint)
         },
         |_, _| Ok(()),
@@ -287,16 +273,8 @@ async fn observe<E: Executor>(
             }
             state.polls += 1;
         }
-        let response = transport::rpc(
-            state,
-            plan,
-            executor,
-            end,
-            Action::Status,
-            Mode::Invoke,
-            Some(unit),
-        )
-        .await?;
+        let response =
+            transport::rpc(state, plan, executor, end, Action::Status, Some(unit)).await?;
         let header = response.header.clone().ok_or_else(|| failure(1))?;
         let ResultData::Status(status) = bound_response(state, &response, Action::Status)?.result
         else {
@@ -375,7 +353,6 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
                 &state.environment,
                 sources.clone(),
                 inventory.clone(),
-                state.options.prepare,
                 &state.budget,
             )?);
             state.sources = Some(sources);
@@ -396,19 +373,18 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
     let end = plan.begin(Phase::Acquisition)?;
     acquire(state, plan, executor, end).await?;
     plan.complete(Phase::Acquisition, end)?;
-    let end = plan.begin(Phase::Stage)?;
     let mode = lock(state)?.options.mode;
     if mode == options::Mode::New {
-        let response = transport::rpc(
-            state,
-            plan,
-            executor,
-            end,
-            Action::Preflight,
-            Mode::Stage,
-            None,
-        )
-        .await?;
+        // The installer refuses while a worker holds the workload lock and
+        // after an unfinished journal, the states collection waits through
+        // and recovery resolves; those modes use the installed executable.
+        let end = plan.begin(Phase::Install)?;
+        install::run(state, plan, executor, end).await?;
+        plan.complete(Phase::Install, end)?;
+    }
+    let end = plan.begin(Phase::Contact)?;
+    if mode == options::Mode::New {
+        let response = transport::rpc(state, plan, executor, end, Action::Preflight, None).await?;
         let ResultData::Preflight(preflight) =
             bound_response(state, &response, Action::Preflight)?.result
         else {
@@ -418,28 +394,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
             return Err(failure(1));
         }
     } else {
-        let mut response = transport::rpc(
-            state,
-            plan,
-            executor,
-            end,
-            Action::Lookup,
-            Mode::Invoke,
-            None,
-        )
-        .await?;
-        if response.unavailable {
-            response = transport::rpc(
-                state,
-                plan,
-                executor,
-                end,
-                Action::Lookup,
-                Mode::Stage,
-                None,
-            )
-            .await?;
-        }
+        let response = transport::rpc(state, plan, executor, end, Action::Lookup, None).await?;
         let header = response.header.clone().ok_or_else(|| failure(1))?;
         let decoded = response.response(Action::Lookup)?;
         let ResultData::Lookup(saved) = &decoded.result else {
@@ -465,7 +420,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
         state.request = bytes.clone();
         state.report.adopt(bytes);
     }
-    plan.complete(Phase::Stage, end)?;
+    plan.complete(Phase::Contact, end)?;
     let end = plan.begin(Phase::Preflight)?;
     stage(
         state,
@@ -486,16 +441,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
     let build_images = lock(state)?.options.build;
     if build_images {
         let end = plan.begin(Phase::Build)?;
-        let response = transport::rpc(
-            state,
-            plan,
-            executor,
-            end,
-            Action::Build,
-            Mode::Invoke,
-            None,
-        )
-        .await?;
+        let response = transport::rpc(state, plan, executor, end, Action::Build, None).await?;
         let ResultData::Build(build) = bound_response(state, &response, Action::Build)?.result
         else {
             return Err(failure(1));
@@ -536,16 +482,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
             |_, _| Ok(()),
         )
         .await?;
-        let response = transport::rpc(
-            state,
-            plan,
-            executor,
-            end,
-            Action::Start,
-            Mode::Invoke,
-            None,
-        )
-        .await?;
+        let response = transport::rpc(state, plan, executor, end, Action::Start, None).await?;
         let header = response.header.as_ref().ok_or_else(|| failure(1))?;
         let ResultData::Start(start) = bound_response(state, &response, Action::Start)?.result
         else {
@@ -572,16 +509,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
     let mut recovered_clean = false;
     if mode == options::Mode::Recover {
         let end = plan.begin(Phase::Recover)?;
-        let response = transport::rpc(
-            state,
-            plan,
-            executor,
-            end,
-            Action::Recover,
-            Mode::Invoke,
-            None,
-        )
-        .await?;
+        let response = transport::rpc(state, plan, executor, end, Action::Recover, None).await?;
         let ResultData::Recover(recovery) =
             bound_response(state, &response, Action::Recover)?.result
         else {
@@ -602,16 +530,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
         plan.complete(Phase::Recover, end)?;
     }
     let end = plan.begin(Phase::Collect)?;
-    let response = transport::rpc(
-        state,
-        plan,
-        executor,
-        end,
-        Action::Collect,
-        Mode::Invoke,
-        None,
-    )
-    .await?;
+    let response = transport::rpc(state, plan, executor, end, Action::Collect, None).await?;
     let header = response.header.as_ref().ok_or_else(|| failure(1))?;
     let ResultData::Collect(collection) = bound_response(state, &response, Action::Collect)?.result
     else {
@@ -651,16 +570,7 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
     }
     plan.complete(Phase::Collect, end)?;
     let end = plan.begin(Phase::Archive)?;
-    let response = transport::rpc(
-        state,
-        plan,
-        executor,
-        end,
-        Action::Archive,
-        Mode::Invoke,
-        None,
-    )
-    .await?;
+    let response = transport::rpc(state, plan, executor, end, Action::Archive, None).await?;
     let archive_name = response.stdout;
     plan.complete(Phase::Archive, end)?;
     let end = plan.begin(Phase::Extract)?;
@@ -693,29 +603,22 @@ async fn body<E: Executor>(state: &Shared, plan: &Plan, executor: &mut E) -> Res
     )
     .await?;
     plan.complete(Phase::Extract, end)?;
-    let end = plan.begin(Phase::Retire)?;
-    let response = transport::rpc(
-        state,
-        plan,
-        executor,
-        end,
-        Action::Retire,
-        Mode::Invoke,
-        None,
-    )
-    .await?;
-    let ResultData::Retire(retirement) = bound_response(state, &response, Action::Retire)?.result
+    // The post-archive verdict: the host proves again that the run's unit is
+    // terminal with an empty cgroup and that no stray container remains.
+    let end = plan.begin(Phase::Conclude)?;
+    let response = transport::rpc(state, plan, executor, end, Action::Conclude, None).await?;
+    let ResultData::Conclude(conclusion) =
+        bound_response(state, &response, Action::Conclude)?.result
     else {
         return Err(failure(1));
     };
     if !clean_terminal
-        || !retirement.retired
-        || retirement.lifecycle != RetirementPhase::Terminal
-        || retirement.request_sha256 != super::super::sha(&lock(state)?.request)
+        || !conclusion.concluded
+        || conclusion.request_sha256 != super::super::sha(&lock(state)?.request)
     {
         return Err(failure(1));
     }
-    plan.complete(Phase::Retire, end)?;
+    plan.complete(Phase::Conclude, end)?;
     let end = plan.begin(Phase::Finalize)?;
     git_identity(state, plan, executor, end, false).await?;
     stage(
@@ -747,17 +650,7 @@ async fn cleanup<E: Executor>(
         plan,
         executor,
         end,
-        |state, checkpoint| {
-            let original = originals(state, checkpoint);
-            let transfer = state
-                .transfer
-                .take()
-                .map(|transfer| transfer.finish(checkpoint))
-                .transpose();
-            original?;
-            transfer?;
-            Ok(())
-        },
+        |state, checkpoint| originals(state, checkpoint),
         |_, _| Ok(()),
     )
     .await
@@ -767,6 +660,7 @@ pub(super) struct Inputs {
     pub options: Options,
     pub caller: PathBuf,
     pub home: PathBuf,
+    pub controller: PathBuf,
     pub environment: Environment,
     pub run: String,
     pub output: PathBuf,
@@ -797,6 +691,7 @@ pub(super) async fn transaction<E: Executor>(
         run: inputs.run,
         caller: inputs.caller,
         home: inputs.home,
+        controller: inputs.controller,
         environment: inputs.environment,
         budget: budget.clone(),
         output: Some(output),
@@ -804,9 +699,9 @@ pub(super) async fn transaction<E: Executor>(
         inventory: None,
         tools: None,
         authenticated: None,
-        transfer: None,
         selection: None,
-        members: None,
+        binary: None,
+        application: None,
         request,
         report,
         index: 0,
@@ -949,6 +844,7 @@ pub(super) async fn native(arguments: &[String]) -> Result<()> {
         return Err(failure(2));
     }
     let options = Options::decode(arguments, &caller, &home)?;
+    let controller = std::env::current_exe().map_err(|_| failure(1))?;
     let plan = Plan::new(clock, &options, start);
     let budget = Budget::default();
     let nonce = random(&budget)?;
@@ -972,6 +868,7 @@ pub(super) async fn native(arguments: &[String]) -> Result<()> {
             options,
             caller: caller.clone(),
             home,
+            controller,
             environment,
             run,
             output,
