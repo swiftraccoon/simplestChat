@@ -375,27 +375,46 @@ async fn actual_inert_selected_python_and_worker_receive_literal_argv_and_clean_
     use std::os::unix::fs::symlink;
     let mut fixture = Fixture::new();
     let capture = fixture.root.join("observed.jsonl");
-    let worker_script = "#!/usr/bin/python3\nimport sys\nassert sys.argv[1:]==['[dtls-close]']\nprint('quiet owned worker fixture')\n";
+    assert!(!capture.to_str().unwrap().contains('\''));
+    assert!(!DIAGNOSTIC.contains('\''));
     let interpreter = format!(
-        r#"#!/usr/bin/python3
-import json,os,sys
-from pathlib import Path
-args=sys.argv[1:]
-with Path({capture}).open('a') as stream:
-    stream.write(json.dumps({{'selected':sys.argv[0],'args':args,'python':os.environ['PYTHON'],
-      'cc':os.environ['CC'],'cxx':os.environ['CXX'],'path':os.environ['PYTHONPATH'],
-      'private':any(name in os.environ for name in ['PRIVATE_SENTINEL','PIP_EXTRA_INDEX_URL']),
-      'cargo':any(name.startswith('CARGO_') for name in os.environ)}})+'\n')
-assert args[:2]==['-m','pip'] or args[:2]==['-m','invoke']
-if args[1]=='invoke':
-    build=Path(os.environ['BUILD_DIR']+'-test');build.mkdir()
-    binary=build/'mediasoup-worker-test';binary.write_text({worker});binary.chmod(0o700)
-    print({diagnostic})
-else: print('owned wheel-plan fixture; no installer executed')
+        r#"#!/bin/sh
+{prelude}capture='{capture}'
+newline='
+'
+: >>"$capture"
+python=${{PYTHON?}} cc=${{CC?}} cxx=${{CXX?}} path=${{PYTHONPATH?}}
+if [ "${{PRIVATE_SENTINEL+set}}" = set ] || [ "${{PIP_EXTRA_INDEX_URL+set}}" = set ]; then
+  private=true
+else
+  private=false
+fi
+case "$newline$(/usr/bin/env)" in
+  *"$newline"CARGO_*) cargo=true ;;
+  *) cargo=false ;;
+esac
+event="{{\"selected\": $(json_string "$0"), \"args\": $(json_strings "$@")"
+event="$event, \"python\": $(json_string "$python"), \"cc\": $(json_string "$cc")"
+event="$event, \"cxx\": $(json_string "$cxx"), \"path\": $(json_string "$path")"
+printf '%s, "private": %s, "cargo": %s}}\n' "$event" "$private" "$cargo" >>"$capture"
+[ "$#" -ge 2 ] && [ "$1" = -m ] && {{ [ "$2" = pip ] || [ "$2" = invoke ]; }} || exit 1
+if [ "$2" = invoke ]; then
+  build=${{BUILD_DIR?}}-test
+  /bin/mkdir -- "$build" || exit 1
+  /bin/cat >"$build/mediasoup-worker-test" <<'WORKER'
+#!/bin/sh
+[ "$#" -eq 1 ] && [ "$1" = '[dtls-close]' ] || exit 1
+printf 'quiet owned worker fixture\n'
+WORKER
+  /bin/chmod 700 "$build/mediasoup-worker-test"
+  printf '%s\n' '{diagnostic}'
+else
+  printf 'owned wheel-plan fixture; no installer executed\n'
+fi
 "#,
-        capture = serde_json::to_string(capture.to_str().unwrap()).unwrap(),
-        worker = serde_json::to_string(worker_script).unwrap(),
-        diagnostic = serde_json::to_string(DIAGNOSTIC).unwrap()
+        prelude = crate::fake_shell::PRELUDE,
+        capture = capture.display(),
+        diagnostic = DIAGNOSTIC
     );
     fs::write(fixture.root.join("bin/python named"), interpreter).unwrap();
     let venv = fixture.context.cwd.join("venv");

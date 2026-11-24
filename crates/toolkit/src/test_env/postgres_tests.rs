@@ -10,39 +10,65 @@ impl Fixture {
     fn new(statuses: &[i32], fast: i32, immediate: i32, block: &str) -> Self {
         let directory =
             create_private_directory(&std::env::temp_dir(), "postgres-service.").unwrap();
+        assert!(!block.contains('\''));
+        let statuses = statuses.iter().map(i32::to_string).collect::<Vec<_>>();
         fs::write(
-            directory.join("config.json"),
-            serde_json::to_vec(
-                &json!({"statuses":statuses,"fast":fast,"immediate":immediate,"block":block}),
-            )
-            .unwrap(),
+            directory.join("config"),
+            format!(
+                "statuses='{}'\nfast={fast}\nimmediate={immediate}\nblock='{block}'\n",
+                statuses.join(" ")
+            ),
         )
         .unwrap();
-        let program = r#"#!/usr/bin/python3
-import json,signal,sys,time
-from pathlib import Path
-root=Path(__file__).parent
-config=json.loads((root/'config.json').read_text())
-args=sys.argv[1:];tool=Path(__file__).name
-with (root/'events').open('a') as events:events.write(json.dumps([tool,*args])+'\n')
-phase='start' if tool=='pg_ctl' and 'start' in args else ('stop' if tool=='pg_ctl' and 'stop' in args else tool)
-if phase==config['block']:
- def finish(*_):
-  (root/'term').write_text(phase);sys.exit(0)
- signal.signal(signal.SIGTERM,finish)
- pending=root/'ready.pending';pending.write_text(phase);pending.replace(root/'ready')
- while phase!='stop' or not (root/'release').exists():time.sleep(.01)
-if tool=='pg_ctl' and 'status' in args:
- counter=root/'counter'
- index=int(counter.read_text()) if counter.exists() else 0
- counter.write_text(str(index+1))
- sys.exit(config['statuses'][min(index,len(config['statuses'])-1)])
-if tool=='pg_ctl' and 'stop' in args:sys.exit(config['immediate'] if 'immediate' in args else config['fast'])
-sys.exit(0)
+        // `config` sets the answers: each `pg_ctl status` exits with the next
+        // of `statuses` (the last one repeats), `pg_ctl stop` with `fast` or,
+        // when asked for, `immediate`; the phase named `block` waits.
+        let program = r#"root=${0%/*}
+tool=${0##*/}
+. "$root/config"
+printf '%s\n' "$(json_strings "$tool" "$@")" >>"$root/events"
+member() {
+  member_word=$1
+  shift
+  for member_item in "$@"; do
+    if [ "$member_item" = "$member_word" ]; then return 0; fi
+  done
+  return 1
+}
+if [ "$tool" = pg_ctl ] && member start "$@"; then
+  phase=start
+elif [ "$tool" = pg_ctl ] && member stop "$@"; then
+  phase=stop
+else
+  phase=$tool
+fi
+if [ "$phase" = "$block" ]; then
+  trap 'printf "%s" "$phase" >"$root/term"; exit 0' TERM
+  printf '%s' "$phase" >"$root/ready.pending"
+  /bin/mv -f "$root/ready.pending" "$root/ready"
+  while [ "$phase" != stop ] || [ ! -e "$root/release" ]; do /bin/sleep 0.01; done
+fi
+if [ "$tool" = pg_ctl ] && member status "$@"; then
+  index=0
+  if [ -e "$root/counter" ]; then index=$(/bin/cat "$root/counter"); fi
+  printf '%s' "$((index + 1))" >"$root/counter"
+  position=0
+  for status in $statuses; do
+    if [ "$position" -eq "$index" ]; then break; fi
+    position=$((position + 1))
+  done
+  exit "$status"
+fi
+if [ "$tool" = pg_ctl ] && member stop "$@"; then
+  if member immediate "$@"; then exit "$immediate"; fi
+  exit "$fast"
+fi
+exit 0
 "#;
+        let program = format!("#!/bin/sh\n{}{program}", crate::fake_shell::PRELUDE);
         for tool in ["pg_ctl", "initdb", "createdb"] {
             let path = directory.join(tool);
-            fs::write(&path, program).unwrap();
+            fs::write(&path, &program).unwrap();
             fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
         }
         Self { directory }
@@ -239,8 +265,11 @@ async fn interruption_during_cleanup_waits_for_stop_and_cannot_publish_success()
 async fn captured_environments_stay_independent_and_child_pg_defaults_are_removed() {
     let first = Fixture::new(&[3], 0, 0, "");
     let second = Fixture::new(&[3], 0, 0, "");
-    let script = "import json,os;from pathlib import Path;Path('child.json').write_text(json.dumps(dict(os.environ)))";
-    let command = vec!["/usr/bin/python3".into(), "-c".into(), script.into()];
+    let command = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "exec /usr/bin/env >child.environment".into(),
+    ];
     let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut signals = Signals::injected(receiver);
     for (fixture, tag) in [(&first, "first"), (&second, "second")] {
@@ -265,9 +294,11 @@ async fn captured_environments_stay_independent_and_child_pg_defaults_are_remove
                 .unwrap(),
             0
         );
-        let report: Value =
-            serde_json::from_slice(&fs::read(fixture.directory.join("child.json")).unwrap())
-                .unwrap();
+        let printed = fs::read_to_string(fixture.directory.join("child.environment")).unwrap();
+        let report = printed
+            .lines()
+            .map(|line| line.split_once('=').unwrap())
+            .collect::<std::collections::BTreeMap<_, _>>();
         assert_eq!(report["KEPT"], tag);
         assert_eq!(
             report["DATABASE_URL"],
@@ -275,13 +306,7 @@ async fn captured_environments_stay_independent_and_child_pg_defaults_are_remove
         );
         assert_eq!(report["TEST_DATABASE_URL"], report["DATABASE_URL"]);
         assert_eq!(report["DISPOSABLE_TEST_DATABASE"], "1");
-        assert!(
-            !report
-                .as_object()
-                .unwrap()
-                .keys()
-                .any(|name| name.starts_with("PG"))
-        );
+        assert!(!report.keys().any(|name| name.starts_with("PG")));
     }
     let environment = Environment::from([(
         "RUNNER_TEMP".into(),

@@ -6,54 +6,107 @@ use policy::{Entry, REFERENCE, REPOSITORY};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const FAKE: &str = r#"
-import json, os, pathlib, subprocess, sys, time
-root = pathlib.Path(os.environ['RETENTION_FIXTURE'])
-calls = root / 'calls.jsonl'
-index = len(calls.read_text().splitlines()) if calls.exists() else 0
-args = sys.argv[1:]
-with calls.open('a') as stream:
-    stream.write(json.dumps({'args':args,'cwd':os.getcwd(),'env':{
-        key:os.environ.get(key) for key in ('GH_DEBUG','GH_HOST','GH_PAGER','GH_PROMPT_DISABLED')
-    }})+'\n')
-responses = json.loads((root / 'responses.json').read_text())
-assert index < len(responses), ('unexpected request', args)
-response = responses[index]
-assert args[:5] == ['api','--hostname','github.com','--method',response.get('method','GET')]
-assert args[5:9] == ['-H','Accept: application/vnd.github+json','-H','X-GitHub-Api-Version: 2022-11-28']
-assert args[9].startswith('repos/swiftraccoon/simplestChat/')
-if 'suffix' in response: assert args[9] == 'repos/swiftraccoon/simplestChat/'+response['suffix']
-if response.get('wait'):
-    child_program = '''import pathlib,signal,sys,time
-ready, stopped = map(pathlib.Path,sys.argv[1:])
-def stop(*_):
-    stopped.touch()
-    raise SystemExit(0)
-signal.signal(signal.SIGTERM,stop)
-signal.signal(signal.SIGINT,stop)
-ready.touch()
-while True: time.sleep(10)
-'''
-    child = subprocess.Popen([sys.executable,'-c',child_program,str(root/'ready'),str(root/'stopped')])
-    (root/'child.pid').write_text(str(child.pid))
-    if response.get('exitLeader'):
-        while not (root/'ready').exists(): time.sleep(.001)
-        sys.exit(0)
-    while True: time.sleep(10)
-if 'stdoutBytes' in response: sys.stdout.write('x'*response['stdoutBytes'])
-elif 'raw' in response: sys.stdout.write(response['raw'])
-else: print(json.dumps(response.get('body')))
-if 'stderrBytes' in response: sys.stderr.write('s'*response['stderrBytes'])
-if 'stderr' in response: sys.stderr.write(response['stderr'])
-sys.exit(response.get('status',0))
+/// The fake `gh`. Its `index`th call answers from `responses/<index>/`:
+/// `method` (the method it must be asked for), `suffix` (when present, the
+/// exact path after the repository), `wait` and `exitLeader` (when present,
+/// it starts an inert descendant instead of answering), and the `stdout`,
+/// `stderr` and `status` it answers with.
+const FAKE: &str = r#"PATH=/usr/bin:/bin
+root=${RETENTION_FIXTURE?}
+calls=$root/calls.jsonl
+index=0
+if [ -e "$calls" ]; then
+  while IFS= read -r call || [ -n "$call" ]; do index=$((index + 1)); done <"$calls"
+fi
+cwd=$(pwd -P)
+event="{\"args\": $(json_strings "$@"), \"cwd\": $(json_string "$cwd"), \"env\": {"
+event="$event\"GH_DEBUG\": $(json_value GH_DEBUG), \"GH_HOST\": $(json_value GH_HOST)"
+event="$event, \"GH_PAGER\": $(json_value GH_PAGER)"
+event="$event, \"GH_PROMPT_DISABLED\": $(json_value GH_PROMPT_DISABLED)}}"
+printf '%s\n' "$event" >>"$calls"
+response=$root/responses/$index
+[ -d "$response" ] || exit 1
+method=$(cat "$response/method") || exit 1
+[ "$#" -ge 5 ] && [ "$1" = api ] && [ "$2" = --hostname ] && [ "$3" = github.com ] &&
+  [ "$4" = --method ] && [ "$5" = "$method" ] || exit 1
+[ "$#" -ge 9 ] && [ "$6" = -H ] && [ "$7" = 'Accept: application/vnd.github+json' ] &&
+  [ "$8" = -H ] && [ "$9" = 'X-GitHub-Api-Version: 2022-11-28' ] || exit 1
+[ "$#" -ge 10 ] || exit 1
+case ${10} in repos/swiftraccoon/simplestChat/*) ;; *) exit 1 ;; esac
+if [ -e "$response/suffix" ]; then
+  suffix=$(cat "$response/suffix") || exit 1
+  [ "${10}" = "repos/swiftraccoon/simplestChat/$suffix" ] || exit 1
+fi
+if [ -e "$response/wait" ]; then
+  (
+    sleeper=
+    trap 'kill "$sleeper" 2>/dev/null; : >"$root/stopped"; exit 0' TERM INT
+    : >"$root/ready"
+    while :; do
+      sleep 10 >/dev/null 2>&1 &
+      sleeper=$!
+      wait "$sleeper"
+    done
+  ) &
+  printf '%s' "$!" >"$root/child.pid"
+  if [ -e "$response/exitLeader" ]; then
+    while [ ! -e "$root/ready" ]; do sleep 0.001; done
+    exit 0
+  fi
+  while :; do sleep 0.01; done
+fi
+cat -- "$response/stdout"
+cat -- "$response/stderr" >&2
+exit "$(cat "$response/status")"
 "#;
+
+/// Write each scripted answer the way the fake `gh` reads it.
+fn answers(root: &Path, responses: &[Value]) {
+    for (index, response) in responses.iter().enumerate() {
+        let directory = root.join("responses").join(index.to_string());
+        fs::create_dir_all(&directory).unwrap();
+        let method = response
+            .get("method")
+            .map_or("GET", |value| value.as_str().unwrap());
+        fs::write(directory.join("method"), method).unwrap();
+        if let Some(suffix) = response.get("suffix") {
+            fs::write(directory.join("suffix"), suffix.as_str().unwrap()).unwrap();
+        }
+        for flag in ["wait", "exitLeader"] {
+            if response.get(flag).is_some_and(|value| value == true) {
+                fs::write(directory.join(flag), b"").unwrap();
+            }
+        }
+        let stdout = if let Some(count) = response.get("stdoutBytes") {
+            "x".repeat(usize::try_from(count.as_u64().unwrap()).unwrap())
+        } else if let Some(raw) = response.get("raw") {
+            raw.as_str().unwrap().to_owned()
+        } else {
+            let body = response.get("body").cloned().unwrap_or(Value::Null);
+            format!("{}\n", crate::fake_shell::spaced_json(&body))
+        };
+        fs::write(directory.join("stdout"), stdout).unwrap();
+        let mut stderr = String::new();
+        if let Some(count) = response.get("stderrBytes") {
+            stderr.push_str(&"s".repeat(usize::try_from(count.as_u64().unwrap()).unwrap()));
+        }
+        if let Some(text) = response.get("stderr") {
+            stderr.push_str(text.as_str().unwrap());
+        }
+        fs::write(directory.join("stderr"), stderr).unwrap();
+        let status = response
+            .get("status")
+            .map_or(0, |value| value.as_u64().unwrap());
+        fs::write(directory.join("status"), status.to_string()).unwrap();
+    }
+}
 
 struct Fixture {
     root: PathBuf,
@@ -71,30 +124,14 @@ impl Fixture {
         let root = fs::canonicalize(root).unwrap();
         let bin = root.join("fake commands");
         fs::create_dir(&bin).unwrap();
-        let python = Command::new("python3")
-            .args(["-c", "import sys; print(sys.executable)"])
-            .output()
-            .expect("Python is the maintained reference interpreter");
-        assert!(python.status.success());
-        let python = String::from_utf8(python.stdout).unwrap().trim().to_owned();
-        let script = root.join("fake gh.py");
-        fs::write(&script, FAKE).unwrap();
         let gh = bin.join("gh");
         fs::write(
             &gh,
-            format!(
-                "#!/bin/sh\nexec {} {} \"$@\"\n",
-                quote(&python),
-                quote(script.to_str().unwrap())
-            ),
+            format!("#!/bin/sh\n{}{FAKE}", crate::fake_shell::PRELUDE),
         )
         .unwrap();
         fs::set_permissions(&gh, fs::Permissions::from_mode(0o755)).unwrap();
-        fs::write(
-            root.join("responses.json"),
-            serde_json::to_vec(&responses).unwrap(),
-        )
-        .unwrap();
+        answers(&root, &responses);
         let environment = [
             ("PATH", bin.as_os_str().to_owned()),
             ("RETENTION_FIXTURE", root.as_os_str().to_owned()),
@@ -102,7 +139,6 @@ impl Fixture {
             ("GH_HOST", "wrong.invalid".into()),
             ("GH_PAGER", "wrong".into()),
             ("GH_PROMPT_DISABLED", "0".into()),
-            ("PYTHONDONTWRITEBYTECODE", "1".into()),
         ]
         .into_iter()
         .map(|(name, value)| (name.into(), value))
@@ -148,9 +184,6 @@ impl Drop for Fixture {
 /// The answers the retired Python helper gave for these tests' inputs.
 fn recorded() -> Value {
     serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
-}
-fn quote(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "'\\''"))
 }
 fn now() -> DateTime<Utc> {
     "2026-10-05T00:00:00Z".parse().unwrap()

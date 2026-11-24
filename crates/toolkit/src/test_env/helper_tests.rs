@@ -18,11 +18,14 @@ impl Fixture {
             .unwrap(),
         )
     }
+    /// `sh -c` running `script` after the shell prelude, with the owned
+    /// directory as `$1`.
     fn command(&self, script: &str) -> Command {
-        let mut command = Command::new("/usr/bin/python3");
+        let mut command = Command::new("/bin/sh");
         command
             .arg("-c")
-            .arg(script)
+            .arg(format!("{}{script}", crate::fake_shell::PRELUDE))
+            .arg("sh")
             .arg(&self.0)
             .stderr(Stdio::null());
         command
@@ -48,7 +51,7 @@ async fn ready(path: &Path) {
 async fn captures_bounded_output_and_preserves_nonzero_exit() {
     let fixture = Fixture::new();
     let output = run(
-        fixture.command("import sys;print('fixed');sys.exit(23)"),
+        fixture.command("printf 'fixed\\n'\nexit 23"),
         Duration::from_secs(5),
         Some(64),
         None,
@@ -58,7 +61,7 @@ async fn captures_bounded_output_and_preserves_nonzero_exit() {
     assert_eq!(output.status, 23);
     assert_eq!(output.stdout, b"fixed\n");
     let error = run(
-        fixture.command("print('x'*65)"),
+        fixture.command("repeat x 65\nprintf '\\n'"),
         Duration::from_secs(5),
         Some(64),
         None,
@@ -76,21 +79,20 @@ async fn startup_interruption_retires_helper_descendants_and_preserves_status() 
     let mut signals = Signals::injected(receiver);
     let command = fixture.command(
         r#"
-import os,signal,sys,time
-from pathlib import Path
-root=Path(sys.argv[1])
-def record(name,value):
- p=root/(name+'.pending');p.write_text(str(value));p.replace(root/name)
-child=os.fork()
-if child==0:
- signal.signal(signal.SIGTERM,signal.SIG_IGN)
- record('worker',os.getpid())
- while True:time.sleep(.01)
-def finish(*_): record('term','observed');sys.exit(0)
-signal.signal(signal.SIGTERM,finish)
-while not (root/'worker').exists():time.sleep(.01)
-record('ready',os.getpid())
-while True:time.sleep(.01)
+root=$1
+record() {
+  printf '%s' "$2" >"$root/$1.pending"
+  /bin/mv -f "$root/$1.pending" "$root/$1"
+}
+(
+  trap '' TERM
+  record worker "$(exec /bin/sh -c 'printf %s "$PPID"')"
+  while :; do /bin/sleep 0.01; done
+) &
+trap 'record term observed; exit 0' TERM
+while [ ! -e "$root/worker" ]; do /bin/sleep 0.01; done
+record ready "$$"
+while :; do /bin/sleep 0.01; done
 "#,
     );
     let interrupt = async {
@@ -138,7 +140,7 @@ async fn prior_cancellation_does_not_acquire_a_helper() {
     sender.send(130).unwrap();
     let mut signals = Signals::injected(receiver);
     let result = run(
-        fixture.command("import sys;from pathlib import Path;Path(sys.argv[1],'started').touch()"),
+        fixture.command(": >\"$1/started\""),
         Duration::from_secs(5),
         None,
         Some(&mut signals),
@@ -168,16 +170,16 @@ async fn zero_exited_leader_retires_stdout_holding_worker_before_final_read() {
     let fixture = Fixture::new();
     let command = fixture.command(
         r#"
-import os,signal,sys,time
-from pathlib import Path
-root=Path(sys.argv[1])
-if os.fork()==0:
- signal.signal(signal.SIGTERM,signal.SIG_IGN)
- pending=root/'worker.pending';pending.write_text(str(os.getpid()));pending.replace(root/'worker')
- while True:time.sleep(.01)
-while not (root/'worker').exists():time.sleep(.01)
-print('closed',flush=True)
-sys.exit(0)
+root=$1
+(
+  trap '' TERM
+  printf '%s' "$(exec /bin/sh -c 'printf %s "$PPID"')" >"$root/worker.pending"
+  /bin/mv -f "$root/worker.pending" "$root/worker"
+  while :; do /bin/sleep 0.01; done
+) &
+while [ ! -e "$root/worker" ]; do /bin/sleep 0.01; done
+printf 'closed\n'
+exit 0
 "#,
     );
     let output = run(command, Duration::from_secs(5), Some(64), None)
@@ -193,9 +195,9 @@ async fn signal_overflow_and_timeout_close_the_inline_pipe_before_error_return()
     for expected in [1, 124, 130, 143] {
         let fixture = Fixture::new();
         let script = if expected == 1 {
-            "print('x'*1024)"
+            "repeat x 1024\nprintf '\\n'"
         } else {
-            "import time;from pathlib import Path;Path(__import__('sys').argv[1],'ready').touch();time.sleep(30)"
+            ": >\"$1/ready\"\n/bin/sleep 30"
         };
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut signals = Signals::injected(receiver);
@@ -242,7 +244,7 @@ async fn capture_close_failure_refuses_zero_and_does_not_replace_known_command_f
     let fixture = Fixture::new();
     for status in [0, 42] {
         let result = run_owned(
-            fixture.command(&format!("import sys;print('fixed');sys.exit({status})")),
+            fixture.command(&format!("printf 'fixed\\n'\nexit {status}")),
             Duration::from_secs(5),
             Some(64),
             None,

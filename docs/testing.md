@@ -110,8 +110,8 @@ This exercises the distributed capacity runtime profile early; the workspace
 suite also checks the combined feature profile. Both jobs select CPython 3.14.8
 before fingerprinting: the automation job builds the Ansible controller
 environment on it, and the workspace job installs Ansible into it for the
-playbook pins and runs the native build (the OpenSSL and AWS-LC installers and
-the vendored worker build's pip) and the tests' fake-tool fixtures on it. The Ops suite itself starts no interpreter: its comparisons with
+playbook pins and runs the vendored worker build's pip on it. The tests' fake
+commands are POSIX `sh` scripts. The Ops suite itself starts no interpreter: its comparisons with
 the retired Python helpers replay answers recorded beside the tests
 (`recorded_*.json` under `ops/src`).
 Ignored subprocess workers do their work only when their owning tests launch
@@ -434,6 +434,23 @@ in Rust, so the allowance of zero refuses any new tracked Python file.
 `cargo run -q -p xtask -- python-lines --update` only removes rows and lowers
 counts: it refuses, changing nothing, while any file is unlisted or grew or the
 total would rise.
+
+The ratchet counts files; the `automation::pins::python_programs` test of
+`simplestchat-ci` refuses a Python program of the repository in any other form
+in every tracked file outside `vendor/`: a `#!` line naming Python (including
+the fake commands tests write), an interpreter given its program with `-c` or
+`-`, a heredoc fed to an interpreter or delimited `PY…`, and a quoted
+interpreter name or path where a `Command` or child-process call starts it.
+Its allowlist names each file that may match, the form, the exact number of
+matching lines and the reason: Ansible's interpreter setting and controller
+environment, the security gate's scanner environment, the vendored worker
+build's interpreter, tests that name Python only to refuse it, JSON recordings
+(which must parse as JSON and not be executable) and frozen reference scripts
+(whose SHA-256 is pinned). Any other match, or an entry that no longer matches
+exactly, fails the test. Fake commands are POSIX `sh` scripts that run under
+dash and macOS `sh`; the functions they share for their records are
+`simplestchat_toolkit::fake_shell`, built for the toolkit's tests and its
+`test-hooks` feature.
 
 ShellCheck, `jq`, and the Ansible dependencies are required for the offline
 tests; the optional Compose checks need the provisioned Compose release,
@@ -1991,7 +2008,7 @@ digest-pinned native BuildKit image with only its bundled AMD64 QEMU removed,
 so build commands use the kernel's Rosetta registration. The container driver and
 exported layer cache remain in use, with a fresh journaled builder name for each
 invocation; no pre-existing fixed-name builder is deleted. Authenticated OpenSSL
-extraction uses Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
+extraction uses the builder's `tar`; its run under Rosetta is unverified. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
 The default signed deployment requires the hosted AMD64 workflow. An explicit
 owner-requested [`--force` deployment](../ops/ansible/RELEASES.md) is a separate,
@@ -2355,7 +2372,7 @@ The image-database compiler bootstrap now also runs on hosted CI, at the same
 reviewed action location and immutable Rust pin. Its 25-minute job and the
 20-minute preparation / 25-minute production scan steps retain their guards and
 budgets, including cold compilation. Hosted cold-start cost is unmeasured.
-Owned fake selectors and pure Python-oracle fixtures verify output/fallback
+Owned fake `sh` selectors and pure plan fixtures verify output/fallback
 policy without registry, updater, scanner or engine work; they do not establish
 online freshness, cache integrity or Linux runtime parity.
 

@@ -14,40 +14,60 @@ use std::{
 const ORIGINAL: &[u8] = include_bytes!("reference-build.sh");
 const SOURCE: &str = "d835ec261c15d926a32328bd7d7fcb0ec49257e0";
 const WORKFLOW: &str = "0ffc53e450724e8e3d3ea7240530a9bcf32dc5d5a9a4624d159dc2ece2b7b921";
-const RECORDER: &str = r#"#!/usr/bin/python3
-import json,os,sys
-from pathlib import Path
-role=Path(sys.argv[0]).name
-args=sys.argv[1:]
-temp=Path(os.environ['RUNNER_TEMP'])
-phase=role
-if role=='docker':
- if args[:3]==['buildx','rm','--force']:
-  phase='initial-rm' if not (temp/'builder-created').exists() else 'final-rm'
- elif args[:2]==['buildx','create']: phase='create'
- elif args[:2]==['buildx','build']: phase='build'
- elif args[0]=='save': phase='save'
- elif args[:2]==['image','inspect']: phase='inspect'
- else: raise AssertionError('unexpected fake Docker request')
-event={'role':role,'phase':phase,'args':args,'cwd':os.getcwd()}
-fd=os.open(os.environ['ORACLE_RECORD'],os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
-os.write(fd,(json.dumps(event)+'\n').encode());os.close(fd)
-if phase=='initial-rm': sys.exit(9)
-if os.environ['ORACLE_FAILURE']==phase: sys.exit(int(os.environ['ORACLE_STATUS']))
-if role=='git': print(os.environ['GITHUB_SHA'] if os.environ['ORACLE_FAILURE']!='head' else 'b'*40)
-elif phase=='create': (temp/'builder-created').write_bytes(b'inert')
-elif role=='timeout':
- assert args[:3]==['--signal=TERM','--kill-after=2m','40m']
- os.execv(str(Path(os.environ['PATH'])/'docker'),args[3:])
-elif role=='mkdir':
- assert args==['-p',str(temp/'loadtest-image')]
- (temp/'loadtest-image').mkdir()
-elif phase=='save': sys.stdout.buffer.write(b'inert saved tar bytes')
-elif role=='zstd':
- assert args[:3]==['-T0','-3','-o']
- Path(args[3]).write_bytes(b'inert compressed '+sys.stdin.buffer.read())
-elif phase=='inspect': print('sha256:'+'c'*64)
-elif role=='ls': assert args==['-la',str(temp/'loadtest-image')]
+/// Every role's recorder: one event line per call, written with one append
+/// so that the two ends of the `docker save | zstd` pipeline cannot
+/// interleave their lines.
+const RECORDER: &str = r#"
+role=${0##*/}
+temp=${RUNNER_TEMP?}
+phase=$role
+if [ "$role" = docker ]; then
+  if [ "$#" -ge 3 ] && [ "$1" = buildx ] && [ "$2" = rm ] && [ "$3" = --force ]; then
+    if [ -e "$temp/builder-created" ]; then phase=final-rm; else phase=initial-rm; fi
+  elif [ "$#" -ge 2 ] && [ "$1" = buildx ] && [ "$2" = create ]; then
+    phase=create
+  elif [ "$#" -ge 2 ] && [ "$1" = buildx ] && [ "$2" = build ]; then
+    phase=build
+  elif [ "$#" -ge 1 ] && [ "$1" = save ]; then
+    phase=save
+  elif [ "$#" -ge 2 ] && [ "$1" = image ] && [ "$2" = inspect ]; then
+    phase=inspect
+  else
+    exit 1
+  fi
+fi
+cwd=$(pwd -P)
+event="{\"role\": $(json_string "$role"), \"phase\": $(json_string "$phase")"
+event="$event, \"args\": $(json_strings "$@"), \"cwd\": $(json_string "$cwd")}"
+(umask 077 && printf '%s\n' "$event" >>"${ORACLE_RECORD?}") || exit 1
+if [ "$phase" = initial-rm ]; then exit 9; fi
+if [ "${ORACLE_FAILURE?}" = "$phase" ]; then exit "${ORACLE_STATUS?}"; fi
+if [ "$role" = git ]; then
+  if [ "$ORACLE_FAILURE" != head ]; then
+    printf '%s\n' "${GITHUB_SHA?}"
+  else
+    printf '%s\n' "$(repeat b 40)"
+  fi
+elif [ "$phase" = create ]; then
+  printf inert >"$temp/builder-created"
+elif [ "$role" = timeout ]; then
+  [ "$#" -ge 4 ] && [ "$1" = --signal=TERM ] && [ "$2" = --kill-after=2m ] && [ "$3" = 40m ] ||
+    exit 1
+  shift 4
+  exec "$PATH/docker" "$@"
+elif [ "$role" = mkdir ]; then
+  [ "$#" -eq 2 ] && [ "$1" = -p ] && [ "$2" = "$temp/loadtest-image" ] || exit 1
+  /bin/mkdir -- "$temp/loadtest-image" || exit 1
+elif [ "$phase" = save ]; then
+  printf 'inert saved tar bytes'
+elif [ "$role" = zstd ]; then
+  [ "$#" -ge 4 ] && [ "$1" = -T0 ] && [ "$2" = -3 ] && [ "$3" = -o ] || exit 1
+  { printf 'inert compressed '; /bin/cat; } >"$4" || exit 1
+elif [ "$phase" = inspect ]; then
+  printf 'sha256:%s\n' "$(repeat c 64)"
+elif [ "$role" = ls ]; then
+  [ "$#" -eq 2 ] && [ "$1" = -la ] && [ "$2" = "$temp/loadtest-image" ] || exit 1
+fi
 "#;
 fn bash() -> PathBuf {
     std::env::var_os("PATH")
@@ -80,9 +100,10 @@ async fn reference(
     );
     let selected_bash = bash();
     let fixture = Fixture::new();
+    let recorder = format!("#!/bin/sh\n{}{RECORDER}", crate::fake_shell::PRELUDE);
     for role in ["git", "docker", "timeout", "mkdir", "zstd", "ls"] {
         let path = fixture.root.join("bin").join(role);
-        fs::write(&path, RECORDER).unwrap();
+        fs::write(&path, &recorder).unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
     }
     if cache {

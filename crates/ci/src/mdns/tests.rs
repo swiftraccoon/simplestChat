@@ -706,11 +706,11 @@ async fn captured_caller_directory_keeps_relative_paths_and_native_path_search()
     fs::write(
         &tool,
         concat!(
-            "#!/usr/bin/python3\nimport os,subprocess\n",
-            "assert os.environ['PATH']=='relative-tools'\n",
-            "assert os.getcwd().endswith('/caller')\n",
-            "subprocess.run(['owned-peer'],check=True)\n",
-            "os.write(1,b'caller-and-relative-path')\n"
+            "#!/bin/sh\n",
+            "[ \"$PATH\" = relative-tools ] || exit 1\n",
+            "case $(pwd -P) in */caller) ;; *) exit 1 ;; esac\n",
+            "owned-peer || exit 1\n",
+            "printf caller-and-relative-path\n"
         ),
     )
     .unwrap();

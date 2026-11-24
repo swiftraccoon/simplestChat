@@ -99,6 +99,67 @@ pub(super) fn executable(path: &std::path::Path, contents: &[u8]) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
 }
 
+/// A `#!/bin/sh` fake tool at `path` running `body` after shell functions for
+/// its records: `json_string VALUE` prints VALUE as a JSON string (the quote,
+/// the backslash and control characters escaped), `json_strings VALUE…` a
+/// JSON array of strings separated by `", "`, and `value FLAG ARGUMENT…` the
+/// argument after the first FLAG, failing when there is none.
+pub(super) fn shell(path: &std::path::Path, body: &str) {
+    const RECORDS: &str = r#"json_string() {
+  json_rest=$1 json_out=
+  while [ -n "$json_rest" ]; do
+    json_tail=${json_rest#?}
+    json_char=${json_rest%"$json_tail"}
+    json_rest=$json_tail
+    case $json_char in
+      '"' | '\') json_out="$json_out\\$json_char" ;;
+      [[:cntrl:]]) json_out="$json_out$(printf '\\u%04x' "'$json_char")" ;;
+      *) json_out="$json_out$json_char" ;;
+    esac
+  done
+  printf '"%s"' "$json_out"
+}
+json_strings() {
+  printf '['
+  json_separator=
+  for json_item in "$@"; do
+    printf '%s' "$json_separator"
+    json_string "$json_item"
+    json_separator=', '
+  done
+  printf ']'
+}
+value() {
+  value_flag=$1
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "$value_flag" ]; then
+      [ "$#" -ge 2 ] || return 1
+      printf '%s' "$2"
+      return 0
+    fi
+    shift
+  done
+  return 1
+}
+"#;
+    executable(path, format!("#!/bin/sh\n{RECORDS}{body}\n").as_bytes());
+}
+
+/// The environment a fake saved with `env`: one `NAME=value` per line.
+pub(super) fn saved_environment(
+    path: &std::path::Path,
+) -> std::collections::BTreeMap<String, String> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let (name, value) = line.split_once('=').unwrap();
+            (name.to_owned(), value.to_owned())
+        })
+        .collect()
+}
+
 impl Fixture {
     pub fn new(fault: Fault, generator_status: i32) -> (Self, Plan) {
         let root =

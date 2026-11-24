@@ -10,126 +10,269 @@ use std::time::Duration;
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const BASE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+/// Every fake tool, run as `sh DISPATCH TOOL ARGUMENT…`. Each call appends one
+/// event to the log; `CI_FIXTURE_*` variables select the answers. The fake
+/// `podman machine ssh` runs the guest script's capability probe, the lines
+/// before its first `test -x /mnt/rosetta`, with the fake `od` of
+/// `CI_FIXTURE_GUEST_TOOLS`.
 const DISPATCH: &str = r#"
-import json, os, pathlib, sys
-tool, *args = sys.argv[1:]
-env = os.environ
-log = pathlib.Path(env['CI_FIXTURE_LOG'])
-seen = pathlib.Path(str(log) + '.act-seen')
-with log.open('a') as stream:
-    stream.write(json.dumps({'tool': tool, 'args': args, 'dockerHost': env.get('DOCKER_HOST', ''),
-        'cwd': os.getcwd()}) + '\n')
-def enabled(name): return bool(env.get('CI_FIXTURE_' + name))
-phase = tool
-if tool == 'git': phase += '-' + args[0]
-elif tool == 'podman': phase += '-' + args[1]
-elif tool == 'curl':
-    phase += '-ping' if args[-1].endswith('/_ping') else '-networks' if args[-1].endswith('/networks') else '-containers'
-if env.get('CI_FIXTURE_FAIL') == phase: sys.exit(int(env.get('CI_FIXTURE_FAIL_CODE', '43')))
-if tool == 'git':
-    if args[0] == 'status':
-        if enabled('DIRTY') or enabled('DIRTY_AFTER') and seen.exists(): print(' M source.js')
-    elif args[0] == 'merge-base':
-        if args[1] == '--is-ancestor': sys.exit(1 if enabled('NONANCESTOR') else 0)
-        print('a'*40 if enabled('DEFAULT_HEAD_BASE') else 'b'*40)
-    elif args[0] == 'rev-parse':
-        if args[-1] == 'HEAD': print(('c' if enabled('CHANGED') and seen.exists() else 'a')*40)
-        elif enabled('INVALID_BASE'): sys.exit(128)
-        else: print(('a' if enabled('SAME_BASE') else 'b')*40)
-    else: sys.exit(93)
-elif tool == 'go':
-    assert args == ['env', 'GOVERSION', 'GOOS', 'GOARCH']
-    print('go1.27.1\ndarwin\narm64')
-elif tool == 'uname': print(env.get('CI_FIXTURE_ARCH', 'arm64') if args == ['-m'] else env.get('CI_FIXTURE_OS', 'Darwin'))
-elif tool == 'curl':
-    if enabled('ENGINE_DOWN'): sys.exit(7)
-    if args[-1].endswith('/_ping'): print('OK')
-    elif args[-1].endswith('/networks'):
-        print(env.get('CI_FIXTURE_NETWORKS', '[{"Name":"bridge","IPAM":{"Config":[{"Gateway":"10.88.0.1"}]}}]'))
-    elif enabled('BUSY') or enabled('BUSY_AFTER') and seen.exists(): print('[{"Id":"existing"}]')
-    else: print(env.get('CI_FIXTURE_CONTAINERS', '[]'))
-elif tool == 'podman':
-    assert args[0] == 'machine'
-    if args[1] == 'inspect':
-        if '--format' not in args:
-            if enabled('NEW_VM'): sys.exit(1)
-        elif '{{.State}}' in args: print('stopped' if enabled('STOPPED') else 'running')
-        else: print('/owned-ci/socket')
-    elif args[1] == 'list': print('other-project true' if enabled('OTHER_VM') else 'simplestchat-ci false')
-    elif args[1] in ('init', 'start', 'stop'): pass
-    elif args[1] == 'ssh':
-        import ctypes
-        from types import SimpleNamespace
-        from unittest.mock import patch
-        script = sys.stdin.read()
-        pathlib.Path(str(log) + '.guest').write_text(script)
-        probe = script.split("<<'PY_CAPABILITIES'\n",1)[1].split('\nPY_CAPABILITIES',1)[0]
-        class Auxv:
-            def __call__(self, key):
-                assert key in (16,26)
-                return int(env.get('CI_FIXTURE_HWCAP' if key == 16 else 'CI_FIXTURE_HWCAP2', '0'), 0)
-        try:
-            with patch.object(ctypes, 'CDLL', return_value=SimpleNamespace(getauxval=Auxv())):
-                exec(compile(probe, 'owned-guest-capabilities', 'exec'), {})
-        except SystemExit as failure:
-            pathlib.Path(str(log) + '.guest-error').write_text(str(failure))
-            sys.exit(1)
-        if enabled('EMULATOR_FAIL'): sys.exit(69)
-        pathlib.Path(str(log) + '.emulator-selected').touch()
-    else: sys.exit(94)
-elif tool == 'act':
-    import hashlib, subprocess, time
-    seen.touch()
-    print('fixture workflow stdout', flush=True)
-    print('fixture workflow stderr', file=sys.stderr, flush=True)
-    event_path = pathlib.Path(args[args.index('--eventpath') + 1])
-    output = event_path.parent
-    if enabled('ACT_WAIT'):
-        # An inert descendant proves cancellation reaches the owned group.
-        program = '''import pathlib,signal,sys,time
-ready, stopped = map(pathlib.Path, sys.argv[1:])
-def stop(*_):
-    stopped.touch()
-    raise SystemExit(0)
-signal.signal(signal.SIGINT, stop)
-signal.signal(signal.SIGTERM, stop)
-ready.touch()
-while True: time.sleep(10)
-'''
-        child = subprocess.Popen([sys.executable, '-c', program, str(log)+'.child-ready', str(log)+'.child-stopped'])
-        pathlib.Path(str(log)+'.child-pid').write_text(str(child.pid))
-        while True: time.sleep(10)
-    if not enabled('NO_RECEIPT'):
-        event = json.loads(event_path.read_text())
-        identity = {'runId': next(arg.split('=',1)[1] for arg in args if arg.startswith('LOCAL_CI_RUN_ID=')),
-            'revision': event['after'], 'base': event['before']}
-        if enabled('STALE_RECEIPT'): identity['runId'] = 'f'*32
-        evidence = output / 'checks'
-        (evidence / 'receipts').mkdir()
-        check = 'browser-fixture'
-        receipt = {'schema':1, 'status':'passed', 'check':check, **identity}
-        if enabled('EXTRA_RECEIPT_KEY'): receipt['unrecognized'] = True
-        if not enabled('MISSING_MATRIX'): (evidence/'receipts'/f'{check}.json').write_text(json.dumps(receipt))
-        hashes = {name: hashlib.sha256(pathlib.Path('.github/workflows',name).read_bytes()).hexdigest()
-            for name in ('ci.yml','security.yml','codeql.yml')}
-        if enabled('BAD_HASH'): hashes['ci.yml'] = '0'*64
-        checks = ['../../outside'] if enabled('BAD_ID') else [check, check] if enabled('DUPLICATE') else [check]
-        (evidence/'required.json').write_text(json.dumps({'schema':1, 'status':'passed', 'gates':['fixture'],
-            'checks': checks, 'workflows': hashes, **identity}))
-    if enabled('EXISTING_SUMMARY'): (output/'summary.json').write_text('keep this evidence')
-    if enabled('REPLACE_LOCK'):
-        lock = pathlib.Path('target/act/run.lock')
-        lock.rename(lock.with_name('original-lock'))
-        lock.mkdir()
-        (lock/'other-owner').write_text('untouched')
-    if enabled('REPLACE_OUTPUT'):
-        output.rename(output.with_name(output.name+'.original'))
-        other = output.with_name(output.name+'.other')
-        other.mkdir()
-        (other/'marker').write_text('untouched')
-        output.symlink_to(other, target_is_directory=True)
-    sys.exit(int(env.get('CI_FIXTURE_ACT_EXIT', '0')))
-else: sys.exit(95)
+tool=$1
+shift
+newline='
+'
+log=${CI_FIXTURE_LOG?}
+seen=$log.act-seen
+cwd=$(pwd -P)
+event="{\"tool\": $(json_string "$tool"), \"args\": $(json_strings "$@")"
+event="$event, \"dockerHost\": $(json_string "${DOCKER_HOST-}"), \"cwd\": $(json_string "$cwd")}"
+printf '%s\n' "$event" >>"$log"
+enabled() { eval "[ -n \"\${CI_FIXTURE_$1-}\" ]"; }
+member() {
+  member_word=$1
+  shift
+  for member_item in "$@"; do
+    if [ "$member_item" = "$member_word" ]; then return 0; fi
+  done
+  return 1
+}
+value() {
+  value_flag=$1
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "$value_flag" ]; then
+      [ "$#" -ge 2 ] || return 1
+      printf '%s' "$2"
+      return 0
+    fi
+    shift
+  done
+  return 1
+}
+last=
+if [ "$#" -gt 0 ]; then eval "last=\${$#}"; fi
+phase=$tool
+case $tool in
+  git)
+    [ "$#" -ge 1 ] || exit 1
+    phase=$tool-$1
+    ;;
+  podman)
+    [ "$#" -ge 2 ] || exit 1
+    phase=$tool-$2
+    ;;
+  curl)
+    [ "$#" -ge 1 ] || exit 1
+    case $last in
+      */_ping) phase=curl-ping ;;
+      */networks) phase=curl-networks ;;
+      *) phase=curl-containers ;;
+    esac
+    ;;
+esac
+if [ "${CI_FIXTURE_FAIL-}" = "$phase" ]; then exit "${CI_FIXTURE_FAIL_CODE-43}"; fi
+case $tool in
+git)
+  case $1 in
+    status)
+      if enabled DIRTY || { enabled DIRTY_AFTER && [ -e "$seen" ]; }; then
+        printf ' M source.js\n'
+      fi
+      ;;
+    merge-base)
+      [ "$#" -ge 2 ] || exit 1
+      if [ "$2" = --is-ancestor ]; then
+        if enabled NONANCESTOR; then exit 1; else exit 0; fi
+      fi
+      if enabled DEFAULT_HEAD_BASE; then repeat a 40; else repeat b 40; fi
+      printf '\n'
+      ;;
+    rev-parse)
+      if [ "$last" = HEAD ]; then
+        if enabled CHANGED && [ -e "$seen" ]; then repeat c 40; else repeat a 40; fi
+      elif enabled INVALID_BASE; then
+        exit 128
+      elif enabled SAME_BASE; then
+        repeat a 40
+      else
+        repeat b 40
+      fi
+      printf '\n'
+      ;;
+    *) exit 93 ;;
+  esac
+  ;;
+go)
+  [ "$#" -eq 4 ] && [ "$1" = env ] && [ "$2" = GOVERSION ] && [ "$3" = GOOS ] &&
+    [ "$4" = GOARCH ] || exit 1
+  printf 'go1.27.1\ndarwin\narm64\n'
+  ;;
+uname)
+  if [ "$#" -eq 1 ] && [ "$1" = -m ]; then
+    printf '%s\n' "${CI_FIXTURE_ARCH-arm64}"
+  else
+    printf '%s\n' "${CI_FIXTURE_OS-Darwin}"
+  fi
+  ;;
+curl)
+  if enabled ENGINE_DOWN; then exit 7; fi
+  networks='[{"Name":"bridge","IPAM":{"Config":[{"Gateway":"10.88.0.1"}]}}]'
+  if [ "${CI_FIXTURE_NETWORKS+set}" = set ]; then networks=$CI_FIXTURE_NETWORKS; fi
+  case $phase in
+    curl-ping) printf 'OK\n' ;;
+    curl-networks) printf '%s\n' "$networks" ;;
+    *)
+      if enabled BUSY || { enabled BUSY_AFTER && [ -e "$seen" ]; }; then
+        printf '[{"Id":"existing"}]\n'
+      else
+        printf '%s\n' "${CI_FIXTURE_CONTAINERS-[]}"
+      fi
+      ;;
+  esac
+  ;;
+podman)
+  [ "$1" = machine ] || exit 1
+  case $2 in
+    inspect)
+      if ! member --format "$@"; then
+        if enabled NEW_VM; then exit 1; fi
+      elif member '{{.State}}' "$@"; then
+        if enabled STOPPED; then printf 'stopped\n'; else printf 'running\n'; fi
+      else
+        printf '/owned-ci/socket\n'
+      fi
+      ;;
+    list)
+      if enabled OTHER_VM; then
+        printf 'other-project true\n'
+      else
+        printf 'simplestchat-ci false\n'
+      fi
+      ;;
+    init | start | stop) ;;
+    ssh)
+      script=$(/bin/cat; printf x) || exit 1
+      script=${script%x}
+      printf '%s' "$script" >"$log.guest"
+      probe=${script%%"$newline"'test -x /mnt/rosetta'*}
+      if ! printf '%s\n' "$probe" |
+        PATH=${CI_FIXTURE_GUEST_TOOLS?} /bin/sh -se 2>"$log.guest-stderr"; then
+        /bin/mv "$log.guest-stderr" "$log.guest-error"
+        exit 1
+      fi
+      /bin/rm -f "$log.guest-stderr"
+      if enabled EMULATOR_FAIL; then exit 69; fi
+      : >"$log.emulator-selected"
+      ;;
+    *) exit 94 ;;
+  esac
+  ;;
+act)
+  : >"$seen"
+  printf 'fixture workflow stdout\n'
+  printf 'fixture workflow stderr\n' >&2
+  event_path=$(value --eventpath "$@") || exit 1
+  output=${event_path%/*}
+  if enabled ACT_WAIT; then
+    # An inert descendant proves cancellation reaches the owned group. A
+    # background shell cannot catch SIGINT, so this leader hands either
+    # signal on as SIGTERM before it ends by the same signal.
+    child=
+    trap 'kill -TERM "$child" 2>/dev/null; trap - INT; kill -INT "$$"' INT
+    trap 'kill -TERM "$child" 2>/dev/null; trap - TERM; kill -TERM "$$"' TERM
+    (
+      sleeper=
+      trap 'kill "$sleeper" 2>/dev/null; : >"$log.child-stopped"; exit 0' TERM
+      : >"$log.child-ready"
+      while :; do
+        /bin/sleep 10 >/dev/null 2>&1 &
+        sleeper=$!
+        wait "$sleeper"
+      done
+    ) &
+    child=$!
+    printf '%s' "$child" >"$log.child-pid"
+    while :; do /bin/sleep 0.01; done
+  fi
+  if ! enabled NO_RECEIPT; then
+    event=$newline$(/bin/cat -- "$event_path")$newline || exit 1
+    field() {
+      field_rest=${event#*"$newline  \"$1\": \""}
+      [ "$field_rest" != "$event" ] || return 1
+      printf '%s' "${field_rest%%\"*}"
+    }
+    revision=$(field after) && base=$(field before) || exit 1
+    run_id=
+    found=false
+    for argument in "$@"; do
+      case $argument in
+        LOCAL_CI_RUN_ID=*)
+          run_id=${argument#LOCAL_CI_RUN_ID=}
+          found=true
+          break
+          ;;
+      esac
+    done
+    $found || exit 1
+    if enabled STALE_RECEIPT; then run_id=$(repeat f 32); fi
+    evidence=$output/checks
+    /bin/mkdir -- "$evidence/receipts" || exit 1
+    check=browser-fixture
+    identity="\"runId\": $(json_string "$run_id"), \"revision\": $(json_string "$revision")"
+    identity="$identity, \"base\": $(json_string "$base")"
+    receipt="{\"schema\": 1, \"status\": \"passed\", \"check\": \"$check\", $identity"
+    if enabled EXTRA_RECEIPT_KEY; then receipt="$receipt, \"unrecognized\": true"; fi
+    if ! enabled MISSING_MATRIX; then
+      printf '%s}' "$receipt" >"$evidence/receipts/$check.json"
+    fi
+    digest() {
+      if [ -x /usr/bin/sha256sum ]; then
+        digest_line=$(/usr/bin/sha256sum <"$1") || return 1
+      else
+        digest_line=$(/usr/bin/shasum -a 256 <"$1") || return 1
+      fi
+      printf '%s' "${digest_line%% *}"
+    }
+    ci=$(digest .github/workflows/ci.yml) &&
+      security=$(digest .github/workflows/security.yml) &&
+      codeql=$(digest .github/workflows/codeql.yml) || exit 1
+    if enabled BAD_HASH; then ci=$(repeat 0 64); fi
+    if enabled BAD_ID; then
+      checks='["../../outside"]'
+    elif enabled DUPLICATE; then
+      checks="[\"$check\", \"$check\"]"
+    else
+      checks="[\"$check\"]"
+    fi
+    workflows="{\"ci.yml\": \"$ci\", \"security.yml\": \"$security\", \"codeql.yml\": \"$codeql\"}"
+    printf '{"schema": 1, "status": "passed", "gates": ["fixture"], "checks": %s, ' "$checks" \
+      >"$evidence/required.json"
+    printf '"workflows": %s, %s}' "$workflows" "$identity" >>"$evidence/required.json"
+  fi
+  if enabled EXISTING_SUMMARY; then printf 'keep this evidence' >"$output/summary.json"; fi
+  if enabled REPLACE_LOCK; then
+    lock=target/act/run.lock
+    /bin/mv -- "$lock" target/act/original-lock && /bin/mkdir -- "$lock" || exit 1
+    printf untouched >"$lock/other-owner"
+  fi
+  if enabled REPLACE_OUTPUT; then
+    /bin/mv -- "$output" "$output.original" && /bin/mkdir -- "$output.other" || exit 1
+    printf untouched >"$output.other/marker"
+    /bin/ln -s -- "$output.other" "$output" || exit 1
+  fi
+  exit "${CI_FIXTURE_ACT_EXIT-0}"
+  ;;
+*) exit 95 ;;
+esac
+"#;
+
+/// The guest's `od`: the auxiliary vector of a guest whose `AT_HWCAP` and
+/// `AT_HWCAP2` are `CI_FIXTURE_HWCAP` and `CI_FIXTURE_HWCAP2` (zero when
+/// unset), between two other entries and the terminating one.
+const GUEST_OD: &str = r#"#!/bin/sh
+[ "$#" -eq 5 ] && [ "$1" = -An ] && [ "$2" = -v ] && [ "$3" = -t ] && [ "$4" = x8 ] &&
+  [ "$5" = /proc/self/auxv ] || exit 1
+printf ' %016x %016x\n' 6 4096 16 "$((${CI_FIXTURE_HWCAP-0}))" 33 0 \
+  26 "$((${CI_FIXTURE_HWCAP2-0}))" 0 0
 "#;
 
 struct Fixture {
@@ -175,21 +318,18 @@ impl Fixture {
         let log = temporary.join("calls.jsonl");
         fs::create_dir_all(&root).unwrap();
         fs::create_dir(&bin).unwrap();
-        let python = Command::new("python3")
-            .args(["-c", "import sys; print(sys.executable)"])
-            .output()
-            .expect("Python 3 is a declared local CI prerequisite");
-        assert!(python.status.success());
-        let python = String::from_utf8(python.stdout).unwrap().trim().to_owned();
-        let dispatcher = temporary.join("fake tools.py");
-        fs::write(&dispatcher, DISPATCH).unwrap();
+        let dispatcher = temporary.join("fake tools");
+        fs::write(
+            &dispatcher,
+            format!("{}{DISPATCH}", crate::fake_shell::PRELUDE),
+        )
+        .unwrap();
         for tool in ["git", "curl", "go", "uname", "podman", "act"] {
             let path = bin.join(tool);
             fs::write(
                 &path,
                 format!(
-                    "#!/bin/sh\nexec {} {} {} \"$@\"\n",
-                    quote(&python),
+                    "#!/bin/sh\nexec /bin/sh {} {} \"$@\"\n",
                     quote(dispatcher.to_str().unwrap()),
                     quote(tool)
                 ),
@@ -197,10 +337,15 @@ impl Fixture {
             .unwrap();
             fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
         }
+        let guest = temporary.join("guest tools");
+        fs::create_dir(&guest).unwrap();
+        fs::write(guest.join("od"), GUEST_OD).unwrap();
+        fs::set_permissions(guest.join("od"), fs::Permissions::from_mode(0o755)).unwrap();
         let environment = [
             ("PATH", bin.as_os_str()),
             ("CI_FIXTURE_LOG", log.as_os_str()),
             ("CI_FIXTURE_BIN", bin.as_os_str()),
+            ("CI_FIXTURE_GUEST_TOOLS", guest.as_os_str()),
             ("LC_ALL", OsStr::new("C")),
         ]
         .into_iter()
@@ -701,12 +846,20 @@ fn actual_guest_probe_rejects_inconsistent_cpu_flags_before_emulator_selection()
             assert_eq!(summary(&outcome)["completeLocalGate"], false);
             let error =
                 fs::read_to_string(format!("{}.guest-error", fixture.log.display())).unwrap();
+            // The refusal names both words in lowercase hexadecimal with no
+            // leading zeros, as the guest's values.
+            let values = format!(
+                "(HWCAP={:#x}, HWCAP2={:#x})",
+                u64::from_str_radix(hwcap.trim_start_matches("0x"), 16).unwrap(),
+                u64::from_str_radix(hwcap2.trim_start_matches("0x"), 16).unwrap()
+            );
             for text in [
                 "simplestchat-ci VM advertises SVE2 without SVE",
+                values.as_str(),
                 "arm64.nosve with rpm-ostree",
                 "docs/testing.md#recover-inconsistent-arm-cpu-features",
             ] {
-                assert!(error.contains(text));
+                assert!(error.contains(text), "{text}");
             }
             assert!(tools(&outcome, "podman").iter().all(|event| {
                 !arguments(event)

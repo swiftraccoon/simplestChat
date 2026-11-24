@@ -702,17 +702,25 @@ async fn native_fake_cli_keeps_captured_environment_and_discards_raw_ids_and_err
     let program = directory.join("docker");
     fs::write(
         &program,
-        r#"#!/usr/bin/python3
-import json,os,sys
-from pathlib import Path
-value={'args':sys.argv[1:],'cwd':os.getcwd(),'sentinel':os.environ.get('PRIVATE_SENTINEL'),
- 'ambientCargo':any(key.startswith('CARGO_') for key in os.environ),
- 'stdoutNull':os.fstat(1).st_rdev==os.stat('/dev/null').st_rdev,
- 'stderrNull':os.fstat(2).st_rdev==os.stat('/dev/null').st_rdev}
-Path('captured.json').write_text(json.dumps(value))
-print('PRIVATE-CID-AND-OUTPUT')
-print('PRIVATE-ERROR',file=sys.stderr)
+        format!(
+            r#"#!/bin/sh
+{}newline='
+'
+cwd=$(pwd -P)
+if [ /dev/fd/1 -ef /dev/null ]; then output=true; else output=false; fi
+if [ /dev/fd/2 -ef /dev/null ]; then errors=true; else errors=false; fi
+case "$newline$(/usr/bin/env)" in
+  *"$newline"CARGO_*) cargo=true ;;
+  *) cargo=false ;;
+esac
+value="{{\"args\": $(json_strings "$@"), \"cwd\": $(json_string "$cwd")"
+value="$value, \"sentinel\": $(json_value PRIVATE_SENTINEL), \"ambientCargo\": $cargo"
+printf '%s, "stdoutNull": %s, "stderrNull": %s}}' "$value" "$output" "$errors" >captured.json
+printf 'PRIVATE-CID-AND-OUTPUT\n'
+printf 'PRIVATE-ERROR\n' >&2
 "#,
+            crate::fake_shell::PRELUDE
+        ),
     )
     .unwrap();
     fs::set_permissions(&program, fs::Permissions::from_mode(0o700)).unwrap();

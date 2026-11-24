@@ -5,21 +5,21 @@ use simplestchat_ci::process::{Executor, Native};
 use simplestchat_toolkit::owned_process::Signals;
 use std::time::Duration;
 
+/// The lease reads exactly its request frame, answers the ready frame, then
+/// requires exactly `release\n` followed by the end of its input. `dd bs=1`
+/// reads one byte per call, so it never consumes a byte past its count.
 const LEASE: &str = r#"
-def exact(n):
-    data=b''
-    while len(data)<n:
-        chunk=os.read(0,n-len(data))
-        if not chunk: raise RuntimeError('short frame')
-        data+=chunk
-    return data
-request=exact(REQUEST)
-with open(ROOT+'/frame-count','w') as out: out.write(str(len(request)))
-os.write(1,READY)
-release=exact(8)
-assert release==b'release\n' and os.read(0,1)==b''
-assert os.path.exists(ROOT+'/ansible-finished')
-with open(ROOT+'/released','w') as out: out.write('released')
+received=$(/bin/dd bs=1 count="$REQUEST" 2>/dev/null | /usr/bin/wc -c) || exit 1
+[ "$((received))" -eq "$REQUEST" ] || exit 1
+printf '%s' "$((received))" >"$ROOT/frame-count"
+printf "$READY"
+release=$(/bin/dd bs=1 count=8 2>/dev/null | /usr/bin/od -An -v -t x1)
+set -- $release
+[ "$*" = '72 65 6c 65 61 73 65 0a' ] || exit 1
+remaining=$(/bin/dd bs=1 count=1 2>/dev/null | /usr/bin/wc -c)
+[ "$((remaining))" -eq 0 ] || exit 1
+[ -e "$ROOT/ansible-finished" ] || exit 1
+printf released >"$ROOT/released"
 "#;
 
 #[tokio::test(flavor = "current_thread")]
@@ -29,9 +29,9 @@ async fn completed_preparation_closes_both_groups_and_streams_before_release() {
     let constructing = PreparationFixture::new(
         LEASE,
         r#"
-os.write(1,b'private ansible output\n')
-os.write(2,b'private ansible error\n')
-with open(ROOT+'/ansible-finished','w') as out: out.write('done')
+printf 'private ansible output\n'
+printf 'private ansible error\n' >&2
+printf done >"$ROOT/ansible-finished"
 "#,
         240,
     );
@@ -71,13 +71,9 @@ with open(ROOT+'/ansible-finished','w') as out: out.write('done')
 
 #[tokio::test]
 async fn late_lease_stdout_after_release_cannot_pass_the_completed_capture_fence() {
-    let lease = format!("{LEASE}\nos.write(1,b'late extra record\\n')\n");
-    let mut fixture = PreparationFixture::new(
-        &lease,
-        "with open(ROOT+'/ansible-finished','w') as out: out.write('done')\n",
-        240,
-    )
-    .await;
+    let lease = format!("{LEASE}\nprintf 'late extra record\\n'\n");
+    let mut fixture =
+        PreparationFixture::new(&lease, "printf done >\"$ROOT/ansible-finished\"\n", 240).await;
     let invocation = fixture.take();
     let mut native = Native::new(
         &fixture.caller,
@@ -98,20 +94,22 @@ async fn late_lease_stdout_after_release_cannot_pass_the_completed_capture_fence
 
 #[tokio::test]
 async fn stderr_eof_cancels_quiet_ansible_while_the_lease_leader_and_stdout_remain() {
+    let release = "release=$(";
+    assert_eq!(LEASE.matches(release).count(), 1);
     let lease = LEASE.replace(
-        "release=exact(8)",
+        release,
         r#"
-while not os.path.exists(ROOT+'/ansible-started'): time.sleep(0.005)
-os.close(2)
-while True: time.sleep(1)
-release=exact(8)"#,
+while [ ! -e "$ROOT/ansible-started" ]; do /bin/sleep 0.005; done
+exec 2>&-
+while :; do /bin/sleep 1; done
+release=$("#,
     );
     let mut fixture = PreparationFixture::new(
         &lease,
         r#"
-with open(ROOT+'/ansible-started','w') as out: out.write('started')
-time.sleep(30)
-with open(ROOT+'/ansible-finished','w') as out: out.write('unexpected')
+printf started >"$ROOT/ansible-started"
+/bin/sleep 30
+printf unexpected >"$ROOT/ansible-finished"
 "#,
         240,
     )
@@ -144,12 +142,9 @@ async fn first_interrupt_survives_a_later_signal_during_joined_settlement() {
     let mut fixture = PreparationFixture::new(
         LEASE,
         r#"
-def interrupted(signum,frame):
-    with open(ROOT+'/ansible-interrupted','w') as out: out.write('seen')
-signal.signal(signal.SIGINT,interrupted)
-signal.signal(signal.SIGTERM,interrupted)
-with open(ROOT+'/ansible-started','w') as out: out.write('started')
-while True: time.sleep(1)
+trap 'printf seen >"$ROOT/ansible-interrupted"' INT TERM
+printf started >"$ROOT/ansible-started"
+while :; do /bin/sleep 1; done
 "#,
         240,
     )

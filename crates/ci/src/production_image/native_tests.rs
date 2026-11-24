@@ -14,16 +14,48 @@ fn signals() -> Signals {
 fn executable(fixture: &mut Fixture, body: &str) {
     let directory = fixture.root.join("fake commands");
     fs::create_dir(&directory).unwrap();
+    // `holds FILE KEY VALUE` accepts an ownership journal, written as the
+    // owner's pretty JSON, that names VALUE as KEY.
     let source = format!(
-        r#"#!/usr/bin/python3
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(os.environ['FIXTURE_ROOT'])
-args=sys.argv[1:]
-with (root/'events').open('a') as output:
-    output.write(json.dumps([Path(sys.argv[0]).name,args])+'\n')
+        r#"#!/bin/sh
+{prelude}root=${{FIXTURE_ROOT?}}
+name=${{0##*/}}
+newline='
+'
+member() {{
+  member_word=$1
+  shift
+  for member_item in "$@"; do
+    if [ "$member_item" = "$member_word" ]; then return 0; fi
+  done
+  return 1
+}}
+value() {{
+  value_flag=$1
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "$value_flag" ]; then
+      [ "$#" -ge 2 ] || return 1
+      printf '%s' "$2"
+      return 0
+    fi
+    shift
+  done
+  return 1
+}}
+holds() {{
+  holds_text=$newline$(/bin/cat -- "$1")$newline || return 1
+  holds_line="  \"$2\": $(json_string "$3")"
+  case $holds_text in
+    *"$newline$holds_line$newline"* | *"$newline$holds_line,$newline"*) ;;
+    *) return 1 ;;
+  esac
+}}
+event="[$(json_string "$name"), $(json_strings "$@")]"
+printf '%s\n' "$event" >>"$root/events"
 {body}
-"#
+"#,
+        prelude = crate::fake_shell::PRELUDE
     );
     for program in ["git", "docker"] {
         let path = directory.join(program);
@@ -56,26 +88,35 @@ async fn actual_fake_git_and_docker_execute_journal_build_cleanup_then_append() 
     executable(
         &mut fixture,
         r#"
-if Path(sys.argv[0]).name=='git':
-    if args==['rev-parse','HEAD']: print(os.environ['GITHUB_SHA'])
-    elif args!=['status','--porcelain=v1','--untracked-files=all']: sys.exit(91)
-elif args[:2]==['buildx','create']:
-    name=args[args.index('--name')+1]
-    token=name.removeprefix('simplestchat-ci-')
-    journal=json.loads((Path(os.environ['RUNNER_TEMP'])/('production-builder-'+token)/'ownership.json').read_text())
-    assert journal['builder']==name and journal['state']=='creation-planned'
-elif args[:2]==['buildx','build']:
-    assert args[args.index('--builder')+1].startswith('simplestchat-ci-')
-    Path(args[args.index('--iidfile')+1]).write_text('sha256:'+'b'*64+'\n')
-    destination=Path(os.environ['RUNNER_TEMP'])/'buildx-cache-next'
-    destination.mkdir();(destination/'index.json').write_text('completed')
-elif args[:2]==['image','inspect']:
-    print(json.dumps({'Id':'sha256:'+'b'*64,'Config':{'User':'10001:10001',
-        'Labels':{'org.opencontainers.image.revision':os.environ['GITHUB_SHA']},
-        'Env':['SOURCE_REVISION='+os.environ['GITHUB_SHA']]}}))
-elif args[:2]==['buildx','rm']:
-    assert (root/'environment').read_text()=='EXISTING=value\n'
-else: sys.exit(92)
+if [ "$name" = git ]; then
+  if [ "$#" -eq 2 ] && [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then
+    printf '%s\n' "${GITHUB_SHA?}"
+  elif ! { [ "$#" -eq 3 ] && [ "$1" = status ] && [ "$2" = --porcelain=v1 ] &&
+    [ "$3" = --untracked-files=all ]; }; then
+    exit 91
+  fi
+elif [ "$#" -ge 2 ] && [ "$1" = buildx ] && [ "$2" = create ]; then
+  builder=$(value --name "$@") || exit 1
+  journal=${RUNNER_TEMP?}/production-builder-${builder#simplestchat-ci-}/ownership.json
+  holds "$journal" builder "$builder" && holds "$journal" state creation-planned || exit 1
+elif [ "$#" -ge 2 ] && [ "$1" = buildx ] && [ "$2" = build ]; then
+  builder=$(value --builder "$@") || exit 1
+  case $builder in simplestchat-ci-*) ;; *) exit 1 ;; esac
+  iidfile=$(value --iidfile "$@") || exit 1
+  printf 'sha256:%s\n' "$(repeat b 64)" >"$iidfile"
+  destination=${RUNNER_TEMP?}/buildx-cache-next
+  /bin/mkdir -- "$destination" || exit 1
+  printf completed >"$destination/index.json"
+elif [ "$#" -ge 2 ] && [ "$1" = image ] && [ "$2" = inspect ]; then
+  revision=$(json_string "${GITHUB_SHA?}")
+  printf '{"Id": "sha256:%s", "Config": {"User": "10001:10001", ' "$(repeat b 64)"
+  printf '"Labels": {"org.opencontainers.image.revision": %s}, ' "$revision"
+  printf '"Env": [%s]}}\n' "$(json_string "SOURCE_REVISION=$GITHUB_SHA")"
+elif [ "$#" -ge 2 ] && [ "$1" = buildx ] && [ "$2" = rm ]; then
+  printf 'EXISTING=value\n' | /usr/bin/cmp -s - "$root/environment" || exit 1
+else
+  exit 92
+fi
 "#,
     );
     let mut native = Native::new(
@@ -101,10 +142,7 @@ else: sys.exit(92)
 #[tokio::test]
 async fn actual_command_exit_spawn_refusals_and_private_capture_fail_closed() {
     let mut fixture = Fixture::new();
-    executable(
-        &mut fixture,
-        "print('PRIVATE-SENTINEL',file=sys.stderr)\nsys.exit(42)",
-    );
+    executable(&mut fixture, "printf 'PRIVATE-SENTINEL\\n' >&2\nexit 42");
     let mut native = Native::new(
         &fixture.context.root,
         &fixture.context.environment,
@@ -156,12 +194,13 @@ async fn timeout_and_interrupt_preserve_status_and_retire_owned_group() {
         executable(
             &mut fixture,
             r#"
-if args==['cleanup']:
-    (root/'cleanup-ready').write_text('done');sys.exit(0)
-signal.signal(signal.SIGTERM,signal.SIG_IGN)
-signal.signal(signal.SIGINT,signal.SIG_IGN)
-(root/'ready').write_text(str(os.getpid()))
-while True: time.sleep(.01)
+if [ "$#" -eq 1 ] && [ "$1" = cleanup ]; then
+  printf done >"$root/cleanup-ready"
+  exit 0
+fi
+trap '' TERM INT
+printf '%s' "$$" >"$root/ready"
+while :; do /bin/sleep 0.01; done
 "#,
         );
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -226,9 +265,10 @@ async fn output_bound_failure_reclaims_process_before_return_and_never_echoes_by
     executable(
         &mut fixture,
         r#"
-(root/'ready').write_text(str(os.getpid()))
-sys.stdout.write('PRIVATE-SENTINEL'*10000);sys.stdout.flush()
-while True: time.sleep(.01)
+printf '%s' "$$" >"$root/ready"
+trap '' PIPE
+repeat PRIVATE-SENTINEL 10000 || exit 1
+while :; do /bin/sleep 0.01; done
 "#,
     );
     let mut native = Native::new(
@@ -261,12 +301,12 @@ async fn exited_leader_descendants_are_retired_without_signaling_unrelated_group
     executable(
         &mut fixture,
         r#"
-pid=os.fork()
-if pid==0:
-    signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    os.close(1);os.close(2)
-    while True: time.sleep(.01)
-(root/'descendant').write_text(str(pid))
+(
+  trap '' TERM
+  exec >&- 2>&-
+  while :; do /bin/sleep 0.01; done
+) &
+printf '%s' "$!" >"$root/descendant"
 "#,
     );
     let mut native = Native::new(
@@ -303,37 +343,51 @@ async fn interrupted_real_fake_verification_reclaims_inspected_container_after_c
     executable(
         &mut fixture,
         r#"
-state=root/'container.json'
-if Path(sys.argv[0]).name=='git':
-    if args[0]=='rev-parse': print(os.environ['GITHUB_SHA'])
-elif args[:2]==['image','inspect']:
-    print(json.dumps({'Id':os.environ['PRODUCTION_IMAGE'],'Config':{'User':'10001:10001',
-        'Labels':{'org.opencontainers.image.revision':os.environ['GITHUB_SHA']},
-        'Env':['SOURCE_REVISION='+os.environ['GITHUB_SHA']]}}))
-elif args[:2]==['container','create']:
-    name=args[args.index('--name')+1]
-    token=name.removeprefix('simplestchat-ci-verify-')
-    intent=Path(os.environ['RUNNER_TEMP'])/('production-verification-'+token)/'ownership.json'
-    assert json.loads(intent.read_text())['container']==name
-    state.write_text(json.dumps({'Id':'d'*64,'Name':'/'+name,'Image':os.environ['PRODUCTION_IMAGE'],
-        'Config':{'Labels':{'com.simplestchat.ci.production-verification':name}},
-        'State':{'Running':False,'Status':'created','ExitCode':0}}))
-    print('d'*64)
-elif args[:2]==['container','inspect']:
-    assert args[-1]=='d'*64
-    print(state.read_text())
-elif args[:2]==['container','start']:
-    assert args==['container','start','--attach','d'*64]
-    (root/'ready').write_text('started')
-    while True: time.sleep(.01)
-elif args[:2]==['container','ls']:
-    if state.exists():
-        assert 'id='+'d'*64 in args
-        print('d'*64)
-elif args[:2]==['container','rm']:
-    assert args==['container','rm','--force','d'*64]
-    state.unlink()
-else: sys.exit(93)
+state=$root/container.json
+container_id=$(repeat d 64)
+last=
+if [ "$#" -gt 0 ]; then eval "last=\${$#}"; fi
+if [ "$name" = git ]; then
+  [ "$#" -ge 1 ] || exit 1
+  if [ "$1" = rev-parse ]; then printf '%s\n' "${GITHUB_SHA?}"; fi
+elif [ "$#" -ge 2 ] && [ "$1" = image ] && [ "$2" = inspect ]; then
+  image=$(json_string "${PRODUCTION_IMAGE?}")
+  revision=$(json_string "${GITHUB_SHA?}")
+  printf '{"Id": %s, "Config": {"User": "10001:10001", ' "$image"
+  printf '"Labels": {"org.opencontainers.image.revision": %s}, ' "$revision"
+  printf '"Env": [%s]}}\n' "$(json_string "SOURCE_REVISION=$GITHUB_SHA")"
+elif [ "$#" -ge 2 ] && [ "$1" = container ] && [ "$2" = create ]; then
+  container=$(value --name "$@") || exit 1
+  token=${container#simplestchat-ci-verify-}
+  holds "${RUNNER_TEMP?}/production-verification-$token/ownership.json" container \
+    "$container" || exit 1
+  owner=$(json_string "$container")
+  {
+    printf '{"Id": "%s", "Name": %s, ' "$container_id" "$(json_string "/$container")"
+    printf '"Image": %s, ' "$(json_string "${PRODUCTION_IMAGE?}")"
+    printf '"Config": {"Labels": {"com.simplestchat.ci.production-verification": %s}}, ' "$owner"
+    printf '"State": {"Running": false, "Status": "created", "ExitCode": 0}}'
+  } >"$state"
+  printf '%s\n' "$container_id"
+elif [ "$#" -ge 2 ] && [ "$1" = container ] && [ "$2" = inspect ]; then
+  [ "$last" = "$container_id" ] || exit 1
+  /bin/cat -- "$state" || exit 1
+  printf '\n'
+elif [ "$#" -ge 2 ] && [ "$1" = container ] && [ "$2" = start ]; then
+  [ "$#" -eq 4 ] && [ "$3" = --attach ] && [ "$4" = "$container_id" ] || exit 1
+  printf started >"$root/ready"
+  while :; do /bin/sleep 0.01; done
+elif [ "$#" -ge 2 ] && [ "$1" = container ] && [ "$2" = ls ]; then
+  if [ -e "$state" ]; then
+    member "id=$container_id" "$@" || exit 1
+    printf '%s\n' "$container_id"
+  fi
+elif [ "$#" -ge 2 ] && [ "$1" = container ] && [ "$2" = rm ]; then
+  [ "$#" -eq 4 ] && [ "$3" = --force ] && [ "$4" = "$container_id" ] || exit 1
+  /bin/rm -- "$state" || exit 1
+else
+  exit 93
+fi
 "#,
     );
     fixture

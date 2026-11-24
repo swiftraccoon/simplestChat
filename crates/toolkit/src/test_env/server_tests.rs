@@ -14,7 +14,11 @@ impl Fixture {
     }
     fn tool(&self, name: &str, body: &str) -> PathBuf {
         let path = self.root.join(name);
-        fs::write(&path, format!("#!/usr/bin/python3\n{body}")).unwrap();
+        fs::write(
+            &path,
+            format!("#!/bin/sh\n{}{body}\n", crate::fake_shell::PRELUDE),
+        )
+        .unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
         path
     }
@@ -82,16 +86,15 @@ impl Drop for Fixture {
     }
 }
 
-const IDLE: &str = r#"import signal,time
-from pathlib import Path
-root=Path(__file__).parent
-name=Path(__file__).name
-def record(suffix):
- pending=root/(name+suffix+'.pending');pending.write_text(name);pending.replace(root/(name+suffix))
-def finish(*_):record('.term');raise SystemExit(0)
-signal.signal(signal.SIGTERM,finish)
-record('.ready')
-while True:time.sleep(.01)
+const IDLE: &str = r#"root=${0%/*}
+name=${0##*/}
+record() {
+  printf '%s' "$name" >"$root/$name$1.pending"
+  /bin/mv -f "$root/$name$1.pending" "$root/$name$1"
+}
+trap 'record .term; exit 0' TERM
+record .ready
+while :; do /bin/sleep 0.01; done
 "#;
 
 async fn ready(path: &Path) {
@@ -138,14 +141,14 @@ async fn naturally_exited_service_leaders_still_require_group_retirement() {
     let fixture = Fixture::new();
     let program = fixture.tool(
         "server",
-        r#"import os,signal,time
-from pathlib import Path
-root=Path(__file__).parent
-if os.fork()==0:
- signal.signal(signal.SIGTERM,signal.SIG_IGN)
- pending=root/'worker.pending';pending.write_text(str(os.getpid()));pending.replace(root/'worker')
- while True:time.sleep(.01)
-while not (root/'worker').exists():time.sleep(.01)
+        r#"root=${0%/*}
+(
+  trap '' TERM
+  printf '%s' "$(exec /bin/sh -c 'printf %s "$PPID"')" >"$root/worker.pending"
+  /bin/mv -f "$root/worker.pending" "$root/worker"
+  while :; do /bin/sleep 0.01; done
+) &
+while [ ! -e "$root/worker" ]; do /bin/sleep 0.01; done
 "#,
     );
     let mut harness = fixture.harness();
@@ -262,15 +265,18 @@ async fn test_command_uses_captured_values_and_owned_overrides_without_ambient_c
     let fixture = Fixture::new();
     let program = fixture.tool(
         "test-command",
-        r#"import json,os
-from pathlib import Path
-value={'captured':os.environ.get('CAPTURED_ONLY'),
- 'ambientCargo':any(name.startswith('CARGO_') for name in os.environ),
- 'pid':os.environ.get('TEST_SERVER_PID'),
- 'ownedToken':os.environ.get('TEST_METRICS_TOKEN')=='owned-test-token',
- 'hasToken':'TEST_METRICS_TOKEN' in os.environ,'community':os.environ.get('COMMUNITY_E2E'),
- 'url':os.environ.get('BASE_URL')}
-Path(__file__).with_name('captured.json').write_text(json.dumps(value))
+        r#"newline='
+'
+case "$newline$(/usr/bin/env)" in
+  *"$newline"CARGO_*) cargo=true ;;
+  *) cargo=false ;;
+esac
+if [ "${TEST_METRICS_TOKEN-}" = owned-test-token ]; then owned=true; else owned=false; fi
+if [ "${TEST_METRICS_TOKEN+set}" = set ]; then present=true; else present=false; fi
+value="{\"captured\": $(json_value CAPTURED_ONLY), \"ambientCargo\": $cargo"
+value="$value, \"pid\": $(json_value TEST_SERVER_PID), \"ownedToken\": $owned"
+value="$value, \"hasToken\": $present, \"community\": $(json_value COMMUNITY_E2E)"
+printf '%s, "url": %s}' "$value" "$(json_value BASE_URL)" >"${0%/*}/captured.json"
 "#,
     );
     let mut harness = fixture.harness();
@@ -345,20 +351,15 @@ async fn companion_finalization_follows_workload_retirement_before_server_cleanu
         environment.insert("E2E_ARTIFACTS".into(), fixture.root.clone().into());
         fixture.tool(
             "curl",
-            r#"import time
-from pathlib import Path
-while not Path(__file__).with_name('server.ready').exists():time.sleep(.005)
-"#,
+            r#"while [ ! -e "${0%/*}/server.ready" ]; do /bin/sleep 0.005; done"#,
         );
         let workload = fixture.tool(
             "test-workload",
             if action_failure {
                 IDLE
             } else {
-                r#"from pathlib import Path
-Path(__file__).with_name('test-workload.term').write_text('finished')
-raise SystemExit(23)
-"#
+                r#"printf finished >"${0%/*}/test-workload.term"
+exit 23"#
             },
         );
         let mut order = Order {

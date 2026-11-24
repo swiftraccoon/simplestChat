@@ -12,7 +12,6 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 struct Fixture {
     root: PathBuf,
-    python: PathBuf,
 }
 impl Fixture {
     fn new() -> Self {
@@ -23,15 +22,7 @@ impl Fixture {
         ));
         fs::create_dir(&path).unwrap();
         let root = path.canonicalize().unwrap();
-        let python = Command::new("python3")
-            .args(["-c", "import sys; print(sys.executable)"])
-            .output()
-            .unwrap();
-        assert!(python.status.success());
-        Self {
-            root,
-            python: PathBuf::from(String::from_utf8(python.stdout).unwrap().trim()),
-        }
+        Self { root }
     }
     fn write(&self, name: &str, bytes: impl AsRef<[u8]>) -> PathBuf {
         let path = self.root.join(name);
@@ -57,26 +48,16 @@ impl Fixture {
             architecture: "x86_64".into(),
         }
     }
-    fn python(&self, program: &str, arguments: &[&Path]) -> Vec<u8> {
-        let output = Command::new(&self.python)
-            .env("PYTHONDONTWRITEBYTECODE", "1")
-            .args(["-c", program])
-            .arg(
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .parent()
-                    .and_then(Path::parent)
-                    .unwrap()
-                    .join("build"),
-            )
-            .args(arguments)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
+    /// A `#!/bin/sh` fake named `name` with `body`, and its path. The root
+    /// holds no single quote, so a body may quote any path below it.
+    fn script(&self, name: &str, body: &str) -> PathBuf {
+        assert!(!self.root.to_str().unwrap().contains('\''));
+        let script = self.write(
+            name,
+            format!("#!/bin/sh\n{}{body}\n", crate::fake_shell::PRELUDE),
         );
-        output.stdout
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        script
     }
     fn git(&self, arguments: &[&str]) {
         let context = self.context();
@@ -122,6 +103,37 @@ impl Drop for Fixture {
 /// recorded from it before it was removed.
 fn reference() -> Value {
     serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
+}
+
+/// Write a ZIP archive at `path` with each member's name, method and bytes,
+/// in order. A deflated member is compressed; a member of any other method
+/// carries its bytes unchanged under that method's number, so it is only
+/// read correctly by a reader that refuses the method before decompressing.
+fn archive(path: &Path, members: &[(String, rawzip::CompressionMethod, Vec<u8>)]) {
+    let output = std::io::BufWriter::new(File::create(path).unwrap());
+    let mut archive = rawzip::ZipArchiveWriter::new(output);
+    for (name, method, bytes) in members {
+        let (mut entry, config) = archive
+            .new_file(name.as_str())
+            .compression_method(*method)
+            .start()
+            .unwrap();
+        let descriptor = if *method == rawzip::CompressionMethod::DEFLATE {
+            let encoder =
+                flate2::write::DeflateEncoder::new(&mut entry, flate2::Compression::default());
+            let mut writer = config.wrap(encoder);
+            writer.write_all(bytes).unwrap();
+            let (encoder, descriptor) = writer.finish().unwrap();
+            encoder.finish().unwrap();
+            descriptor
+        } else {
+            let mut writer = config.wrap(&mut entry);
+            writer.write_all(bytes).unwrap();
+            writer.finish().unwrap().1
+        };
+        entry.finish(descriptor).unwrap();
+    }
+    archive.finish().unwrap().into_inner().unwrap();
 }
 
 /// The bytes a recording spells in hexadecimal.
@@ -718,20 +730,33 @@ fn archive_path_encoding_alias_and_size_decisions_match_the_reference() {
 #[test]
 fn only_stored_and_deflated_sources_are_read_back_other_metadata_is_safe_to_inspect() {
     let fixture = Fixture::new();
-    let program = r"
-import pathlib,sys,zipfile
-root=pathlib.Path(sys.argv[2])
-methods=[('stored',zipfile.ZIP_STORED),('deflated',zipfile.ZIP_DEFLATED),
-    ('bzip2',zipfile.ZIP_BZIP2),('lzma',zipfile.ZIP_LZMA)]
-if hasattr(zipfile,'ZIP_ZSTANDARD'): methods.append(('zstd',zipfile.ZIP_ZSTANDARD))
-for name,method in methods:
-    database=root/name;database.mkdir()
-    (database/'codeql-database.yml').write_text('sourceLocationPrefix: /rust')
-    with zipfile.ZipFile(database/'src.zip','w',compression=method) as archive:
-        archive.writestr('rust/src/main.rs',b'fn main() {}')
-        archive.writestr('rust/results/source.bqrs',b'evaluated query')
-";
-    fixture.python(program, &[&fixture.root]);
+    use rawzip::CompressionMethod as Method;
+    for (name, method) in [
+        ("stored", Method::STORE),
+        ("deflated", Method::DEFLATE),
+        ("bzip2", Method::BZIP2),
+        ("lzma", Method::LZMA),
+        ("zstd", Method::ZSTD),
+    ] {
+        let database = fixture.root.join(name);
+        fs::create_dir(&database).unwrap();
+        fs::write(
+            database.join("codeql-database.yml"),
+            "sourceLocationPrefix: /rust",
+        )
+        .unwrap();
+        archive(
+            &database.join("src.zip"),
+            &[
+                ("rust/src/main.rs".into(), method, b"fn main() {}".to_vec()),
+                (
+                    "rust/results/source.bqrs".into(),
+                    method,
+                    b"evaluated query".to_vec(),
+                ),
+            ],
+        );
+    }
     let manifest =
         serde_json::Map::from_iter([("src/main.rs".into(), json!(io::sha256(b"fn main() {}")))]);
     for entry in fixture.root.read_dir().unwrap() {
@@ -756,9 +781,13 @@ for name,method in methods:
 fn command_timeout_kills_owned_descendant_even_after_leader_exit() {
     let fixture = Fixture::new();
     let pidfile = fixture.root.join("child.pid");
-    let script=fixture.write("fake slow analyzer",format!("#!{}\nimport pathlib,subprocess,sys\nchild=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])\npathlib.Path({}).write_text(str(child.pid))\n",
-        fixture.python.display(),serde_json::to_string(pidfile.to_str().unwrap()).unwrap()));
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    let script = fixture.script(
+        "fake slow analyzer",
+        &format!(
+            "/bin/sleep 60 &\nprintf '%s' \"$!\" >'{}'",
+            pidfile.display()
+        ),
+    );
     let error = process::capture(
         &fixture.root,
         &fixture.context().environment,
@@ -795,15 +824,24 @@ fn command_timeout_kills_owned_descendant_even_after_leader_exit() {
 #[test]
 fn expansion_count_and_regular_file_bounds_fail_before_any_analyzer() {
     let fixture = Fixture::new();
-    let program = r"
-import pathlib,sys,zipfile
-root=pathlib.Path(sys.argv[2])
-with zipfile.ZipFile(root/'too-many.zip','w') as archive:
-    for i in range(100001): archive.writestr('rust/results/'+str(i)+'.bqrs',b'')
-with zipfile.ZipFile(root/'source-too-large.zip','w',compression=zipfile.ZIP_DEFLATED) as archive:
-    archive.writestr('source/src/main.rs',b'x'*(16*1024**2+1))
-";
-    fixture.python(program, &[&fixture.root]);
+    let members = (0..100_001)
+        .map(|index| {
+            (
+                format!("rust/results/{index}.bqrs"),
+                rawzip::CompressionMethod::STORE,
+                Vec::new(),
+            )
+        })
+        .collect::<Vec<_>>();
+    archive(&fixture.root.join("too-many.zip"), &members);
+    archive(
+        &fixture.root.join("source-too-large.zip"),
+        &[(
+            "source/src/main.rs".into(),
+            rawzip::CompressionMethod::DEFLATE,
+            vec![b'x'; 16 * 1024 * 1024 + 1],
+        )],
+    );
     let database = fixture.root.join("large-database");
     fs::create_dir(&database).unwrap();
     fs::write(
@@ -849,9 +887,20 @@ with zipfile.ZipFile(root/'source-too-large.zip','w',compression=zipfile.ZIP_DEF
 fn actual_command_boundary_is_private_bounded_and_preserves_literal_arguments() {
     let fixture = Fixture::new();
     let log = fixture.root.join("command.json");
-    let script = fixture.write("fake analyzer",format!("#!{}\nimport json,os,pathlib,sys\npathlib.Path({}).write_text(json.dumps({{'args':sys.argv[1:],'tokenPresent':'GH_TOKEN' in os.environ,'home':os.environ['HOME']}}))\nprint('private analyzer output')\n",
-        fixture.python.display(),serde_json::to_string(log.to_str().unwrap()).unwrap()));
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    let script = fixture.script(
+        "fake analyzer",
+        &format!(
+            concat!(
+                "home=${{HOME?}}\n",
+                "if [ \"${{GH_TOKEN+set}}\" = set ]; then present=true; else present=false; fi\n",
+                "{{ printf '{{\"args\": '; json_strings \"$@\"\n",
+                "  printf ', \"tokenPresent\": %s, \"home\": ' \"$present\"; json_string \"$home\"\n",
+                "  printf '}}'; }} >'{}'\n",
+                "printf 'private analyzer output\\n'"
+            ),
+            log.display()
+        ),
+    );
     let mut context = fixture.context();
     context
         .environment
@@ -882,13 +931,10 @@ fn actual_command_boundary_is_private_bounded_and_preserves_literal_arguments() 
     assert_eq!(seen["tokenPresent"], false);
     assert_eq!(seen["home"], fixture.root.join("home").to_str().unwrap());
     for (body, limit) in [
-        ("import sys;sys.stdout.write('x'*1025)", 1024),
-        (
-            "import sys;sys.stderr.write('secret'*1025);sys.exit(7)",
-            1024,
-        ),
+        ("repeat x 1025", 1024),
+        ("repeat secret 1025 >&2\nexit 7", 1024),
     ] {
-        fs::write(&script, format!("#!{}\n{body}\n", fixture.python.display())).unwrap();
+        fixture.script("fake analyzer", body);
         let error = process::capture(
             &fixture.root,
             &context.environment,

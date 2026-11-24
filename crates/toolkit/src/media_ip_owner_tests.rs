@@ -3,31 +3,41 @@ use super::*;
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 struct Fixture {
     root: PathBuf,
+    directory: PathBuf,
     environment: Environment,
 }
 impl Fixture {
+    /// Fake `ip`, `route` and `ifconfig` commands running `body` in a root
+    /// reached through a link. A shell replaces an inherited `PWD` that does
+    /// not name its working directory with the directory's own path, which
+    /// differs from the link's, so the fakes' `PWD` check sees only what the
+    /// query passed.
     fn new(body: &str) -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let root = std::env::temp_dir().join(format!(
+        let name = format!(
             "media query {} {}",
             std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        );
+        let directory = std::env::temp_dir().join(format!("{name} directory"));
+        fs::create_dir(&directory).unwrap();
+        let root = std::env::temp_dir().join(name);
+        std::os::unix::fs::symlink(&directory, &root).unwrap();
         fs::write(root.join("runner-env"), b"BEFORE=1\n").unwrap();
         fs::set_permissions(root.join("runner-env"), fs::Permissions::from_mode(0o600)).unwrap();
         let script = format!(
             concat!(
-                "#!/usr/bin/python3\n",
-                "import os,sys,json,time,signal\nfrom pathlib import Path\n",
-                "root=Path(os.environ['FIXTURE_ROOT'])\n",
-                "def record(name,value):\n p=root/(name+'.pending');p.write_text(str(value));",
-                "p.replace(root/name)\n",
-                "with (root/'calls').open('a') as out:out.write(json.dumps(sys.argv)+'\\n')\n",
-                "assert os.environ['LC_ALL']=='C' and os.environ['PWD']==str(root)\n",
-                "assert os.environ['CAPTURED_MARKER']=='literal inherited value'\n",
+                "#!/bin/sh\n{prelude}root=${{FIXTURE_ROOT?}}\n",
+                "record() {{\n",
+                "  printf '%s' \"$2\" >\"$root/$1.pending\"\n",
+                "  /bin/mv -f \"$root/$1.pending\" \"$root/$1\"\n",
+                "}}\n",
+                "printf '%s\\n' \"$(json_strings \"$0\" \"$@\")\" >>\"$root/calls\"\n",
+                "[ \"${{LC_ALL?}}\" = C ] && [ \"${{PWD?}}\" = \"$root\" ] || exit 1\n",
+                "[ \"${{CAPTURED_MARKER?}}\" = 'literal inherited value' ] || exit 1\n",
                 "{body}\n"
             ),
+            prelude = crate::fake_shell::PRELUDE,
             body = body
         );
         for name in ["ip", "route", "ifconfig"] {
@@ -45,12 +55,17 @@ impl Fixture {
             ),
         ]
         .into();
-        Self { root, environment }
+        Self {
+            root,
+            directory,
+            environment,
+        }
     }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
+        let _ = fs::remove_file(&self.root);
+        let _ = fs::remove_dir_all(&self.directory);
     }
 }
 fn signals() -> Signals {
@@ -58,16 +73,21 @@ fn signals() -> Signals {
     Signals::injected(receiver)
 }
 const SUCCESS: &str = r#"
-name=Path(sys.argv[0]).name
-if name=='route':
- assert sys.argv[1:]==['-n','get','default'];print('interface: en0')
-elif name=='ifconfig':
- assert sys.argv[1:]==['en0'];print('inet 192.0.2.44 netmask 0xffffff00')
-elif sys.argv[1:]==['-j','-4','route','show','default']:
- print('[{"dst":"default","dev":"en0"}]')
-else:
- assert sys.argv[1:]==['-j','-4','addr','show','dev','en0']
- print('[{"addr_info":[{"family":"inet","local":"192.0.2.44"}]}]')
+name=${0##*/}
+if [ "$name" = route ]; then
+  [ "$#" -eq 3 ] && [ "$1" = -n ] && [ "$2" = get ] && [ "$3" = default ] || exit 1
+  printf 'interface: en0\n'
+elif [ "$name" = ifconfig ]; then
+  [ "$#" -eq 1 ] && [ "$1" = en0 ] || exit 1
+  printf 'inet 192.0.2.44 netmask 0xffffff00\n'
+elif [ "$#" -eq 5 ] && [ "$1" = -j ] && [ "$2" = -4 ] && [ "$3" = route ] &&
+  [ "$4" = show ] && [ "$5" = default ]; then
+  printf '[{"dst":"default","dev":"en0"}]\n'
+else
+  [ "$#" -eq 6 ] && [ "$1" = -j ] && [ "$2" = -4 ] && [ "$3" = addr ] && [ "$4" = show ] &&
+    [ "$5" = dev ] && [ "$6" = en0 ] || exit 1
+  printf '[{"addr_info":[{"family":"inet","local":"192.0.2.44"}]}]\n'
+fi
 "#;
 async fn ready(path: &Path) {
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -196,9 +216,9 @@ async fn malformed_file_or_unfit_schedule_acquires_no_route_process() {
 #[tokio::test]
 async fn bounded_output_nonzero_and_parser_failures_never_echo_private_tool_data() {
     for (body, expected) in [
-        ("print('PRIVATE_SENTINEL'*10000)", 1),
-        ("print('PRIVATE_SENTINEL');sys.exit(42)", 42),
-        ("print('PRIVATE_SENTINEL')", 1),
+        ("repeat PRIVATE_SENTINEL 10000\nprintf '\\n'", 1),
+        ("printf 'PRIVATE_SENTINEL\\n'\nexit 42", 42),
+        ("printf 'PRIVATE_SENTINEL\\n'", 1),
     ] {
         let fixture = Fixture::new(body);
         let result = detect(&fixture.root, &fixture.environment, &mut signals())
@@ -214,10 +234,9 @@ async fn interruption_and_body_timeout_retire_admitted_query_before_return() {
     for status in [124, 130, 143] {
         let fixture = Fixture::new(
             r#"
-def finish(*_):record('term','observed');sys.exit(0)
-signal.signal(signal.SIGTERM,finish)
-record('ready',os.getpid())
-while True:time.sleep(.01)
+trap 'record term observed; exit 0' TERM
+record ready "$$"
+while :; do /bin/sleep 0.01; done
 "#,
         );
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();

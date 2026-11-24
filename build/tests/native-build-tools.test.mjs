@@ -30,33 +30,25 @@ test('every native Python tool is version and wheel-hash locked', () => {
   assert.deepEqual(requirements.toSorted(), constraints);
 });
 
+// Each disabled task is one top-level function whose whole body is its
+// docstring and the refusal, so calling it raises before any command runs.
 test('unsupported upstream Docker tasks fail before executing commands', () => {
-  const result = spawnSync('python3', ['-c', `
-import ast, pathlib
-path = pathlib.Path('${worker}tasks.py')
-tree = ast.parse(path.read_text())
-names = {'docker', 'docker_run', 'docker_alpine', 'docker_alpine_run', 'docker_386', 'docker_386_run'}
-found = set()
-class Context:
-    def run(self, *args, **kwargs):
-        raise AssertionError('unsupported task executed a command')
-for node in tree.body:
-    if isinstance(node, ast.FunctionDef) and node.name in names:
-        node.decorator_list = []
-        namespace = {}
-        exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), namespace)
-        try:
-            namespace[node.name](Context())
-        except RuntimeError as error:
-            if 'disabled' not in str(error):
-                raise
-        else:
-            raise AssertionError('unsupported task did not fail closed')
-        found.add(node.name)
-if found != names:
-    raise AssertionError('missing task guard')
-`], { cwd: root, encoding: 'utf8', timeout: 10_000 });
-  assert.equal(result.status, 0, result.stderr);
+  const lines = read(worker + 'tasks.py').split('\n');
+  const refusal = [
+    '    """Unsupported upstream developer task; use the repository Dockerfile."""',
+    '    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")',
+  ];
+  const names = ['docker', 'docker_run', 'docker_alpine', 'docker_alpine_run', 'docker_386',
+    'docker_386_run'];
+  for (const name of names) {
+    const starts = lines.flatMap((line, index) => line.startsWith(`def ${name}(`) ? [index] : []);
+    assert.equal(starts.length, 1, name);
+    assert.equal(lines[starts[0]], `def ${name}(ctx):`);
+    let end = starts[0] + 1;
+    while (end < lines.length && (lines[end] === '' || /^\s/.test(lines[end]))) end += 1;
+    const body = lines.slice(starts[0] + 1, end).filter(line => line.trim() !== '');
+    assert.deepEqual(body, refusal, name);
+  }
   const importer = spawnSync('bash', [worker + 'scripts/get-dep.sh', 'fuzzer-corpora'], {
     cwd: root, encoding: 'utf8', timeout: 10_000,
   });

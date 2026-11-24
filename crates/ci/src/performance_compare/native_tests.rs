@@ -1,4 +1,4 @@
-//! Closed comparison roles run only an owned inert Python recorder. File
+//! Closed comparison roles run only an owned inert shell recorder. File
 //! handshakes establish readiness/finalization; no benchmark or compiler runs.
 
 use super::{files, plan};
@@ -40,13 +40,14 @@ impl Fixture {
         fs::create_dir_all(root.join("target/release")).unwrap();
         let script = format!(
             concat!(
-                "#!/usr/bin/python3\nimport os,signal,sys,time\nfrom pathlib import Path\n",
-                "root=Path(os.environ['FIXTURE_ROOT'])\n",
-                "assert Path.cwd()==Path(os.environ['EXPECTED_CWD'])\n",
-                "assert os.environ['CAPTURED_MARKER']=='selected literal context'\n",
-                "assert sys.argv[1:]==['--owned-inert']\n",
-                "def record(name,value):\n p=root/(name+'.pending');",
-                "p.write_text(str(value));p.replace(root/name)\n",
+                "#!/bin/sh\nroot=${{FIXTURE_ROOT?}}\n",
+                "[ \"$(pwd -P)\" = \"${{EXPECTED_CWD?}}\" ] || exit 1\n",
+                "[ \"${{CAPTURED_MARKER?}}\" = 'selected literal context' ] || exit 1\n",
+                "[ \"$#\" -eq 1 ] && [ \"$1\" = --owned-inert ] || exit 1\n",
+                "record() {{\n",
+                "  printf '%s' \"$2\" >\"$root/$1.pending\"\n",
+                "  /bin/mv -f \"$root/$1.pending\" \"$root/$1\"\n",
+                "}}\n",
                 "{body}\n"
             ),
             body = body
@@ -62,8 +63,6 @@ impl Fixture {
             ("EXPECTED_CWD", root.clone().into_os_string()),
             ("CAPTURED_MARKER", "selected literal context".into()),
             ("PATH", "/nonexistent/no-fallback".into()),
-            ("PYTHONDONTWRITEBYTECODE", "1".into()),
-            ("PYTHONNOUSERSITE", "1".into()),
         ]
         .into_iter()
         .map(|(key, value)| (key.into(), value))
@@ -141,28 +140,31 @@ fn no_signal() -> Signals {
 async fn benchmark_term_reaches_only_leader_and_waits_for_cooperative_finalizers() {
     let fixture = Fixture::new(
         r#"
-child=os.fork()
-if child==0:
- def child_term(*_):record('descendant-term','observed')
- signal.signal(signal.SIGTERM,child_term)
- record('descendant-ready',os.getpid())
- while not (root/'descendant-release').exists():
-  if (root/'probe-request').exists():record('descendant-probe','alive')
-  time.sleep(.005)
- os._exit(0)
-def finish(*_):
- record('leader-term','observed')
- while not (root/'release').exists():time.sleep(.005)
- assert not (root/'descendant-term').exists()
- record('descendant-release','released')
- assert os.waitpid(child,0)[1]==0
- os.write(1,b'finalized-output\n');os.write(2,b'finalized-error\n')
- record('finalized','after-descendant-and-output')
- sys.exit(0)
-signal.signal(signal.SIGTERM,finish)
-while not (root/'descendant-ready').exists():time.sleep(.005)
-record('ready',os.getpid())
-while True:time.sleep(.01)
+(
+  trap 'record descendant-term observed' TERM
+  record descendant-ready "$(exec /bin/sh -c 'printf %s "$PPID"')"
+  while [ ! -e "$root/descendant-release" ]; do
+    if [ -e "$root/probe-request" ]; then record descendant-probe alive; fi
+    /bin/sleep 0.005
+  done
+  exit 0
+) &
+child=$!
+finish() {
+  record leader-term observed
+  while [ ! -e "$root/release" ]; do /bin/sleep 0.005; done
+  [ ! -e "$root/descendant-term" ] || exit 1
+  record descendant-release released
+  wait "$child" || exit 1
+  printf 'finalized-output\n'
+  printf 'finalized-error\n' >&2
+  record finalized after-descendant-and-output
+  exit 0
+}
+trap finish TERM
+while [ ! -e "$root/descendant-ready" ]; do /bin/sleep 0.005; done
+record ready "$$"
+while :; do /bin/sleep 0.01; done
 "#,
     );
     let (tool, scope) = fixture.selected();
@@ -207,7 +209,7 @@ while True:time.sleep(.01)
 
 #[tokio::test]
 async fn wrong_comparison_role_refuses_before_dispatch_and_finishes_the_admitted_log() {
-    let fixture = Fixture::new("record('dispatched','unexpected')");
+    let fixture = Fixture::new("record dispatched unexpected");
     let (tool, scope) = fixture.selected();
     let mut native = Native::new(&fixture.path, &fixture.environment, no_signal());
     let error = native
@@ -224,8 +226,7 @@ async fn wrong_comparison_role_refuses_before_dispatch_and_finishes_the_admitted
 
 #[tokio::test]
 async fn closed_benchmark_nonzero_status_keeps_both_output_channels_and_retirement() {
-    let fixture =
-        Fixture::new("os.write(1,b'closed-output\\n');os.write(2,b'closed-error\\n');sys.exit(42)");
+    let fixture = Fixture::new("printf 'closed-output\\n'\nprintf 'closed-error\\n' >&2\nexit 42");
     let (tool, scope) = fixture.selected();
     let mut native = Native::new(&fixture.path, &fixture.environment, no_signal());
     let error = native

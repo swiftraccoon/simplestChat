@@ -255,7 +255,11 @@ impl Owned {
             .create(&directory)
             .unwrap();
         let program = directory.join("pg_config");
-        std::fs::write(&program, format!("#!/usr/bin/python3\n{script}")).unwrap();
+        std::fs::write(
+            &program,
+            format!("#!/bin/sh\n{}{script}\n", crate::fake_shell::PRELUDE),
+        )
+        .unwrap();
         std::fs::set_permissions(program, std::fs::Permissions::from_mode(0o700)).unwrap();
         Self(directory)
     }
@@ -272,7 +276,7 @@ impl Drop for Owned {
 #[tokio::test]
 async fn actual_owned_pg_config_preserves_paths_status_and_same_signal_registration() {
     let fixture = Owned::new(
-        "import json,sys;from pathlib import Path;root=Path(__file__).parent;(root/'args.json').write_text(json.dumps(sys.argv[1:]));print(root)",
+        "root=${0%/*}\njson_strings \"$@\" >\"$root/args.json\"\nprintf '%s\\n' \"$root\"",
     );
     let environment = fixture.environment();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -294,7 +298,7 @@ async fn actual_owned_pg_config_preserves_paths_status_and_same_signal_registrat
     sender.send(130).unwrap();
     assert_eq!(signals.pending().await, Some(130));
 
-    let fixture = Owned::new("raise SystemExit(37)");
+    let fixture = Owned::new("exit 37");
     let environment = fixture.environment();
     let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut native = Native::new(&fixture.0, &environment, Signals::injected(receiver));
@@ -321,7 +325,7 @@ async fn actual_owned_pg_config_preserves_paths_status_and_same_signal_registrat
 
 #[tokio::test]
 async fn actual_discovery_overflow_or_cancellation_never_transfers_clean_success() {
-    let fixture = Owned::new("print('x'*4097)");
+    let fixture = Owned::new("repeat x 4097\nprintf '\\n'");
     let environment = fixture.environment();
     let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut native = Native::new(&fixture.0, &environment, Signals::injected(receiver));
@@ -332,15 +336,11 @@ async fn actual_discovery_overflow_or_cancellation_never_transfers_clean_success
     );
 
     let fixture = Owned::new(
-        r#"import signal,time
-from pathlib import Path
-root=Path(__file__).parent
-def stop(*_):
- (root/'term').write_text('retired');raise SystemExit(0)
-signal.signal(signal.SIGTERM,stop)
-pending=root/'ready.pending';pending.write_text('ready');pending.replace(root/'ready')
-while True:time.sleep(.01)
-"#,
+        r#"root=${0%/*}
+trap 'printf retired >"$root/term"; exit 0' TERM
+printf ready >"$root/ready.pending"
+/bin/mv -f "$root/ready.pending" "$root/ready"
+while :; do /bin/sleep 0.01; done"#,
     );
     let environment = fixture.environment();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -367,7 +367,7 @@ while True:time.sleep(.01)
 
 #[tokio::test]
 async fn unproven_cleanup_and_late_cancellation_fence_the_harness_handoff() {
-    let fixture = Owned::new("from pathlib import Path;print(Path(__file__).parent)");
+    let fixture = Owned::new("printf '%s\\n' \"${0%/*}\"");
     let environment = fixture.environment();
     let mut fake = Fake {
         commands: vec![],

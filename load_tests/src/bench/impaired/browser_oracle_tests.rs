@@ -1,15 +1,12 @@
 //! The unchanged launcher is exercised only with owned inert fixture tools.
 
+use super::super::tests::{saved_environment, shell};
 use super::{
     plan::{Mode, Plan},
     tests::{Fault, Fixture, executable},
 };
 use crate::bench::process::{self, Command, NativeHost, Sink};
 use std::{ffi::OsString, fs, path::Path, time::Duration};
-
-fn python(path: &Path, contents: &str) {
-    executable(path, format!("#!/usr/bin/python3\n{contents}\n").as_bytes());
-}
 
 #[tokio::test]
 async fn unchanged_launcher_proves_guest_env_profile_inputs_status_and_cleanup_corrections() {
@@ -41,53 +38,56 @@ async fn unchanged_launcher_proves_guest_env_profile_inputs_status_and_cleanup_c
             )
             .unwrap();
         }
-        let root = serde_json::to_string(fixture.root.to_str().unwrap()).unwrap();
-        python(
+        let root = fixture.root.to_str().unwrap();
+        assert!(!root.contains('\''));
+        shell(
             &fixture.root.join("server"),
             &format!(
                 r#"
-import json,os,pathlib,signal,sys
-root=pathlib.Path({root})
-signal.signal(signal.SIGTERM,lambda *_:sys.exit({server_status}))
-(root/'server-env.json').write_text(json.dumps(dict(os.environ)))
-(root/'ready.part').write_text('ready')
-os.replace(root/'ready.part',root/'server.ready')
-while True:signal.pause()
+root='{root}'
+sleeper=
+trap 'kill "$sleeper" 2>/dev/null; exit {server_status}' TERM
+/usr/bin/env >"$root/server-environment"
+printf ready >"$root/ready.part"
+/bin/mv -f "$root/ready.part" "$root/server.ready"
+while :; do
+  /bin/sleep 1 >/dev/null 2>&1 &
+  sleeper=$!
+  wait "$sleeper"
+done
 "#
             ),
         );
-        python(
+        shell(
             &fixture.root.join("curl"),
             &format!(
                 r#"
-import pathlib,sys,time
-ready=pathlib.Path({root})/'server.ready'
-for _ in range(200):
- if ready.exists():sys.exit(0)
- time.sleep(.01)
-sys.exit(1)
+attempt=0
+while [ "$attempt" -lt 200 ]; do
+  if [ -e '{root}/server.ready' ]; then exit 0; fi
+  /bin/sleep 0.01
+  attempt=$((attempt + 1))
+done
+exit 1
 "#
             ),
         );
-        python(
+        shell(
             &fixture.root.join("node"),
             &format!(
                 r#"
-import json,os,pathlib,sys
-root=pathlib.Path({root})
-(root/'node-env.json').write_text(json.dumps(dict(os.environ)))
-(root/'node-argv.json').write_text(json.dumps(sys.argv[1:]))
-sys.exit({node_status})
+root='{root}'
+/usr/bin/env >"$root/node-environment"
+json_strings "$@" >"$root/node-argv.json"
+exit {node_status}
 "#
             ),
         );
-        python(
+        shell(
             &fixture.root.join("sudo"),
             &format!(
                 r#"
-import json,pathlib,sys
-with (pathlib.Path({root})/'kernel.jsonl').open('a') as output:
- output.write(json.dumps(sys.argv[1:])+'\n')
+printf '%s\n' "$(json_strings "$@")" >>'{root}/kernel.jsonl'
 "#
             ),
         );
@@ -163,14 +163,14 @@ with (pathlib.Path({root})/'kernel.jsonl').open('a') as output:
             serde_json::from_slice::<serde_json::Value>(&fs::read(fixture.root.join(name)).unwrap())
                 .unwrap()
         };
-        let server = read("server-env.json");
+        let server = saved_environment(&fixture.root.join("server-environment"));
         let expected = plan.server_environment();
         for (name, value) in expected {
             assert_eq!(server[name.to_str().unwrap()], value.to_str().unwrap());
         }
-        assert!(server.get("DATABASE_URL").is_none());
-        assert!(server.get("NODE_PATH").is_none());
-        let node = read("node-env.json");
+        assert!(!server.contains_key("DATABASE_URL"));
+        assert!(!server.contains_key("NODE_PATH"));
+        let node = saved_environment(&fixture.root.join("node-environment"));
         let expected = plan.node_environment();
         for name in [
             "BASE_URL",

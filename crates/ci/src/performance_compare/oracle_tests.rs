@@ -54,46 +54,72 @@ fn assert_original_bytes() {
 
 /// Every executable is this same inert recorder under a literal role name.
 /// The build recorder writes distinguishable fixture bytes but executes none.
-const RECORDER: &str = r#"#!/usr/bin/python3
-import json,os,sys
-from pathlib import Path
-role=Path(sys.argv[0]).name
-args=sys.argv[1:]
-workspace=Path(os.environ['GITHUB_WORKSPACE'])
-temporary=Path(os.environ['RUNNER_TEMP'])
-event={'program':role,'args':args,'cwd':os.getcwd(),'environment':{
- key:os.environ.get(key) for key in ['CARGO_TARGET_DIR','OPENSSL_DIR','OPENSSL_STATIC',
- 'AWS_LC_SYS_SYSTEM_DIR','AWS_LC_SYS_STATIC','AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK',
- 'PKG_CONFIG_PATH','PIP_CONSTRAINT','CAPTURED_MARKER']}}
-with Path(os.environ['ORACLE_RECORD']).open('a') as output:
- output.write(json.dumps(event,ensure_ascii=False)+'\n')
-if role=='git':
- if args[0]=='rev-parse':
-  assert args==['rev-parse','--verify',os.environ['BASELINE_REF']+'^{commit}']
-  print('b'*40)
- else:
-  assert args==['worktree','add','--detach',str(temporary/'baseline'),'b'*40]
-  (temporary/'baseline'/'vendor').mkdir(parents=True)
-elif role=='find':
- assert args==[str(temporary/'baseline'/'vendor'),'-exec','touch','-h','-t',
- '200001010000','{}','+']
-elif role=='cargo':
- assert args in [['build','--locked','--release','--bin','simplestChat'],
- ['build','--locked','--release','-p','simplestchat-load-test','--bin','load_test']]
- target=Path(os.environ.get('CARGO_TARGET_DIR',str(Path.cwd()/'target')))/'release'
- target.mkdir(parents=True,exist_ok=True)
- variant='baseline' if Path.cwd()==temporary/'baseline' else 'candidate'
- (target/args[-1]).write_bytes(('inert '+variant+' '+args[-1]).encode())
-elif role=='install':
- assert args==['-D',str(workspace/'target/release/simplestChat'),
- str(temporary/'baseline/target/release/simplestChat')]
- destination=Path(args[2]);destination.parent.mkdir(parents=True)
- destination.write_bytes(Path(args[1]).read_bytes());destination.chmod(0o755)
-elif role=='rm':
- assert args==['-f',str(workspace/'target/release/simplestChat')]
- Path(args[1]).unlink()
-else:
- assert role=='load_test'
+const RECORDER: &str = r#"
+role=${0##*/}
+workspace=${GITHUB_WORKSPACE?}
+temporary=${RUNNER_TEMP?}
+cwd=$(pwd -P)
+event="{\"program\": $(json_string "$role"), \"args\": $(json_strings "$@")"
+event="$event, \"cwd\": $(json_string "$cwd"), \"environment\": {"
+separator=
+for key in CARGO_TARGET_DIR OPENSSL_DIR OPENSSL_STATIC AWS_LC_SYS_SYSTEM_DIR AWS_LC_SYS_STATIC \
+  AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK PKG_CONFIG_PATH PIP_CONSTRAINT CAPTURED_MARKER; do
+  event="$event$separator\"$key\": $(json_value "$key")"
+  separator=', '
+done
+printf '%s}}\n' "$event" >>"${ORACLE_RECORD?}"
+fresh_directory() {
+  if [ -e "$1" ] || [ -L "$1" ]; then return 1; fi
+  /bin/mkdir -p -- "$1"
+}
+selected=$(repeat b 40)
+case $role in
+  git)
+    [ "$#" -ge 1 ] || exit 1
+    if [ "$1" = rev-parse ]; then
+      [ "$#" -eq 3 ] && [ "$2" = --verify ] && [ "$3" = "${BASELINE_REF?}^{commit}" ] || exit 1
+      printf '%s\n' "$selected"
+    else
+      [ "$#" -eq 5 ] && [ "$1" = worktree ] && [ "$2" = add ] && [ "$3" = --detach ] &&
+        [ "$4" = "$temporary/baseline" ] && [ "$5" = "$selected" ] || exit 1
+      fresh_directory "$temporary/baseline/vendor" || exit 1
+    fi
+    ;;
+  find)
+    [ "$#" -eq 8 ] && [ "$1" = "$temporary/baseline/vendor" ] && [ "$2" = -exec ] &&
+      [ "$3" = touch ] && [ "$4" = -h ] && [ "$5" = -t ] && [ "$6" = 200001010000 ] &&
+      [ "$7" = '{}' ] && [ "$8" = + ] || exit 1
+    ;;
+  cargo)
+    {
+      [ "$#" -eq 5 ] && [ "$1" = build ] && [ "$2" = --locked ] && [ "$3" = --release ] &&
+        [ "$4" = --bin ] && [ "$5" = simplestChat ]
+    } || {
+      [ "$#" -eq 7 ] && [ "$1" = build ] && [ "$2" = --locked ] && [ "$3" = --release ] &&
+        [ "$4" = -p ] && [ "$5" = simplestchat-load-test ] && [ "$6" = --bin ] &&
+        [ "$7" = load_test ]
+    } || exit 1
+    target=${CARGO_TARGET_DIR-$cwd/target}/release
+    /bin/mkdir -p -- "$target" || exit 1
+    if [ "$cwd" = "$temporary/baseline" ]; then variant=baseline; else variant=candidate; fi
+    eval "binary=\${$#}"
+    printf 'inert %s %s' "$variant" "$binary" >"$target/$binary"
+    ;;
+  install)
+    [ "$#" -eq 3 ] && [ "$1" = -D ] && [ "$2" = "$workspace/target/release/simplestChat" ] &&
+      [ "$3" = "$temporary/baseline/target/release/simplestChat" ] || exit 1
+    fresh_directory "${3%/*}" || exit 1
+    /bin/cat -- "$2" >"$3" && /bin/chmod 755 "$3" || exit 1
+    ;;
+  rm)
+    [ "$#" -eq 2 ] && [ "$1" = -f ] && [ "$2" = "$workspace/target/release/simplestChat" ] ||
+      exit 1
+    /bin/rm -- "$2" || exit 1
+    ;;
+  *)
+    [ "$role" = load_test ] || exit 1
+    ;;
+esac
 "#;
 
 struct Fixture {
@@ -148,8 +174,6 @@ impl Fixture {
             ("PKG_CONFIG_PATH", "/literal selected pkgconfig".into()),
             ("PIP_CONSTRAINT", "/literal selected constraints".into()),
             ("CAPTURED_MARKER", "literal marker with spaces λ".into()),
-            ("PYTHONDONTWRITEBYTECODE", "1".into()),
-            ("PYTHONNOUSERSITE", "1".into()),
         ]
         .into_iter()
         .map(|(name, value)| (name.into(), value))
@@ -213,7 +237,11 @@ impl Drop for Fixture {
     }
 }
 fn executable(path: &Path) {
-    fs::write(path, RECORDER).unwrap();
+    fs::write(
+        path,
+        format!("#!/bin/sh\n{}{RECORDER}", crate::fake_shell::PRELUDE),
+    )
+    .unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
 }
 

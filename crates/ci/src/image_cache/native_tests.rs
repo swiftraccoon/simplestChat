@@ -7,30 +7,56 @@ fn executable(fixture: &mut Fixture, mode: &str) {
     let bin = fixture.root.join("fake commands");
     fs::create_dir(&bin).unwrap();
     let path = bin.join("cargo");
-    fs::write(&path, r#"#!/usr/bin/python3
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(os.environ['FIXTURE_ROOT']);args=sys.argv[1:];mode=os.environ['FIXTURE_MODE']
-assert args[:8]==['run','--locked','-q','-p','simplestchat-security','--','image','cache']
-args=['selector',*args[8:]]
-stage='prefix' if args[1:]==['--prefix'] else 'hint' if len(args)==1 else 'status'
-with (root/'events').open('a') as out:out.write(json.dumps(args)+'\n')
-if mode==stage+'-hang':
-    signal.signal(signal.SIGINT,signal.SIG_IGN);signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    (root/'ready').write_text(str(os.getpid()))
-    while True:time.sleep(.01)
-if mode==stage+'-fail':
-    print('PRIVATE-SENTINEL',file=sys.stderr);sys.exit(42)
-prefix='grype-db-v2-main-'+'a'*64+'-'
-if mode==stage+'-overflow':print('x'*4097)
-elif mode==stage+'-invalid':print('PRIVATE-SENTINEL\nprivate=injected')
-elif stage=='prefix':print(prefix)
-else:
-    if stage=='status':
-        assert args[1]=='--status'
-        assert args[2] in [str(root/'runner temp/image-database-preparation/database-status.json'),str(root/'runner temp/production-security/image/database-status.json')]
-    print(prefix+'b'*64)
-"#).unwrap();
+    let source = r#"
+PATH=/usr/bin:/bin
+root=${FIXTURE_ROOT?} mode=${FIXTURE_MODE?}
+[ "$#" -ge 8 ] && [ "$1" = run ] && [ "$2" = --locked ] && [ "$3" = -q ] && [ "$4" = -p ] &&
+  [ "$5" = simplestchat-security ] && [ "$6" = -- ] && [ "$7" = image ] && [ "$8" = cache ] ||
+  exit 1
+shift 8
+set -- selector "$@"
+if [ "$#" -eq 2 ] && [ "$2" = --prefix ]; then
+  stage=prefix
+elif [ "$#" -eq 1 ]; then
+  stage=hint
+else
+  stage=status
+fi
+{ json_strings "$@"; printf '\n'; } >>"$root/events"
+if [ "$mode" = "$stage-hang" ]; then
+  trap '' INT TERM
+  printf '%s' "$$" >"$root/ready"
+  while :; do sleep 0.01; done
+fi
+if [ "$mode" = "$stage-fail" ]; then
+  printf 'PRIVATE-SENTINEL\n' >&2
+  exit 42
+fi
+prefix=grype-db-v2-main-$(repeat a 64)-
+if [ "$mode" = "$stage-overflow" ]; then
+  repeat x 4097
+  printf '\n'
+elif [ "$mode" = "$stage-invalid" ]; then
+  printf 'PRIVATE-SENTINEL\nprivate=injected\n'
+elif [ "$stage" = prefix ]; then
+  printf '%s\n' "$prefix"
+else
+  if [ "$stage" = status ]; then
+    [ "$#" -ge 3 ] && [ "$2" = --status ] || exit 1
+    case $3 in
+      "$root/runner temp/image-database-preparation/database-status.json") ;;
+      "$root/runner temp/production-security/image/database-status.json") ;;
+      *) exit 1 ;;
+    esac
+  fi
+  printf '%s%s\n' "$prefix" "$(repeat b 64)"
+fi
+"#;
+    fs::write(
+        &path,
+        format!("#!/bin/sh\n{}{source}", crate::fake_shell::PRELUDE),
+    )
+    .unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
     for (key, value) in [
         ("PATH", bin.into_os_string()),
@@ -46,7 +72,7 @@ fn signals() -> Signals {
 }
 
 #[tokio::test]
-async fn actual_fake_python_processes_preserve_success_and_both_status_paths() {
+async fn actual_fake_processes_preserve_success_and_both_status_paths() {
     for operation in [
         Operation::Hint,
         Operation::Preparation,

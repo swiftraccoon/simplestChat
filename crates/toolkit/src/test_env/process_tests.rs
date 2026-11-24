@@ -28,29 +28,32 @@ impl Fixture {
         Self { root }
     }
     fn command(&self, status: i32, cancel: bool) -> std::process::Command {
-        let mut command = std::process::Command::new("/usr/bin/python3");
+        let mut command = std::process::Command::new("/bin/sh");
         command.args([
             "-c",
             r#"
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(sys.argv[1]);status=int(sys.argv[2]);cancel=sys.argv[3]=='true'
-def record(name,contents):
-    pending=root/(name+'.pending')
-    pending.write_text(contents)
-    pending.replace(root/name)
-child=os.fork()
-if child==0:
-    signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    record('worker',json.dumps({'pid':os.getpid(),'group':os.getpgrp()}))
-    while True:time.sleep(.01)
-def terminate(*_): record('term','TERM received')
-if cancel:signal.signal(signal.SIGTERM,terminate)
-while not (root/'worker').exists():time.sleep(.01)
-record('leader',json.dumps({'pid':os.getpid(),'group':os.getpgrp()}))
-while not (root/'release').exists():time.sleep(.01)
-sys.exit(status)
+root=$1 status=$2 cancel=$3
+record() {
+  printf '%s' "$2" >"$root/$1.pending"
+  /bin/mv -f "$root/$1.pending" "$root/$1"
+}
+identity() {
+  identity_group=$(/bin/ps -o pgid= -p "$1") || return 1
+  printf '{"pid": %s, "group": %s}' "$1" "$((identity_group))"
+}
+(
+  trap '' TERM
+  worker=$(exec /bin/sh -c 'printf %s "$PPID"')
+  record worker "$(identity "$worker")"
+  while :; do /bin/sleep 0.01; done
+) &
+if [ "$cancel" = true ]; then trap 'record term "TERM received"' TERM; fi
+while [ ! -e "$root/worker" ]; do /bin/sleep 0.01; done
+record leader "$(identity "$$")"
+while [ ! -e "$root/release" ]; do /bin/sleep 0.01; done
+exit "$status"
 "#,
+            "sh",
         ]);
         command
             .arg(&self.root)
@@ -125,8 +128,8 @@ async fn retired(pid: i32) {
 }
 fn unrelated() -> Group {
     use std::os::unix::process::CommandExt;
-    let child = std::process::Command::new("/usr/bin/python3")
-        .args(["-c", "import time;time.sleep(30)"])
+    let child = std::process::Command::new("/bin/sleep")
+        .arg("30")
         .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

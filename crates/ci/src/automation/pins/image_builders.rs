@@ -126,6 +126,149 @@ fn no_workflow_installs_buildx_through_a_floating_action() {
     }
 }
 
+/// Caddy's publishing step, run as GitHub runs it with a fake Buildx that
+/// writes each recorded metadata text: a lowercase SHA-256 index digest of
+/// one UTF-8 JSON object becomes the step output, the attested receipt and
+/// the summary line; every other metadata stops the step with the fixed
+/// words before it writes any of them.
+#[tokio::test]
+async fn the_caddy_step_records_only_a_well_formed_index_digest() {
+    use sha2::{Digest, Sha256};
+    let document = workflow(CADDY.0);
+    let step = steps(&document, CADDY.1)
+        .iter()
+        .find(|step| step["id"] == "image")
+        .unwrap();
+    let root = super::ansible::root();
+    let scratch = std::env::temp_dir().join(format!("caddy step {}", std::process::id()));
+    std::fs::create_dir(&scratch).unwrap();
+    std::fs::create_dir(scratch.join("bin")).unwrap();
+    let docker = scratch.join("bin/docker");
+    std::fs::write(
+        &docker,
+        concat!(
+            "#!/bin/sh\n",
+            "[ \"$1 $2\" = 'buildx create' ] && exit 0\n",
+            "[ \"$1 $2\" = 'buildx build' ] || exit 1\n",
+            "while [ \"$#\" -gt 1 ] && [ \"$1\" != --metadata-file ]; do shift; done\n",
+            "[ \"$#\" -gt 1 ] && /bin/cp \"$CASE_METADATA\" \"$2\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&docker, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let digest = format!("sha256:{}", "0123456789abcdef".repeat(4));
+    let pretty = format!(
+        "{{\n  \"containerimage.descriptor\": {{\n    \"digest\": \"sha256:{}\"\n  }},\n  \
+         \"containerimage.digest\": \"{digest}\"\n}}",
+        "f".repeat(64)
+    );
+    let refused: Vec<Vec<u8>> = vec![
+        b"{}".to_vec(),
+        format!(
+            "{{\"containerimage.digest\": \"{}\"}}",
+            digest.to_uppercase()
+        )
+        .into_bytes(),
+        format!("{{\"containerimage.digest\": \"{}\"}}", &digest[..70]).into_bytes(),
+        format!("{{\"containerimage.digest\": \"{digest}\\n\"}}").into_bytes(),
+        format!("{{\"containerimage.digest\": \"{digest}\\u0000\"}}").into_bytes(),
+        format!("{{\"containerimage.digest\": \" {digest}\"}}").into_bytes(),
+        format!("{{\"containerimage.digest\": [\"{digest}\"]}}").into_bytes(),
+        format!("[{{\"containerimage.digest\": \"{digest}\"}}]").into_bytes(),
+        format!("{{\"containerimage.digest\": \"{digest}\"}}{{}}").into_bytes(),
+        format!("{{\"containerimage.digest\": \"{digest}\", \"name\": \"\u{0}\"}}").into_bytes(),
+        [
+            format!("{{\"containerimage.digest\": \"{digest}\", \"name\": \"").as_bytes(),
+            b"\xff\"}",
+        ]
+        .concat(),
+        Vec::new(),
+    ];
+    let accepted = [
+        format!("{{\"containerimage.digest\": \"{digest}\"}}").into_bytes(),
+        pretty.into_bytes(),
+    ];
+    let hex = |path: &str| {
+        Sha256::digest(std::fs::read(root.join(path)).unwrap())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    let image = format!("ghcr.io/owned/caddy:2.11.7-{}@{digest}", "b".repeat(40));
+    let receipt = format!(
+        concat!(
+            "{{\n  \"version\": \"2.11.7\",\n  \"revision\": \"{revision}\",\n",
+            "  \"image\": \"{image}\",\n  \"platforms\": [\n    \"linux/amd64\",\n",
+            "    \"linux/arm64\"\n  ],\n  \"recipeSha256\": \"{recipe}\",\n",
+            "  \"caddyfileSha256\": \"{caddyfile}\"\n}}\n"
+        ),
+        revision = "b".repeat(40),
+        image = image,
+        recipe = hex("build/caddy-image.Dockerfile"),
+        caddyfile = hex("Caddyfile"),
+    );
+    let mut outcomes = Vec::new();
+    for (index, metadata) in refused.iter().chain(&accepted).enumerate() {
+        let case = scratch.join(index.to_string());
+        std::fs::create_dir(&case).unwrap();
+        std::fs::write(case.join("metadata"), metadata).unwrap();
+        let mut bash = std::process::Command::new("/bin/bash");
+        bash.args(["--noprofile", "--norc", "-eo", "pipefail", "-c"])
+            .arg(format!("exec 2>&1\n{}", script(step)))
+            .current_dir(&root)
+            .env_clear()
+            .env(
+                "PATH",
+                format!(
+                    "{}:/usr/bin:/bin:/usr/sbin:/sbin",
+                    scratch.join("bin").display()
+                ),
+            )
+            .env("CASE_METADATA", case.join("metadata"))
+            .env("RUNNER_TEMP", &case)
+            .env("GITHUB_OUTPUT", case.join("output"))
+            .env("GITHUB_STEP_SUMMARY", case.join("summary"))
+            .env("GITHUB_SHA", "b".repeat(40))
+            .env("IMAGE_NAME", "ghcr.io/owned/caddy")
+            .env("IMAGE_TAG", format!("2.11.7-{}", "b".repeat(40)));
+        let (status, printed) = simplestchat_toolkit::test_env::helper_with_signals(
+            bash,
+            std::time::Duration::from_secs(30),
+            Some(64 * 1024),
+            None,
+        )
+        .await
+        .unwrap();
+        let read = |name: &str| std::fs::read_to_string(case.join(name)).ok();
+        outcomes.push((
+            status,
+            String::from_utf8(printed).unwrap(),
+            read("output"),
+            read("caddy-release.json"),
+            read("summary"),
+        ));
+    }
+    std::fs::remove_dir_all(&scratch).unwrap();
+    let (refusals, successes) = outcomes.split_at(refused.len());
+    for (index, (status, printed, output, receipt, summary)) in refusals.iter().enumerate() {
+        assert_eq!(*status, 1, "refused metadata {index}");
+        assert!(printed.ends_with("Caddy image index digest is missing or malformed\n"));
+        assert!(output.is_none() && receipt.is_none() && summary.is_none());
+    }
+    for (status, printed, output, written, summary) in successes {
+        assert_eq!((*status, printed.as_str()), (0, ""));
+        assert_eq!(
+            output.as_deref(),
+            Some(format!("digest={digest}\n").as_str())
+        );
+        assert_eq!(written.as_deref(), Some(receipt.as_str()));
+        assert_eq!(
+            summary.as_deref(),
+            Some(format!("Caddy 2.11.7: `{image}`\n").as_str())
+        );
+    }
+}
+
 /// Caddy's only build names its own recipe, so BuildKit reads that recipe's
 /// ignore file, which admits only the proxy configuration, never the
 /// repository's 500-pattern `.dockerignore`.

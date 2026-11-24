@@ -8,6 +8,8 @@
 //! media announcements (`media_ip`).
 
 pub mod executable;
+#[cfg(any(test, feature = "test-hooks"))]
+pub mod fake_shell;
 pub mod media_ip;
 pub mod owned_process;
 pub mod replay;

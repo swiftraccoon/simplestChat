@@ -37,7 +37,7 @@ impl Fixture {
         fs::write(openssl.join("lib/pkgconfig/openssl.pc"), "owned fixture").unwrap();
         for name in ["python named", "clang", "clang++", "pkg-config"] {
             let path = bin.join(name);
-            fs::write(&path, b"#!/usr/bin/python3\nraise SystemExit(0)\n").unwrap();
+            fs::write(&path, b"#!/bin/sh\nexit 0\n").unwrap();
             fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
         }
         let environment = Environment::from([

@@ -12,6 +12,8 @@
 //! an analyzed database.
 
 use anyhow::{Result, bail};
+#[cfg(test)]
+use simplestchat_toolkit::fake_shell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};

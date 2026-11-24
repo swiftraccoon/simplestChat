@@ -34,12 +34,16 @@ fn original_shell_argv_status_and_fixed_environment_match_both_typed_create_plan
             let tool = fixture.root.join("docker");
             fs::write(
                 &tool,
-                concat!(
-                    "#!/usr/bin/python3\nimport os,sys,json\nfrom pathlib import Path\n",
-                    "root=Path(os.environ['FIXTURE_ROOT'])\n",
-                    "(root/'old-command.json').write_text(json.dumps({'argv':sys.argv[1:],",
-                    "'secret':os.environ.get('TRUSTED_PROXY_SECRET'),'cwd':str(Path.cwd())}))\n",
-                    "sys.exit(int(os.environ['FAKE_STATUS']))\n"
+                format!(
+                    concat!(
+                        "#!/bin/sh\n{}root=${{FIXTURE_ROOT?}}\ncwd=$(pwd -P)\n",
+                        "{{ printf '{{\"argv\": '; json_strings \"$@\"\n",
+                        "  printf ', \"secret\": '; json_value TRUSTED_PROXY_SECRET\n",
+                        "  printf ', \"cwd\": '; json_string \"$cwd\"\n",
+                        "  printf '}}'; }} >\"$root/old-command.json\"\n",
+                        "exit \"${{FAKE_STATUS?}}\"\n"
+                    ),
+                    crate::fake_shell::PRELUDE
                 ),
             )
             .unwrap();

@@ -155,17 +155,16 @@ fn automation_checks_keep_their_ceiling_and_exact_gate() {
 
 /// The pinned Python is selected once, unconditionally, and named for what
 /// runs on it, before every step that installs into it or runs it: in
-/// rust-test the Ansible the playbook pins call, the native build (the
-/// OpenSSL and AWS-LC installers and the worker build's pip) and the tests'
-/// interpreter fixtures; in automation the Ansible controller environment.
-/// It also precedes the fingerprint and the cache restore.
+/// rust-test the Ansible the playbook pins call and the vendored worker
+/// build's pip; in automation the Ansible controller environment. It also
+/// precedes the fingerprint and the cache restore.
 #[test]
 fn the_pinned_python_precedes_fingerprints_cache_and_its_consumers() {
     let ci = workflow("ci.yml");
     for (name, purpose) in [
         (
             "rust-test",
-            "Select the pinned Python of Ansible, the native build and test fixtures",
+            "Select the pinned Python of Ansible and the native build",
         ),
         (
             "automation",

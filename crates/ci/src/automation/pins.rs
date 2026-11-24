@@ -25,6 +25,7 @@ mod public_reboot;
 mod public_recorded_release;
 mod public_secrets;
 mod public_templates;
+mod python_programs;
 mod reboot;
 mod recorded;
 mod release_container_ci;

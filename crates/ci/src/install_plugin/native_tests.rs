@@ -7,47 +7,109 @@ use std::os::unix::fs::PermissionsExt;
 fn executable(fixture: &mut Fixture, expected: &Expected, mode: &str) {
     let directory = fixture.root.join("fake commands");
     fs::create_dir(&directory).unwrap();
-    let source = r#"#!/usr/bin/python3
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(os.environ['FIXTURE_ROOT'])
-args=sys.argv[1:]
-program=Path(sys.argv[0]).name
-stage='download' if program=='curl' else 'caller_version' if program=='docker' else 'root_version' if args[0]=='env' else 'install_directory' if args[1]=='-d' else 'install_file'
-mode=os.environ['FIXTURE_MODE']
-with (root/'events').open('a') as out: out.write(json.dumps([program,args,stage])+'\n')
-if mode==stage+'-fail':
-    print('PRIVATE-SENTINEL',file=sys.stderr);sys.exit(42)
-if stage=='install_file':
-    assert args[:3]==['install','-m','0755']
-    assert args[3].endswith('/verified') and Path(args[3]).read_bytes()==b'owned fixture plugin\n'
-    assert args[4]==os.environ['FIXTURE_PLUGIN']
-    (root/'installed-fixture').write_text('owned fixture only')
-if mode==stage+'-hang':
-    signal.signal(signal.SIGINT,signal.SIG_IGN);signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    (root/'ready').write_text(str(os.getpid()))
-    while True: time.sleep(.01)
-if stage=='download':
-    assert '--output' not in args
-    if mode=='swap-download':
-        prefix=next(path for path in (root/'runner temp').iterdir() if path.is_dir())
-        target=root/'private-target';target.write_bytes(b'foreign sentinel')
-        (prefix/'download').unlink();(prefix/'download').symlink_to(target)
-    sys.stdout.buffer.write(b'owned fixture plugin\n')
-elif stage=='install_directory':
-    assert args==['install','-d','-m','0755','/usr/local/lib/docker/cli-plugins']
-elif stage=='caller_version':
-    assert args==json.loads(os.environ['FIXTURE_VERSION']);print(os.environ['FIXTURE_ANSWER'])
-elif stage=='root_version':
-    assert args==['env','-i','PATH=/usr/sbin:/usr/bin:/sbin:/bin','LC_ALL=C','timeout','--signal=TERM','--kill-after=2s','10s','/usr/bin/docker','--host','unix:///var/run/docker.sock',*json.loads(os.environ['FIXTURE_VERSION'])]
-    print(os.environ['FIXTURE_ANSWER'])
+    // `FIXTURE_VERSION` holds the expected version command, one word per line.
+    let source = r#"
+PATH=/usr/bin:/bin
+root=${FIXTURE_ROOT?}
+program=${0##*/}
+newline='
+'
+member() {
+  member_word=$1
+  shift
+  for member_item in "$@"; do
+    if [ "$member_item" = "$member_word" ]; then return 0; fi
+  done
+  return 1
+}
+same() {
+  same_rest=$1
+  shift
+  while [ -n "$same_rest" ]; do
+    same_line=${same_rest%%"$newline"*}
+    same_rest=${same_rest#*"$newline"}
+    [ "$#" -gt 0 ] && [ "$1" = "$same_line" ] || return 1
+    shift
+  done
+  [ "$#" -eq 0 ]
+}
+if [ "$program" = curl ]; then
+  stage=download
+elif [ "$program" = docker ]; then
+  stage=caller_version
+else
+  [ "$#" -ge 1 ] || exit 1
+  if [ "$1" = env ]; then
+    stage=root_version
+  else
+    [ "$#" -ge 2 ] || exit 1
+    if [ "$2" = -d ]; then stage=install_directory; else stage=install_file; fi
+  fi
+fi
+mode=${FIXTURE_MODE?}
+{
+  printf '['; json_string "$program"; printf ', '; json_strings "$@"
+  printf ', '; json_string "$stage"; printf ']\n'
+} >>"$root/events"
+if [ "$mode" = "$stage-fail" ]; then
+  printf 'PRIVATE-SENTINEL\n' >&2
+  exit 42
+fi
+if [ "$stage" = install_file ]; then
+  [ "$#" -ge 5 ] && [ "$1" = install ] && [ "$2" = -m ] && [ "$3" = 0755 ] || exit 1
+  case $4 in */verified) ;; *) exit 1 ;; esac
+  printf 'owned fixture plugin\n' | cmp -s - "$4" || exit 1
+  [ "$5" = "${FIXTURE_PLUGIN?}" ] || exit 1
+  printf 'owned fixture only' >"$root/installed-fixture"
+fi
+if [ "$mode" = "$stage-hang" ]; then
+  trap '' INT TERM
+  printf '%s' "$$" >"$root/ready"
+  while :; do sleep 0.01; done
+fi
+if [ "$stage" = download ]; then
+  if member --output "$@"; then exit 1; fi
+  if [ "$mode" = swap-download ]; then
+    prefix=
+    for candidate in "$root/runner temp"/*; do
+      if [ -d "$candidate" ]; then prefix=$candidate; break; fi
+    done
+    [ -n "$prefix" ] || exit 1
+    printf 'foreign sentinel' >"$root/private-target"
+    rm -- "$prefix/download" && ln -s -- "$root/private-target" "$prefix/download" || exit 1
+  fi
+  printf 'owned fixture plugin\n'
+elif [ "$stage" = install_directory ]; then
+  [ "$#" -eq 5 ] && [ "$1" = install ] && [ "$2" = -d ] && [ "$3" = -m ] && [ "$4" = 0755 ] &&
+    [ "$5" = /usr/local/lib/docker/cli-plugins ] || exit 1
+elif [ "$stage" = caller_version ]; then
+  same "${FIXTURE_VERSION?}" "$@" || exit 1
+  printf '%s\n' "${FIXTURE_ANSWER?}"
+elif [ "$stage" = root_version ]; then
+  [ "$#" -ge 11 ] && [ "$1" = env ] && [ "$2" = -i ] &&
+    [ "$3" = PATH=/usr/sbin:/usr/bin:/sbin:/bin ] && [ "$4" = LC_ALL=C ] && [ "$5" = timeout ] &&
+    [ "$6" = --signal=TERM ] && [ "$7" = --kill-after=2s ] && [ "$8" = 10s ] &&
+    [ "$9" = /usr/bin/docker ] && [ "${10}" = --host ] &&
+    [ "${11}" = unix:///var/run/docker.sock ] || exit 1
+  shift 11
+  same "${FIXTURE_VERSION?}" "$@" || exit 1
+  printf '%s\n' "${FIXTURE_ANSWER?}"
+fi
 "#;
     for name in ["curl", "sudo", "docker"] {
         let path = directory.join(name);
-        fs::write(&path, source).unwrap();
+        fs::write(
+            &path,
+            format!("#!/bin/sh\n{}{source}", crate::fake_shell::PRELUDE),
+        )
+        .unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
     }
-    let version = serde_json::to_string(expected.command).unwrap();
+    let version = expected
+        .command
+        .iter()
+        .map(|word| format!("{word}\n"))
+        .collect::<String>();
     for (key, value) in [
         ("PATH", directory.into_os_string()),
         ("FIXTURE_ROOT", fixture.root.clone().into_os_string()),

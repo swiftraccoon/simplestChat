@@ -53,24 +53,24 @@ impl Fixture {
         fs::create_dir(&artifacts).unwrap();
         let harness = root.join("owned fixture harness");
         let source = format!(
-            r#"#!/usr/bin/env python3
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(os.environ['FIXTURE_ROOT'])
-with (root/'events.jsonl').open('a') as output:
-    output.write(json.dumps({{'args':sys.argv[1:], 'browser':os.environ.get('E2E_BROWSER'),
-        'artifacts':os.environ.get('E2E_ARTIFACTS'), 'ip':os.environ.get('TEST_ANNOUNCE_IP'),
-        'flag':os.environ.get('PRESENTATION_IMPAIRMENT')}})+'\n')
+            r#"{prelude}PATH=/usr/bin:/bin
+root=${{FIXTURE_ROOT?}}
+{{
+  printf '{{"args": '; json_strings "$@"
+  printf ', "browser": '; json_value E2E_BROWSER
+  printf ', "artifacts": '; json_value E2E_ARTIFACTS
+  printf ', "ip": '; json_value TEST_ANNOUNCE_IP
+  printf ', "flag": '; json_value PRESENTATION_IMPAIRMENT
+  printf '}}\n'
+}} >>"$root/events.jsonl"
 {body}
-"#
+"#,
+            prelude = crate::fake_shell::PRELUDE
         );
         fs::write(&harness, source).unwrap();
         // The planned program is `rustup`, found only on the fixture's PATH, so
         // a missing or unusable fake never falls through to a real toolchain.
-        let python = std::env::split_paths(&std::env::var_os("PATH").unwrap())
-            .map(|directory| directory.join("python3"))
-            .find(|candidate| candidate.is_file())
-            .unwrap();
+        let shell = Path::new("/bin/sh");
         let bin = root.join("bin");
         fs::create_dir(&bin).unwrap();
         let executable = bin.join("rustup");
@@ -83,7 +83,7 @@ with (root/'events.jsonl').open('a') as output:
             &executable,
             format!(
                 "#!/bin/sh\nexec {} {} \"$@\"\n",
-                quoted(&python),
+                quoted(shell),
                 quoted(&harness)
             ),
         )
@@ -145,7 +145,7 @@ async fn ready(path: &Path) {
 
 #[test]
 fn every_suite_fixes_both_browser_arguments_artifacts_and_only_needed_overrides() {
-    let fixture = Fixture::new("sys.exit(0)");
+    let fixture = Fixture::new("exit 0");
     for (name, script, prefix, media) in [
         ("auth-lifecycle", "auth-lifecycle", "auth-lifecycle", false),
         ("auth-cross-tab", "auth-cross-tab", "account-tabs", false),
@@ -207,7 +207,7 @@ fn every_suite_fixes_both_browser_arguments_artifacts_and_only_needed_overrides(
 
 #[test]
 fn invalid_invocation_and_artifact_roots_refuse_before_a_child_starts() {
-    let fixture = Fixture::new("sys.exit(0)");
+    let fixture = Fixture::new("exit 0");
     for args in [
         vec![],
         vec!["unknown".into()],
@@ -261,15 +261,13 @@ impl<F: std::future::Future<Output = anyhow::Result<Ipv4Addr>>>
 
 #[tokio::test]
 async fn native_detector_retires_its_query_before_cancelled_browser_preparation_returns() {
-    let mut fixture = Fixture::new("sys.exit(0)");
+    let mut fixture = Fixture::new("exit 0");
     let source = concat!(
-        "#!/usr/bin/python3\n",
-        "import os,signal,sys,time\nfrom pathlib import Path\n",
-        "root=Path(os.environ['FIXTURE_ROOT'])\n",
-        "def finish(*_):\n (root/'query-retired').write_text('observed');sys.exit(0)\n",
-        "signal.signal(signal.SIGTERM,finish)\n",
-        "(root/'query-ready').touch()\n",
-        "while True:time.sleep(.01)\n"
+        "#!/bin/sh\n",
+        "root=${FIXTURE_ROOT?}\n",
+        "trap 'printf observed >\"$root/query-retired\"; exit 0' TERM\n",
+        ": >\"$root/query-ready\"\n",
+        "while :; do /bin/sleep 0.01; done\n"
     );
     for name in ["route", "ip"] {
         let path = fixture.root.join(name);
@@ -309,7 +307,7 @@ async fn native_detector_retires_its_query_before_cancelled_browser_preparation_
 
 #[tokio::test]
 async fn actual_fake_harness_receives_literal_arguments_and_runs_chromium_then_firefox() {
-    let fixture = Fixture::new("sys.exit(0)");
+    let fixture = Fixture::new("exit 0");
     execute(
         &fixture.root,
         &fixture.plan(Suite::Presentation),
@@ -339,10 +337,7 @@ async fn actual_fake_harness_receives_literal_arguments_and_runs_chromium_then_f
 
 #[tokio::test]
 async fn first_browser_failure_signal_or_launch_error_preserves_status_and_stops_the_plan() {
-    for (body, code) in [
-        ("sys.exit(37)", 37),
-        ("os.kill(os.getpid(),signal.SIGTERM)", 143),
-    ] {
+    for (body, code) in [("exit 37", 37), ("kill -TERM \"$$\"", 143)] {
         let fixture = Fixture::new(body);
         let error = execute(
             &fixture.root,
@@ -356,7 +351,7 @@ async fn first_browser_failure_signal_or_launch_error_preserves_status_and_stops
         assert_eq!(fixture.events().len(), 1);
     }
     for missing in [false, true] {
-        let fixture = Fixture::new("sys.exit(0)");
+        let fixture = Fixture::new("exit 0");
         if missing {
             fs::remove_file(&fixture.executable).unwrap();
         } else {
@@ -381,14 +376,15 @@ async fn cancellation_allows_harness_cleanup_and_never_signals_an_unrelated_chil
         let delay = if code == 143 { 2.2 } else { 0.0 };
         let fixture = Fixture::new(&format!(
             r#"
-def cleanup(signum,frame):
-    time.sleep({delay})
-    (root/'cleanup').write_text(str(signum))
-    sys.exit(0)
-signal.signal(signal.SIGINT,cleanup)
-signal.signal(signal.SIGTERM,cleanup)
-(root/'ready').write_text('ready')
-while True: time.sleep(10)
+cleanup() {{
+  sleep {delay}
+  printf '%s' "$1" >"$root/cleanup"
+  exit 0
+}}
+trap 'cleanup 2' INT
+trap 'cleanup 15' TERM
+printf ready >"$root/ready"
+while :; do sleep 0.01; done
 "#
         ));
         let mut unrelated = Command::new("sleep")
@@ -426,18 +422,18 @@ async fn forced_cleanup_and_normal_leader_exit_cannot_leave_owned_group_descenda
     for hang in [false, true] {
         let fixture = Fixture::new(&format!(
             r#"
-signal.signal(signal.SIGTERM,signal.SIG_IGN)
-pid=os.fork()
-if pid==0:
-    time.sleep(0.5)
-    (root/'survived').write_text('stray descendant')
-    os._exit(0)
-(root/'ready').write_text('ready')
-if {hang}:
-    while True: time.sleep(10)
-sys.exit(0)
+trap '' TERM
+(
+  sleep 0.5
+  printf 'stray descendant' >"$root/survived"
+) &
+printf ready >"$root/ready"
+if {hang}; then
+  while :; do sleep 0.01; done
+fi
+exit 0
 "#,
-            hang = if hang { "True" } else { "False" }
+            hang = if hang { "true" } else { "false" }
         ));
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut signals = Signals::injected(receiver);
@@ -475,7 +471,7 @@ async fn address_resolution_is_once_for_media_never_for_account_suites_and_failu
         Suite::MediaContinuity,
         Suite::Presentation,
     ] {
-        let fixture = Fixture::new("sys.exit(0)");
+        let fixture = Fixture::new("exit 0");
         let mut detections = 0;
         let detector = async {
             detections += 1;
@@ -494,7 +490,7 @@ async fn address_resolution_is_once_for_media_never_for_account_suites_and_failu
         assert_eq!(invocations.len(), 2);
         assert!(fixture.events().is_empty());
     }
-    let fixture = Fixture::new("sys.exit(0)");
+    let fixture = Fixture::new("exit 0");
     let error = prepare(
         Suite::MediaContinuity,
         &fixture.environment,
@@ -517,7 +513,7 @@ async fn detector_receives_the_same_signal_and_pending_signals_cannot_launch_a_b
             self.0.store(true, Ordering::Relaxed);
         }
     }
-    let fixture = Fixture::new("sys.exit(0)");
+    let fixture = Fixture::new("exit 0");
     let released = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let probe = Probe(released.clone());
     let (started, observed) = tokio::sync::oneshot::channel();

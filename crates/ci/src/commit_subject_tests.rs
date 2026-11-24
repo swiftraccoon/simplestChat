@@ -29,7 +29,11 @@ impl Fixture {
     }
     fn git(&self, body: &str) {
         let file = self.0.join("git");
-        fs::write(&file, format!("#!/usr/bin/python3\n{body}")).unwrap();
+        fs::write(
+            &file,
+            format!("#!/bin/sh\n{}{body}\n", crate::fake_shell::PRELUDE),
+        )
+        .unwrap();
         fs::set_permissions(file, fs::Permissions::from_mode(0o700)).unwrap();
     }
     fn hook(&self, bytes: &[u8]) -> bool {
@@ -231,7 +235,7 @@ async fn closed_revision_fixed_argv_status_and_late_cancellation_are_binding() {
 #[tokio::test]
 async fn actual_fake_git_uses_captured_path_and_keeps_failure_or_interrupt_status() {
     let fixture = Fixture::new();
-    fixture.git("import json,sys;from pathlib import Path;root=Path(__file__).parent;(root/'args').write_text(json.dumps(sys.argv[1:]));print('fix: owned')");
+    fixture.git("json_strings \"$@\" >\"${0%/*}/args\"\nprintf 'fix: owned\\n'");
     let environment = fixture.environment();
     let revision = Revision::read(&environment).unwrap();
     let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -241,12 +245,12 @@ async fn actual_fake_git_uses_captured_path_and_keeps_failure_or_interrupt_statu
         fs::read_to_string(fixture.0.join("args")).unwrap(),
         format!("[\"log\", \"-1\", \"--format=%B\", \"{}\"]", "a".repeat(40))
     );
-    for body in ["raise SystemExit(37)", "print('x'*(1024*1024+1))"] {
+    for body in ["exit 37", "repeat x 1048577\nprintf '\\n'"] {
         fixture.git(body);
         let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut native = Native::new(&fixture.0, &environment, Signals::injected(receiver));
         let error = verify(&revision, &mut native).await.unwrap_err();
-        assert_eq!(error.code, if body.starts_with("raise") { 37 } else { 1 });
+        assert_eq!(error.code, if body.starts_with("exit") { 37 } else { 1 });
         assert!(native.cleanup_passed());
     }
     fs::remove_file(fixture.0.join("git")).unwrap();
@@ -258,9 +262,9 @@ async fn actual_fake_git_uses_captured_path_and_keeps_failure_or_interrupt_statu
 #[tokio::test]
 async fn cancellation_retires_only_the_owned_fake_git_group() {
     use std::os::unix::process::CommandExt;
-    let mut command = Process::new("/usr/bin/python3");
+    let mut command = Process::new("/bin/sleep");
     command
-        .args(["-c", "import time;time.sleep(30)"])
+        .arg("30")
         .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -269,15 +273,11 @@ async fn cancellation_retires_only_the_owned_fake_git_group() {
     drop(command);
     let fixture = Fixture::new();
     fixture.git(
-        r#"import signal,time
-from pathlib import Path
-root=Path(__file__).parent
-def stop(*_):
- (root/'term').write_text('retired');raise SystemExit(0)
-signal.signal(signal.SIGTERM,stop)
-pending=root/'ready.pending';pending.write_text('ready');pending.replace(root/'ready')
-while True:time.sleep(.01)
-"#,
+        r#"root=${0%/*}
+trap 'printf retired >"$root/term"; exit 0' TERM
+printf ready >"$root/ready.pending"
+/bin/mv -f "$root/ready.pending" "$root/ready"
+while :; do /bin/sleep 0.01; done"#,
     );
     let environment = fixture.environment();
     let revision = Revision::read(&environment).unwrap();

@@ -31,7 +31,8 @@ impl Fixture {
         fs::write(
             &program,
             format!(
-                "#!/usr/bin/python3\nimport os,signal,sys,time\nfrom pathlib import Path\nroot=Path(os.environ['FIXTURE_ROOT'])\n{body}\n"
+                "#!/bin/sh\n{}root=${{FIXTURE_ROOT?}}\n{body}\n",
+                crate::fake_shell::PRELUDE
             ),
         )
         .unwrap();
@@ -136,9 +137,9 @@ fn closed(descriptors: &[i32]) {
 #[tokio::test]
 async fn selected_zstd_keeps_binary_stdout_separate_and_consumes_current_input_cursor() {
     let fixture = Fixture::new(concat!(
-        "assert sys.argv[1:]==['literal-argument']\n",
-        "os.write(1,sys.stdin.buffer.read())\n",
-        "os.write(2,b'PRIVATE_STDERR\\x00\\xff')"
+        "[ \"$#\" -eq 1 ] && [ \"$1\" = literal-argument ] || exit 1\n",
+        "/bin/cat\n",
+        "printf 'PRIVATE_STDERR\\000\\377' >&2"
     ));
     let proof = Arc::new(
         simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker")).unwrap(),
@@ -172,14 +173,14 @@ async fn separate_mode_retires_descendants_before_finishing_both_pipe_eofs() {
     unrelated.arg("30").process_group(0);
     let unrelated = Group::new(unrelated.spawn().unwrap());
     let fixture = Fixture::new(concat!(
-        "child=os.fork()\n",
-        "if child==0:\n",
-        " signal.signal(signal.SIGTERM,signal.SIG_IGN)\n",
-        " (root/'worker.ready').write_text('ready')\n",
-        " while True:time.sleep(.01)\n",
-        "while not (root/'worker.ready').exists():time.sleep(.005)\n",
-        "os.write(1,b'binary\\x00\\xff')\n",
-        "os.write(2,b'private diagnostic')"
+        "(\n",
+        "  trap '' TERM\n",
+        "  printf ready >\"$root/worker.ready\"\n",
+        "  while :; do /bin/sleep 0.01; done\n",
+        ") &\n",
+        "while [ ! -e \"$root/worker.ready\" ]; do /bin/sleep 0.005; done\n",
+        "printf 'binary\\000\\377'\n",
+        "printf 'private diagnostic' >&2"
     ));
     let (command, descriptors) = fixture.separate(128, 128);
     let mut native = fixture.native(signals());
@@ -203,10 +204,10 @@ async fn either_separate_stream_overflow_refuses_success_and_closes_both_logs() 
     for stream in [1, 2] {
         let fixture = Fixture::new(&format!(
             concat!(
-                "try:\n",
-                " while True:os.write({stream},b'PRIVATE_OUTPUT'*1024)\n",
-                "except BrokenPipeError:\n",
-                " while True:time.sleep(.01)"
+                "trap '' PIPE\n",
+                "chunk=$(repeat PRIVATE_OUTPUT 1024)\n",
+                "while printf '%s' \"$chunk\" 3>&{stream} 2>/dev/null >&3; do :; done\n",
+                "while :; do /bin/sleep 0.01; done"
             ),
             stream = stream
         ));
@@ -255,7 +256,7 @@ async fn separate_known_statuses_survive_unproven_retirement_and_close_input() {
         closed(&descriptors);
     }
     for code in [0, 42, 130, 143] {
-        let fixture = Fixture::new(&format!("raise SystemExit({code})"));
+        let fixture = Fixture::new(&format!("exit {code}"));
         let (command, descriptors) = fixture.separate(128, 128);
         let mut native = fixture.native(signals());
         let error = native
@@ -295,12 +296,11 @@ async fn final_sink_failure_attempts_peer_closes_and_preserves_known_primary() {
     for code in [0, 42, 124, 130, 143] {
         let fixture = Fixture::new(&format!(
             concat!(
-                "os.write(1,b'logged')\n",
-                "signal.signal(signal.SIGTERM,signal.SIG_IGN)\n",
-                "signal.signal(signal.SIGINT,signal.SIG_IGN)\n",
-                "(root/'ready').write_text('ready')\n",
-                "if {code} in (0,42):raise SystemExit({code})\n",
-                "while True:time.sleep(.01)"
+                "printf logged\n",
+                "trap '' TERM INT\n",
+                "printf ready >\"$root/ready\"\n",
+                "if [ {code} -eq 0 ] || [ {code} -eq 42 ]; then exit {code}; fi\n",
+                "while :; do /bin/sleep 0.01; done"
             ),
             code = code
         ));
@@ -339,7 +339,7 @@ async fn paired_setup_and_spawn_refusals_settle_every_unique_owner_without_dispa
         "cancel",
     ] {
         use std::os::fd::AsRawFd;
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let (mut command, mut descriptors) = fixture.separate(128, 128);
         let (input, input_fd) = fixture.input(b"owned input", 0);
         command.stdin = Some(input);
@@ -400,7 +400,7 @@ async fn paired_setup_and_spawn_refusals_settle_every_unique_owner_without_dispa
 async fn invalid_or_borrowed_input_cannot_skip_unique_peer_log_settlement() {
     use std::os::fd::AsRawFd;
     for kind in ["writable", "directory", "pipe", "borrowed"] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let (mut command, mut descriptors) = fixture.separate(128, 128);
         let (file, writer) = match kind {
             "writable" => (
@@ -448,7 +448,7 @@ async fn invalid_or_borrowed_input_cannot_skip_unique_peer_log_settlement() {
 #[tokio::test]
 async fn unforwarded_and_borrowed_log_refusals_close_unique_input_and_sink_peers() {
     for borrowed in [false, true] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let (mut command, mut descriptors) = fixture.separate(128, 128);
         let (input, input_fd) = fixture.input(b"input", 0);
         command.stdin = Some(input);
@@ -477,9 +477,9 @@ async fn unforwarded_and_borrowed_log_refusals_close_unique_input_and_sink_peers
 async fn zstd_proof_is_disjoint_and_parent_stdio_clone_closes_before_body_settlement() {
     use std::os::unix::fs::MetadataExt;
     let fixture = Fixture::new(concat!(
-        "(root/'ready').write_text('ready')\n",
-        "while not (root/'release').exists():time.sleep(.005)\n",
-        "os.write(1,sys.stdin.buffer.read())"
+        "printf ready >\"$root/ready\"\n",
+        "while [ ! -e \"$root/release\" ]; do /bin/sleep 0.005; done\n",
+        "/bin/cat"
     ));
     let proof = Arc::new(
         simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker")).unwrap(),
@@ -510,7 +510,7 @@ async fn zstd_proof_is_disjoint_and_parent_stdio_clone_closes_before_body_settle
     Arc::try_unwrap(proof).unwrap().close().unwrap();
 
     for role in [Program::Zstd, Program::Node] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let proof = Arc::new(
             simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker"))
                 .unwrap(),
@@ -540,9 +540,9 @@ fn manual_tools(fixture: &Fixture) -> crate::load_generator_image::tools::Tools 
 #[tokio::test]
 async fn manual_git_and_docker_use_retained_selection_after_path_poisoning() {
     let fixture = Fixture::new(concat!(
-        "assert sys.argv[1:]==['literal-argument']\n",
-        "os.write(1,Path(sys.argv[0]).name.encode())\n",
-        "os.write(2,b'PRIVATE_SELECTED_DIAGNOSTIC')"
+        "[ \"$#\" -eq 1 ] && [ \"$1\" = literal-argument ] || exit 1\n",
+        "printf '%s' \"${0##*/}\"\n",
+        "printf PRIVATE_SELECTED_DIAGNOSTIC >&2"
     ));
     let tools = manual_tools(&fixture);
     for program in [Program::Git, Program::Docker] {
@@ -561,7 +561,7 @@ async fn manual_git_and_docker_use_retained_selection_after_path_poisoning() {
         let file = poison.join(name);
         fs::write(
             &file,
-            "#!/usr/bin/python3\nraise SystemExit('unexpected PATH fallback')\n",
+            "#!/bin/sh\nprintf 'unexpected PATH fallback\\n' >&2\nexit 1\n",
         )
         .unwrap();
         fs::set_permissions(file, fs::Permissions::from_mode(0o700)).unwrap();
@@ -598,7 +598,7 @@ async fn manual_git_and_docker_use_retained_selection_after_path_poisoning() {
 #[tokio::test]
 async fn manual_tool_capsules_refuse_cross_roles_and_multiple_proofs_before_dispatch() {
     for case in ["git-as-docker", "docker-as-git", "extra-proof", "node"] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let tools = manual_tools(&fixture);
         let (mut command, mut descriptors) = fixture.separate(128, 128);
         let (input, input_fd) = fixture.input(b"owned input", 0);
@@ -635,11 +635,11 @@ async fn manual_tool_capsules_refuse_cross_roles_and_multiple_proofs_before_disp
 #[tokio::test]
 async fn changed_manual_tool_binding_refuses_without_ambient_fallback() {
     for program in [Program::Git, Program::Docker] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let tools = manual_tools(&fixture);
         let selected = fixture.path.join(program.name());
         fs::rename(&selected, selected.with_extension("retained")).unwrap();
-        fs::write(&selected, b"#!/usr/bin/python3\nraise SystemExit(0)\n").unwrap();
+        fs::write(&selected, b"#!/bin/sh\nexit 0\n").unwrap();
         fs::set_permissions(selected, fs::Permissions::from_mode(0o700)).unwrap();
         let (mut command, descriptors) = fixture.separate(128, 128);
         command.program = program;
@@ -654,9 +654,11 @@ async fn changed_manual_tool_binding_refuses_without_ambient_fallback() {
 
 #[tokio::test]
 async fn combined_mode_keeps_ordered_streams_private_and_closes_before_success() {
-    let fixture = Fixture::new(
-        "assert sys.argv[1:]==['literal-argument']\nos.write(1,b'output\\n')\nos.write(2,b'private-error\\n')",
-    );
+    let fixture = Fixture::new(concat!(
+        "[ \"$#\" -eq 1 ] && [ \"$1\" = literal-argument ] || exit 1\n",
+        "printf 'output\\n'\n",
+        "printf 'private-error\\n' >&2"
+    ));
     let mut native = fixture.native(signals());
     assert!(native.run(fixture.request(64)).await.unwrap().is_empty());
     assert!(native.cleanup_passed());
@@ -670,13 +672,13 @@ async fn normal_leader_exit_retires_pipe_holding_descendant_before_eof() {
     unrelated_command.arg("30").process_group(0);
     let unrelated = Group::new(unrelated_command.spawn().unwrap());
     let fixture = Fixture::new(
-        r#"child=os.fork()
-if child==0:
-    signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    (root/'worker').write_text(str(os.getpid()))
-    while True:time.sleep(.01)
-while not (root/'worker').exists():time.sleep(.005)
-os.write(1,b'leader completed\n')
+        r#"(
+  trap '' TERM
+  printf '%s' "$(exec /bin/sh -c 'printf %s "$PPID"')" >"$root/worker"
+  while :; do /bin/sleep 0.01; done
+) &
+while [ ! -e "$root/worker" ]; do /bin/sleep 0.005; done
+printf 'leader completed\n'
 "#,
     );
     let mut native = fixture.native(signals());
@@ -697,7 +699,11 @@ os.write(1,b'leader completed\n')
 
 #[tokio::test]
 async fn overflow_caps_real_file_and_retires_the_child_without_echoing_output() {
-    let fixture = Fixture::new("os.write(1,b'PRIVATE-SENTINEL'*4096)\nwhile True:time.sleep(.01)");
+    let fixture = Fixture::new(concat!(
+        "trap '' PIPE\n",
+        "repeat PRIVATE-SENTINEL 4096 || exit 1\n",
+        "while :; do /bin/sleep 0.01; done"
+    ));
     let mut native = fixture.native(signals());
     let error = native.run(fixture.request(32)).await.unwrap_err();
     assert_eq!(error.code, 1);
@@ -706,11 +712,10 @@ async fn overflow_caps_real_file_and_retires_the_child_without_echoing_output() 
     assert!(native.cleanup_passed());
 }
 
-const IDLE: &str = r#"signal.signal(signal.SIGTERM,signal.SIG_IGN)
-signal.signal(signal.SIGINT,signal.SIG_IGN)
-os.write(1,b'private-output\n')
-(root/'ready').write_text(str(os.getpid()))
-while True:time.sleep(.01)
+const IDLE: &str = r#"trap '' TERM INT
+printf 'private-output\n'
+printf '%s' "$$" >"$root/ready"
+while :; do /bin/sleep 0.01; done
 "#;
 
 #[tokio::test]
@@ -788,7 +793,7 @@ impl Finalizer for UnprovenCleanup {
 async fn reaped_nonzero_status_survives_unproven_cleanup_while_zero_is_refused() {
     for combined in [false, true] {
         for code in [0, 42, 130, 143] {
-            let fixture = Fixture::new(&format!("raise SystemExit({code})"));
+            let fixture = Fixture::new(&format!("exit {code}"));
             let mut native = fixture.native(signals());
             let command = if combined {
                 fixture.request(128)
@@ -809,7 +814,7 @@ async fn reaped_nonzero_status_survives_unproven_cleanup_while_zero_is_refused()
 async fn setup_spawn_and_prior_cancel_failures_finish_every_admitted_log_descriptor() {
     use std::os::fd::AsRawFd;
     for failure in ["mode", "role", "missing", "permission", "cancel"] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let output = OpenOptions::new()
             .create_new(true)
             .write(true)
@@ -873,7 +878,7 @@ impl Finalizer for Finalized {
 }
 #[tokio::test]
 async fn interruption_during_final_log_completion_cannot_return_zero() {
-    let fixture = Fixture::new("os.write(1,b'closed child\\n')");
+    let fixture = Fixture::new("printf 'closed child\\n'");
     let log = fixture.log(128);
     let writer = log.writer().unwrap();
     let mut command = Command::capture(Program::Docker, &[]);
@@ -899,7 +904,7 @@ async fn interruption_during_final_log_completion_cannot_return_zero() {
 #[tokio::test]
 async fn combined_mode_refuses_ambiguous_modes_and_borrowed_owners_before_spawn() {
     for borrowed in [false, true] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let log = Arc::new(fixture.log(128));
         let mut command = Command::capture(Program::Docker, &[]);
         command.combined_log = Some(log.clone());
@@ -953,7 +958,7 @@ async fn replay_known_interrupt_and_timeout_survive_unproven_finalization() {
 async fn replay_unfit_deadline_cannot_dispatch_and_pending_interrupt_has_precedence() {
     use std::process::Stdio;
     for code in [124, 130, 143] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let mut command = std::process::Command::new(fixture.path.join("docker"));
         command
             .env_clear()
@@ -981,13 +986,13 @@ async fn replay_unfit_deadline_cannot_dispatch_and_pending_interrupt_has_precede
 async fn factored_replay_keeps_literal_role_bytes_and_selected_executable_proof() {
     for changed in [false, true] {
         let body = concat!(
-            "assert sys.argv[1:]==['__replay']\n",
-            "(root/'replayed').write_bytes(sys.stdin.buffer.read())\n"
+            "[ \"$#\" -eq 1 ] && [ \"$1\" = __replay ] || exit 1\n",
+            "/bin/cat >\"$root/replayed\"\n"
         );
         let fixture = Fixture::new(&format!(
             "{body}{}",
             if changed {
-                "with Path(sys.argv[0]).open('a') as output:output.write('# changed\\n')"
+                "printf '# changed\\n' >>\"$0\""
             } else {
                 ""
             }
@@ -1013,7 +1018,7 @@ async fn factored_replay_keeps_literal_role_bytes_and_selected_executable_proof(
 
 #[tokio::test]
 async fn factored_replay_refuses_missing_proof_or_pending_outcome_without_dispatch() {
-    let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+    let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
     let missing = replay_selected(
         &fixture.path,
         &fixture.environment,
@@ -1050,7 +1055,7 @@ async fn factored_replay_refuses_missing_proof_or_pending_outcome_without_dispat
 async fn mdns_evidence_distinguishes_actual_exit124_from_observed_timeout() {
     use crate::mdns::tools::{FixtureTool, Role};
     for timed_out in [false, true] {
-        let fixture = Fixture::new(if timed_out { IDLE } else { "sys.exit(124)" });
+        let fixture = Fixture::new(if timed_out { IDLE } else { "exit 124" });
         let proof = FixtureTool::new(Role::Probe, &fixture.path.join("docker")).unwrap();
         let (mut command, descriptors) = fixture.separate(128, 128);
         command.program = Program::MdnsProbe;
@@ -1076,7 +1081,7 @@ async fn mdns_evidence_distinguishes_actual_exit124_from_observed_timeout() {
 async fn mdns_admission_spawn_and_final_stream_failures_never_acquire_clean_evidence() {
     use crate::mdns::tools::{FixtureTool, Role};
     for mode in ["missing", "role", "spawn", "stream"] {
-        let fixture = Fixture::new("os.write(1,b'FINAL!');sys.exit(42)");
+        let fixture = Fixture::new("printf 'FINAL!'\nexit 42");
         if mode == "spawn" {
             // A missing literal interpreter fails spawn without depending on
             // platform-specific ENOEXEC shell fallback for an unknown format.
@@ -1129,7 +1134,7 @@ async fn mdns_admission_spawn_and_final_stream_failures_never_acquire_clean_evid
 async fn mdns_proofs_refuse_extra_capsules_reuse_and_changed_selected_binding() {
     use crate::mdns::tools::{FixtureTool, Role};
     for mode in ["extra", "reuse", "replacement"] {
-        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let fixture = Fixture::new("printf unexpected >\"$root/dispatched\"");
         let proof = FixtureTool::new(Role::Probe, &fixture.path.join("docker")).unwrap();
         let (mut command, descriptors) = fixture.separate(128, 128);
         command.program = Program::MdnsProbe;
@@ -1389,7 +1394,7 @@ impl crate::command::ReleaseProof for Uncontexted {
 async fn only_a_source_git_proof_without_context_runs_in_the_runner_checkout() {
     use crate::command::ReleaseRole::{self, *};
     for role in ReleaseRole::ALL {
-        let fixture = Fixture::new("(root/'dispatched').write_text('ran')");
+        let fixture = Fixture::new("printf ran >\"$root/dispatched\"");
         let program = match role {
             Producer => Program::OpsCargo,
             SourceGit => Program::OpsGit,

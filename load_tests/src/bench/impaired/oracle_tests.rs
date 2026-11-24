@@ -1,13 +1,9 @@
 //! Run the unchanged shell with only owned fake tools: no sockets or kernel calls.
 
-use super::tests::{Fault, Fixture, executable};
+use super::tests::{Fault, Fixture, executable, saved_environment, shell};
 use crate::bench::process::{self, Command, NativeHost, Sink};
 use serde_json::Value;
 use std::{ffi::OsString, fs, path::Path, time::Duration};
-
-fn python(path: &Path, source: &str) {
-    executable(path, format!("#!/usr/bin/python3\n{source}\n").as_bytes());
-}
 
 #[tokio::test]
 async fn actual_reference_keeps_exact_workload_clean_server_environment_and_delivery_status_evidence()
@@ -23,59 +19,64 @@ async fn actual_reference_keeps_exact_workload_clean_server_environment_and_deli
             )
             .unwrap();
         }
-        let quoted = serde_json::to_string(fixture.root.to_str().unwrap()).unwrap();
-        python(
+        let root = fixture.root.to_str().unwrap();
+        assert!(!root.contains('\''));
+        shell(
             &fixture.root.join("server"),
             &format!(
                 r#"
-import json,os,pathlib,signal,sys
-root=pathlib.Path({quoted})
-signal.signal(signal.SIGTERM,lambda *_:sys.exit(0))
-(root/'server-env.json').write_text(json.dumps(dict(os.environ)))
-(root/'ready.part').write_text('ready')
-os.replace(root/'ready.part',root/'server.ready')
-while True: signal.pause()
+root='{root}'
+sleeper=
+trap 'kill "$sleeper" 2>/dev/null; exit 0' TERM
+/usr/bin/env >"$root/server-environment"
+printf ready >"$root/ready.part"
+/bin/mv -f "$root/ready.part" "$root/server.ready"
+while :; do
+  /bin/sleep 1 >/dev/null 2>&1 &
+  sleeper=$!
+  wait "$sleeper"
+done
 "#
             ),
         );
-        python(
+        shell(
             &fixture.root.join("curl"),
             &format!(
                 r#"
-import pathlib,time,sys
-ready=pathlib.Path({quoted})/'server.ready'
-for _ in range(200):
- if ready.exists():sys.exit(0)
- time.sleep(.01)
-sys.exit(1)
+attempt=0
+while [ "$attempt" -lt 200 ]; do
+  if [ -e '{root}/server.ready' ]; then exit 0; fi
+  /bin/sleep 0.01
+  attempt=$((attempt + 1))
+done
+exit 1
 "#
             ),
         );
-        python(
+        shell(
             &fixture.root.join("generator"),
             &format!(
                 r#"
-import json,os,pathlib,sys
-root=pathlib.Path({quoted})
-(root/'generator-argv.json').write_text(json.dumps(sys.argv[1:]))
-(root/'generator-env.json').write_text(json.dumps(dict(os.environ)))
-output=pathlib.Path(sys.argv[sys.argv.index('--output-dir')+1])
-keys=['successfulConnections','failedConnections','validatedConsumers','failedConsumers',
- 'keyframesRequested','bandwidthEstimates','totalPacketsReceived','totalErrors']
-(output/'load_test_summary.json').write_text(json.dumps(dict(zip(keys,range(8)))))
-sys.exit({status})
+root='{root}'
+json_strings "$@" >"$root/generator-argv.json"
+/usr/bin/env >"$root/generator-environment"
+output=$(value --output-dir "$@") || exit 1
+printf '{{"successfulConnections": 0, "failedConnections": 1, "validatedConsumers": 2, ' \
+  >"$output/load_test_summary.json"
+printf '"failedConsumers": 3, "keyframesRequested": 4, "bandwidthEstimates": 5, ' \
+  >>"$output/load_test_summary.json"
+printf '"totalPacketsReceived": 6, "totalErrors": 7}}' >>"$output/load_test_summary.json"
+exit {status}
 "#
             ),
         );
         for name in ["sudo", "tc"] {
-            python(
+            shell(
                 &fixture.root.join(name),
                 &format!(
                     r#"
-import json,pathlib,sys
-with (pathlib.Path({quoted})/'kernel-argv.jsonl').open('a') as output:
- output.write(json.dumps([pathlib.Path(sys.argv[0]).name,*sys.argv[1:]])+'\n')
-print('owned fixture state')
+printf '%s\n' "$(json_strings "${{0##*/}}" "$@")" >>'{root}/kernel-argv.jsonl'
+printf 'owned fixture state\n'
 "#
                 ),
             );
@@ -139,9 +140,7 @@ print('owned fixture state')
         }
         let parsed = crate::bench::summary::parse(&selected).unwrap();
         assert_eq!(parsed.impaired_projection(&selected).unwrap(), legacy);
-        let exported: std::collections::BTreeMap<String, String> =
-            serde_json::from_slice(&fs::read(fixture.root.join("generator-env.json")).unwrap())
-                .unwrap();
+        let exported = saved_environment(&fixture.root.join("generator-environment"));
         for key in [
             "IMPAIR_UDP_PORT",
             "IMPAIR_WORKERS",
@@ -155,9 +154,7 @@ print('owned fixture state')
                 plan.environment[&OsString::from(key)].to_str().unwrap()
             );
         }
-        let server: std::collections::BTreeMap<String, String> =
-            serde_json::from_slice(&fs::read(fixture.root.join("server-env.json")).unwrap())
-                .unwrap();
+        let server = saved_environment(&fixture.root.join("server-environment"));
         let expected = plan.server_environment();
         for (key, value) in expected {
             assert_eq!(server[key.to_str().unwrap()], value.to_str().unwrap());

@@ -13,23 +13,42 @@ pub(super) const ARM64_IMAGE: &str = "docker.io/catthehacker/ubuntu@sha256:\
      84e94c96278dd26b8feb71226a521d259f8160cf6b1dd08e51fd42be43a82e56";
 const MACHINE: &str = "simplestchat-ci";
 
-/// The guest owns these Linux-only capability and binfmt operations. Keep the
-/// maintained probe intact until a native guest helper replaces this boundary.
-pub(super) const ARM64_GUEST: &str = r#"python3 - <<'PY_CAPABILITIES'
-import ctypes
-
-libc = ctypes.CDLL(None)
-libc.getauxval.argtypes = [ctypes.c_ulong]
-libc.getauxval.restype = ctypes.c_ulong
-hwcap, hwcap2 = libc.getauxval(16), libc.getauxval(26)
-if hwcap2 & (1 << 1) and not hwcap & (1 << 22):
-    raise SystemExit(
-        "The owned simplestchat-ci VM advertises SVE2 without SVE "
-        f"(HWCAP={hwcap:#x}, HWCAP2={hwcap2:#x}); native tools can crash. "
-        "After owned CI jobs have stopped, apply arm64.nosve with rpm-ostree "
-        "and reboot only this VM. See docs/testing.md#recover-inconsistent-arm-cpu-features."
-    )
-PY_CAPABILITIES
+/// The guest owns these Linux-only capability and binfmt operations, run by
+/// `sudo sh -se` in the owned Fedora CoreOS VM with its `od` and `grep`.
+///
+/// The capability probe reads `/proc/self/auxv`, the auxiliary vector the
+/// kernel gave `od` itself: one type and one value per 16 bytes, so `od -t
+/// x8` prints each entry as two 16-digit hexadecimal words. It refuses a
+/// guest whose `AT_HWCAP2` (type 26) advertises SVE2 (bit 1) while its
+/// `AT_HWCAP` (type 16) lacks SVE (bit 22), naming both values; an absent
+/// type reads as zero, and an unreadable vector stops the script. Every
+/// later line selects the Rosetta handler and disables the QEMU one.
+pub(super) const ARM64_GUEST: &str = r#"auxv=$(od -An -v -t x8 /proc/self/auxv)
+hwcap=0000000000000000
+hwcap2=0000000000000000
+type=
+for word in $auxv; do
+  if [ -z "$type" ]; then
+    type=$word
+    continue
+  fi
+  case $type in
+    0000000000000010) hwcap=$word ;;
+    000000000000001a) hwcap2=$word ;;
+  esac
+  type=
+done
+hex() {
+  hex_digits=${1#"${1%%[!0]*}"}
+  printf '0x%s' "${hex_digits:-0}"
+}
+if [ $((0x${hwcap2#????????} & 0x2)) -ne 0 ] && [ $((0x${hwcap#????????} & 0x400000)) -eq 0 ]; then
+  printf '%s\n' "The owned simplestchat-ci VM advertises SVE2 without SVE \
+(HWCAP=$(hex "$hwcap"), HWCAP2=$(hex "$hwcap2")); native tools can crash. \
+After owned CI jobs have stopped, apply arm64.nosve with rpm-ostree \
+and reboot only this VM. See docs/testing.md#recover-inconsistent-arm-cpu-features." >&2
+  exit 1
+fi
 test -x /mnt/rosetta
 grep -qx 'interpreter /mnt/rosetta' /proc/sys/fs/binfmt_misc/rosetta
 printf '1\n' > /proc/sys/fs/binfmt_misc/rosetta

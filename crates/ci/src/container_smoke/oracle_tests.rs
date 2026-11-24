@@ -23,53 +23,147 @@ fn reference_bash() -> PathBuf {
         .unwrap()
 }
 
-const STAND_IN: &str = r#"#!/usr/bin/python3
-import json,sys
-from pathlib import Path
-root=Path(__file__).parent.parent
-state_path=root/'oracle-state.json'
-state=json.loads(state_path.read_text())
-bad=state['bad'];args=sys.argv[1:];program=Path(sys.argv[0]).name
-def value(flag):return args[args.index(flag)+1]
-def finish(code=0):
- state_path.write_text(json.dumps(state));raise SystemExit(code)
-if program=='sleep':finish()
-if program=='docker':
- if args[0] in ['info','image']:finish()
- if args[0]=='run':
-  database='--publish' in args;name='database' if database else 'app'
-  state[name]=True;print('d'*64 if database else 'e'*64);finish()
- if args[0]=='inspect':
-  app=args[-1]=='e'*64
-  print('false' if app and state.get('restarted') and bad=='restart' else 'true');finish()
- if args[0]=='exec':
-  if args[2]=='pg_isready':finish()
-  if '_sqlx_migrations' in args[-1]:print('0' if bad=='migration-zero' else '1' if bad=='migration-count' else '2')
-  else:print('0' if bad=='registered' else '1')
-  finish()
- if args[0]=='port':print('0.0.0.0:38001' if bad=='port' else '127.0.0.1:38001');finish()
- if args[0]=='restart':state['restarted']=True;print(args[-1]);finish()
- if args[0]=='logs':print('PRIVATE inert guest logs');finish()
- if args[0]=='rm':state['removed'].append(args[-1]);finish()
- finish(99)
-if program=='curl':
- route=args[-1].split(':38001')[-1]
- if route=='/api/auth/register':
-  assert value('--output')=='/dev/null';assert json.loads(value('--data'))['email']=='container-smoke@example.test'
-  state['registeredRequest']=True;finish()
- if route=='/api/rooms':data=b'[{}]' if bad=='rooms' else b'[]\n\n'
- elif route=='/health':
-  if bad=='health-command':finish(22)
-  data=b'wrong' if bad=='health' else b'{"status":"ok"}\n\n'
- elif route=='/':
-  if bad=='html-command':finish(22)
-  data=b'not html' if bad=='html' else b'<!DOCTYPE HTML><title>owned</title>'
- else:
-  asset=route[1:];data=b'wrong' if bad=='asset-bytes' else (root/'web/public'/asset).read_bytes()
-  mime='text/plain' if bad=='mime' else 'application/manifest+json' if asset=='manifest.webmanifest' else 'application/javascript' if asset=='sw.js' else 'image/png'
-  Path(value('--output')).write_bytes(data);print(mime+'; charset=utf-8');finish()
- sys.stdout.buffer.write(data);finish()
-finish(98)
+/// The stand-in for `docker`, `curl` and `sleep`. Its state lives in the
+/// fixture's `oracle-state` directory: `bad` names the fault to answer,
+/// `database`, `app`, `restarted` and `registeredRequest` exist once that
+/// happened, and `removed` holds one removed container per line.
+const STAND_IN: &str = r#"#!/bin/sh
+PATH=/usr/bin:/bin
+root=${0%/*}
+root=${root%/*}
+state=$root/oracle-state
+bad=$(cat "$state/bad") || exit 1
+program=${0##*/}
+last=
+if [ "$#" -gt 0 ]; then eval "last=\${$#}"; fi
+member() {
+  member_word=$1
+  shift
+  for member_item in "$@"; do
+    if [ "$member_item" = "$member_word" ]; then return 0; fi
+  done
+  return 1
+}
+value() {
+  value_flag=$1
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "$value_flag" ]; then
+      [ "$#" -ge 2 ] || return 1
+      printf '%s' "$2"
+      return 0
+    fi
+    shift
+  done
+  return 1
+}
+if [ "$program" = sleep ]; then exit 0; fi
+if [ "$program" = docker ]; then
+  [ "$#" -ge 1 ] || exit 1
+  case $1 in
+    info | image) exit 0 ;;
+    run)
+      if member --publish "$@"; then
+        : >"$state/database"
+        printf 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\n'
+      else
+        : >"$state/app"
+        printf 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n'
+      fi
+      exit 0
+      ;;
+    inspect)
+      if [ "$last" = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ] &&
+        [ -e "$state/restarted" ] && [ "$bad" = restart ]; then
+        printf 'false\n'
+      else
+        printf 'true\n'
+      fi
+      exit 0
+      ;;
+    exec)
+      [ "$#" -ge 3 ] || exit 1
+      if [ "$3" = pg_isready ]; then exit 0; fi
+      case $last in
+        *_sqlx_migrations*)
+          case $bad in
+            migration-zero) printf '0\n' ;;
+            migration-count) printf '1\n' ;;
+            *) printf '2\n' ;;
+          esac
+          ;;
+        *) if [ "$bad" = registered ]; then printf '0\n'; else printf '1\n'; fi ;;
+      esac
+      exit 0
+      ;;
+    port)
+      if [ "$bad" = port ]; then printf '0.0.0.0:38001\n'; else printf '127.0.0.1:38001\n'; fi
+      exit 0
+      ;;
+    restart)
+      : >"$state/restarted"
+      printf '%s\n' "$last"
+      exit 0
+      ;;
+    logs)
+      printf 'PRIVATE inert guest logs\n'
+      exit 0
+      ;;
+    rm)
+      printf '%s\n' "$last" >>"$state/removed"
+      exit 0
+      ;;
+  esac
+  exit 99
+fi
+if [ "$program" = curl ]; then
+  route=${last##*:38001}
+  case $route in
+    /api/auth/register)
+      output=$(value --output "$@") && [ "$output" = /dev/null ] || exit 1
+      data=$(value --data "$@") || exit 1
+      case $data in
+        *'"email":"container-smoke@example.test"'*) ;;
+        *) exit 1 ;;
+      esac
+      : >"$state/registeredRequest"
+      exit 0
+      ;;
+    /api/rooms)
+      if [ "$bad" = rooms ]; then printf '[{}]'; else printf '[]\n\n'; fi
+      ;;
+    /health)
+      if [ "$bad" = health-command ]; then exit 22; fi
+      if [ "$bad" = health ]; then printf wrong; else printf '{"status":"ok"}\n\n'; fi
+      ;;
+    /)
+      if [ "$bad" = html-command ]; then exit 22; fi
+      if [ "$bad" = html ]; then
+        printf 'not html'
+      else
+        printf '<!DOCTYPE HTML><title>owned</title>'
+      fi
+      ;;
+    *)
+      asset=${route#?}
+      case $bad:$asset in
+        mime:*) mime=text/plain ;;
+        *:manifest.webmanifest) mime=application/manifest+json ;;
+        *:sw.js) mime=application/javascript ;;
+        *) mime=image/png ;;
+      esac
+      output=$(value --output "$@") || exit 1
+      if [ "$bad" = asset-bytes ]; then
+        printf wrong >"$output"
+      else
+        cat -- "$root/web/public/$asset" >"$output" || exit 1
+      fi
+      printf '%s; charset=utf-8\n' "$mime"
+      ;;
+  esac
+  exit 0
+fi
+exit 98
 "#;
 
 #[tokio::test]
@@ -107,11 +201,9 @@ async fn all_original_assertion_outcomes_match_the_inert_legacy_script() {
             fs::write(&path, STAND_IN).unwrap();
             fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
         }
-        fs::write(
-            legacy.root.join("oracle-state.json"),
-            serde_json::to_vec(&json!({"bad":bad,"removed":[]})).unwrap(),
-        )
-        .unwrap();
+        let state = legacy.root.join("oracle-state");
+        fs::create_dir(&state).unwrap();
+        fs::write(state.join("bad"), bad).unwrap();
         fs::write(
             legacy.root.join("reference-bash.txt"),
             [bash.as_os_str().as_encoded_bytes(), b"\n", &version.stdout].concat(),
@@ -157,13 +249,11 @@ async fn all_original_assertion_outcomes_match_the_inert_legacy_script() {
         } else {
             assert_eq!(actual, expected, "{bad}");
         }
-        let state: Value =
-            serde_json::from_slice(&fs::read(legacy.root.join("oracle-state.json")).unwrap())
-                .unwrap();
-        assert!(!state["removed"].as_array().unwrap().is_empty());
+        let removed = fs::read_to_string(state.join("removed")).unwrap();
+        assert!(removed.lines().count() > 0);
         if bad.is_empty() {
-            assert_eq!(state["registeredRequest"], true);
-            assert_eq!(state["restarted"], true);
+            assert!(state.join("registeredRequest").is_file());
+            assert!(state.join("restarted").is_file());
             assert_eq!(fake.restarted, [APPID]);
         }
     }

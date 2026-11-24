@@ -7,46 +7,60 @@ use crate::{browser_suite::process::Signals, process::Native};
 fn executable(fixture: &mut Fixture, mode: &str) {
     let bin = fixture.root.join("fake commands");
     fs::create_dir(&bin).unwrap();
-    let source = r#"#!/usr/bin/python3
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(os.environ['FIXTURE_ROOT']);mode=os.environ['FIXTURE_MODE']
-args=sys.argv[1:]
-assert args[:7]==['run','--locked','-q','-p','simplestchat-security','--','tools']
-args=args[6:]
-stage='install' if args[1]=='install' else 'resolve'
-with (root/'events').open('a') as out:out.write(json.dumps([stage,args])+'\n')
-if mode==stage+'-fail':
-    print('PRIVATE-SENTINEL',file=sys.stderr);sys.exit(42)
-if mode==stage+'-hang':
-    signal.signal(signal.SIGINT,signal.SIG_IGN);signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    (root/'ready').write_text(str(os.getpid()))
-    while True:time.sleep(.01)
-if stage=='install':
-    assert args[1:-1]==['install','--tools','cargo-audit','--directory']
-    tools=Path(args[-1]);(tools/'bin').mkdir(parents=True)
-    scanner=tools/'bin/cargo-audit'
-    scanner.write_text('''#!/usr/bin/python3
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(os.environ['FIXTURE_ROOT']);mode=os.environ['FIXTURE_MODE']
-assert sys.argv[1:]==['audit','--deny','unsound','--ignore','RUSTSEC-2026-0459']
-(root/'audit-started').write_text('owned fixture only')
-if mode=='audit-hang':
-    signal.signal(signal.SIGINT,signal.SIG_IGN);signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    (root/'ready').write_text(str(os.getpid()))
-    while True:time.sleep(.01)
-if mode=='audit-fail':sys.exit(17)
-print('Owned fixture advisory output')
-''')
-    scanner.chmod(0o700)
-else:
-    assert args[1:-1]==['path','cargo-audit','--directory']
-    if mode=='resolve-overflow':print('x'*4097)
-    else:print(str(Path(args[-1])/'bin/cargo-audit'))
+    let source = r#"
+PATH=/usr/bin:/bin
+root=${FIXTURE_ROOT?} mode=${FIXTURE_MODE?}
+[ "$#" -ge 7 ] && [ "$1" = run ] && [ "$2" = --locked ] && [ "$3" = -q ] && [ "$4" = -p ] &&
+  [ "$5" = simplestchat-security ] && [ "$6" = -- ] && [ "$7" = tools ] || exit 1
+shift 6
+[ "$#" -ge 2 ] || exit 1
+if [ "$2" = install ]; then stage=install; else stage=resolve; fi
+{ printf '['; json_string "$stage"; printf ', '; json_strings "$@"; printf ']\n'; } >>"$root/events"
+if [ "$mode" = "$stage-fail" ]; then
+  printf 'PRIVATE-SENTINEL\n' >&2
+  exit 42
+fi
+if [ "$mode" = "$stage-hang" ]; then
+  trap '' INT TERM
+  printf '%s' "$$" >"$root/ready"
+  while :; do sleep 0.01; done
+fi
+if [ "$stage" = install ]; then
+  [ "$#" -eq 6 ] && [ "$2" = install ] && [ "$3" = --tools ] && [ "$4" = cargo-audit ] &&
+    [ "$5" = --directory ] || exit 1
+  mkdir -p -- "$6" && mkdir -- "$6/bin" || exit 1
+  cat >"$6/bin/cargo-audit" <<'SCANNER'
+#!/bin/sh
+PATH=/usr/bin:/bin
+root=${FIXTURE_ROOT?} mode=${FIXTURE_MODE?}
+[ "$#" -eq 5 ] && [ "$1" = audit ] && [ "$2" = --deny ] && [ "$3" = unsound ] &&
+  [ "$4" = --ignore ] && [ "$5" = RUSTSEC-2026-0459 ] || exit 1
+printf 'owned fixture only' >"$root/audit-started"
+if [ "$mode" = audit-hang ]; then
+  trap '' INT TERM
+  printf '%s' "$$" >"$root/ready"
+  while :; do sleep 0.01; done
+fi
+if [ "$mode" = audit-fail ]; then exit 17; fi
+printf 'Owned fixture advisory output\n'
+SCANNER
+  chmod 700 "$6/bin/cargo-audit"
+else
+  [ "$#" -eq 5 ] && [ "$2" = path ] && [ "$3" = cargo-audit ] && [ "$4" = --directory ] || exit 1
+  if [ "$mode" = resolve-overflow ]; then
+    repeat x 4097
+    printf '\n'
+  else
+    printf '%s/bin/cargo-audit\n' "$5"
+  fi
+fi
 "#;
     let path = bin.join("cargo");
-    fs::write(&path, source).unwrap();
+    fs::write(
+        &path,
+        format!("#!/bin/sh\n{}{source}", crate::fake_shell::PRELUDE),
+    )
+    .unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
     for (key, value) in [
         ("PATH", bin.into_os_string()),

@@ -543,14 +543,16 @@ impl PreparationFixture {
         let lease_pending = output.capture(1, super::MAX_STATUS).await.unwrap();
         let ansible_pending = output.capture(2, super::MAX_JSON).await.unwrap();
         let reader = output.ready_reader(&lease_pending).unwrap();
-        let ready_hex = ready.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        // `printf "$READY"` writes the ready frame: every byte as an octal
+        // escape, so no byte is a format directive.
+        let ready_octal = ready
+            .iter()
+            .map(|b| format!("\\{b:03o}"))
+            .collect::<String>();
+        assert!(!root.to_str().unwrap().contains('\''));
         let prefix = format!(
-            concat!(
-                "#!/usr/bin/python3\nimport os,sys,time,json,signal\n",
-                "ROOT={}\nREADY=bytes.fromhex('{}')\nREQUEST={}\n",
-            ),
-            serde_json::to_string(root.to_str().unwrap()).unwrap(),
-            ready_hex,
+            "#!/bin/sh\nROOT='{}'\nREADY='{ready_octal}'\nREQUEST={}\n",
+            root.display(),
             envelope.len()
         );
         let paths = [root.join("git"), root.join("ssh"), root.join("ansible")];

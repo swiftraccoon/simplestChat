@@ -10,11 +10,8 @@ fn executable(fixture: &Fixture, body: &str) -> Environment {
     fs::write(
         &program,
         format!(
-            concat!(
-                "#!/usr/bin/python3\nimport os,signal,sys,time\nfrom pathlib import Path\n",
-                "root=Path(os.environ['FIXTURE_ROOT'])\n{}\n"
-            ),
-            body
+            "#!/bin/sh\n{}root=${{FIXTURE_ROOT?}}\n{body}\n",
+            crate::fake_shell::PRELUDE
         ),
     )
     .unwrap();
@@ -50,15 +47,15 @@ async fn metadata_readback_follows_normal_exit_descendant_retirement_and_pipe_cl
     let fixture = Fixture::new(Kind::Caddy);
     let environment = executable(
         &fixture,
-        r#"assert sys.argv[1:]==['literal $(argument)']
-child=os.fork()
-if child==0:
-    signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    (root/'worker.pending').write_text(str(os.getpid()))
-    (root/'worker.pending').rename(root/'worker')
-    while True:time.sleep(.01)
-while not (root/'worker').is_file():time.sleep(.005)
-os.write(1,b'{"metadata":"closed"}\n')
+        r#"[ "$#" -eq 1 ] && [ "$1" = 'literal $(argument)' ] || exit 1
+(
+  trap '' TERM
+  printf '%s' "$(exec /bin/sh -c 'printf %s "$PPID"')" >"$root/worker.pending"
+  /bin/mv "$root/worker.pending" "$root/worker"
+  while :; do /bin/sleep 0.01; done
+) &
+while [ ! -f "$root/worker" ]; do /bin/sleep 0.005; done
+printf '{"metadata":"closed"}\n'
 "#,
     );
     let artifacts = files::Artifacts::new(&fixture.context).unwrap();
@@ -88,12 +85,11 @@ os.write(1,b'{"metadata":"closed"}\n')
     drop(unrelated);
 }
 
-const IDLE: &str = r#"signal.signal(signal.SIGTERM,signal.SIG_IGN)
-signal.signal(signal.SIGINT,signal.SIG_IGN)
-os.write(1,b'PRIVATE_METADATA\n')
-(root/'ready.pending').write_text(str(os.getpid()))
-(root/'ready.pending').rename(root/'ready')
-while True:time.sleep(.01)
+const IDLE: &str = r#"trap '' TERM INT
+printf 'PRIVATE_METADATA\n'
+printf '%s' "$$" >"$root/ready.pending"
+/bin/mv "$root/ready.pending" "$root/ready"
+while :; do /bin/sleep 0.01; done
 "#;
 
 #[tokio::test]
@@ -143,7 +139,11 @@ async fn metadata_overflow_and_spawn_failure_never_produce_a_partial_successful_
         let fixture = Fixture::new(Kind::Caddy);
         let mut environment = executable(
             &fixture,
-            "os.write(1,b'PRIVATE_METADATA'*8192)\nwhile True:time.sleep(.01)",
+            concat!(
+                "trap '' PIPE\n",
+                "repeat PRIVATE_METADATA 8192 || exit 1\n",
+                "while :; do /bin/sleep 0.01; done"
+            ),
         );
         if !overflow {
             environment.insert("PATH".into(), fixture.root.join("absent").into());

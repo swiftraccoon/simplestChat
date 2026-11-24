@@ -44,31 +44,32 @@ jobs:
             --file build/caddy-image.Dockerfile \
             --tag "$IMAGE_NAME:$IMAGE_TAG" \
             --metadata-file "$RUNNER_TEMP/caddy-metadata.json" .
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          import re
-          from pathlib import Path
-          root = Path(os.environ['RUNNER_TEMP'])
-          metadata = json.loads((root / 'caddy-metadata.json').read_text())
-          digest = metadata['containerimage.digest']
-          if re.fullmatch(r'sha256:[a-f0-9]{64}', digest) is None:
-              raise SystemExit('Caddy image index digest is missing or malformed')
-          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
-              output.write(f'digest={digest}\n')
-          receipt = {
-              'version': '2.11.7',
-              'revision': os.environ['GITHUB_SHA'],
-              'image': f"{os.environ['IMAGE_NAME']}:{os.environ['IMAGE_TAG']}@{digest}",
-              'platforms': ['linux/amd64', 'linux/arm64'],
-              'recipeSha256': hashlib.sha256(Path('build/caddy-image.Dockerfile').read_bytes()).hexdigest(),
-              'caddyfileSha256': hashlib.sha256(Path('Caddyfile').read_bytes()).hexdigest(),
-          }
-          (root / 'caddy-release.json').write_text(json.dumps(receipt, indent=2) + '\n')
-          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
-              summary.write(f"Caddy 2.11.7: `{receipt['image']}`\n")
-          PY
+          # The index digest comes from metadata that is UTF-8 holding exactly
+          # one JSON object; jq prints the digest only when the whole string is
+          # one, so the shell never sees a newline or NUL it would drop.
+          metadata="$RUNNER_TEMP/caddy-metadata.json"
+          digest=''
+          if iconv -f UTF-8 -t UTF-8 "$metadata" >/dev/null; then
+            digest="$(jq --exit-status --raw-output --slurp 'if length == 1
+              then .[0]["containerimage.digest"] | strings
+                | select(test("\\Asha256:[a-f0-9]{64}\\z")) else empty end' \
+              "$metadata")" || digest=''
+          fi
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo 'Caddy image index digest is missing or malformed' >&2
+            exit 1
+          fi
+          printf 'digest=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+          recipe="$(sha256sum <build/caddy-image.Dockerfile)"
+          caddyfile="$(sha256sum <Caddyfile)"
+          image="$IMAGE_NAME:$IMAGE_TAG@$digest"
+          jq --null-input --arg revision "$GITHUB_SHA" --arg image "$image" \
+            --arg recipe "${recipe%% *}" --arg caddyfile "${caddyfile%% *}" \
+            '{version: "2.11.7", revision: $revision, image: $image,
+              platforms: ["linux/amd64", "linux/arm64"],
+              recipeSha256: $recipe, caddyfileSha256: $caddyfile}' \
+            >"$RUNNER_TEMP/caddy-release.json"
+          printf '%s\n' "Caddy 2.11.7: \`$image\`" >>"$GITHUB_STEP_SUMMARY"
       - name: Attest the exact image index and reviewed build inputs
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:

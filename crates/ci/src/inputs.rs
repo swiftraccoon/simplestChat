@@ -44,6 +44,7 @@ pub(super) const BROWSER_BACKEND_FILES: &[&str] = &[
     "crates/toolkit/Cargo.toml",
     "crates/toolkit/src/lib.rs",
     "crates/toolkit/src/executable.rs",
+    "crates/toolkit/src/fake_shell.rs",
     "crates/toolkit/src/media_ip.rs",
     "crates/toolkit/src/media_ip_files.rs",
     "crates/toolkit/src/media_ip_files_tests.rs",

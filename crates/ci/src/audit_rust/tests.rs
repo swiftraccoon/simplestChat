@@ -79,7 +79,7 @@ impl Drop for Fixture {
 }
 fn scanner(path: &Path) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, b"#!/usr/bin/python3\nprint('fixture only')\n").unwrap();
+    fs::write(path, b"#!/bin/sh\nprintf 'fixture only\\n'\n").unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
 }
 

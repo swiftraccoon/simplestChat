@@ -13,9 +13,10 @@ workspace = true
 path = "src/lib.rs"
 
 [features]
-# Lets a dependent's tests inject signal receivers. Dependents enable it only
-# from `[dev-dependencies]`, so their normal and release builds leave it off;
-# `--all-features` builds compile `Signals::injected`, which only tests call.
+# Lets a dependent's tests inject signal receivers and build fake commands
+# with `fake_shell`. Dependents enable it only from `[dev-dependencies]`, so
+# their normal and release builds leave it off; `--all-features` builds
+# compile `Signals::injected` and `fake_shell`, which only tests call.
 test-hooks = []
 
 [dependencies]

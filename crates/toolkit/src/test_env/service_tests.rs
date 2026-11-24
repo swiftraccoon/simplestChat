@@ -23,33 +23,40 @@ impl Fixture {
     }
 
     fn spawn(&self, mode: &str, status: i32) -> Service {
-        let mut command = Command::new("/usr/bin/python3");
+        let mut command = Command::new("/bin/sh");
         command.args([
             "-c",
             r#"
-import json,os,signal,sys,time
-from pathlib import Path
-root=Path(sys.argv[1]);mode=sys.argv[2];status=int(sys.argv[3])
-def record(name,contents):
-    pending=root/(name+'.pending')
-    pending.write_text(contents)
-    pending.replace(root/name)
-worker=os.fork()
-if worker==0:
-    signal.signal(signal.SIGTERM,signal.SIG_IGN)
-    record('worker',json.dumps({'pid':os.getpid(),'group':os.getpgrp()}))
-    while True:time.sleep(.01)
-def term(*_):
-    record('term','TERM received')
-    if mode=='cooperative':sys.exit(status)
-    while not (root/'release').exists():time.sleep(.01)
-if mode in ('cooperative','pending'):signal.signal(signal.SIGTERM,term)
-if mode=='stubborn':signal.signal(signal.SIGTERM,signal.SIG_IGN)
-while not (root/'worker').exists():time.sleep(.01)
-record('leader',json.dumps({'pid':os.getpid(),'group':os.getpgrp()}))
-while not (root/'release').exists():time.sleep(.01)
-sys.exit(status)
+root=$1 mode=$2 status=$3
+record() {
+  printf '%s' "$2" >"$root/$1.pending"
+  /bin/mv -f "$root/$1.pending" "$root/$1"
+}
+identity() {
+  identity_group=$(/bin/ps -o pgid= -p "$1") || return 1
+  printf '{"pid": %s, "group": %s}' "$1" "$((identity_group))"
+}
+(
+  trap '' TERM
+  worker=$(exec /bin/sh -c 'printf %s "$PPID"')
+  record worker "$(identity "$worker")"
+  while :; do /bin/sleep 0.01; done
+) &
+term() {
+  record term 'TERM received'
+  if [ "$mode" = cooperative ]; then exit "$status"; fi
+  while [ ! -e "$root/release" ]; do /bin/sleep 0.01; done
+}
+case $mode in
+  cooperative | pending) trap term TERM ;;
+  stubborn) trap '' TERM ;;
+esac
+while [ ! -e "$root/worker" ]; do /bin/sleep 0.01; done
+record leader "$(identity "$$")"
+while [ ! -e "$root/release" ]; do /bin/sleep 0.01; done
+exit "$status"
 "#,
+            "sh",
         ]);
         command
             .arg(&self.0)
@@ -137,9 +144,9 @@ async fn retired(pid: u32) {
 }
 
 fn unrelated() -> Service {
-    let mut command = Command::new("/usr/bin/python3");
+    let mut command = Command::new("/bin/sleep");
     command
-        .args(["-c", "import time;time.sleep(30)"])
+        .arg("30")
         .env_clear()
         .stdin(Stdio::null())
         .stdout(Stdio::null())
