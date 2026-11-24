@@ -285,7 +285,7 @@ pub(super) fn gateway(networks: &Value) -> Result<Ipv4Addr> {
 
 /// Preserve `ipaddress.ip_address(...).is_private` from the Python reference:
 /// this is the non-global IANA range policy, rather than only RFC 1918.
-fn reference_private(address: Ipv4Addr) -> bool {
+pub(super) fn reference_private(address: Ipv4Addr) -> bool {
     match address.octets() {
         [0 | 10 | 127, ..] => true,
         [169, 254, ..] | [172, 16..=31, ..] => true,

@@ -13,49 +13,15 @@ umask 077
 }
 relay_state="${RUNNER_TEMP:?}/local-ci-postgres"
 mkdir "$relay_state"
-export CI_LOCAL_POSTGRES_READY="$relay_state/ready"
-python3 -u - > "$relay_state/relay.log" 2>&1 <<'PY' &
-import asyncio
-import ipaddress
-import os
-import pathlib
-import socket
-
-port = int(os.environ["CI_LOCAL_POSTGRES_PORT"])
-gateway = socket.gethostbyname("host.docker.internal")
-if not ipaddress.ip_address(gateway).is_private:
-    raise SystemExit("The CI service gateway must be private")
-
-async def transfer(reader, writer):
-    while data := await asyncio.wait_for(reader.read(65536), timeout=120):
-        writer.write(data)
-        await writer.drain()
-    if writer.can_write_eof():
-        writer.write_eof()
-
-async def relay(reader, writer):
-    upstream = None
-    try:
-        remote, upstream = await asyncio.wait_for(asyncio.open_connection(gateway, port), timeout=10)
-        await asyncio.gather(transfer(reader, upstream), transfer(remote, writer))
-    except (OSError, asyncio.TimeoutError):
-        pass
-    finally:
-        writer.close()
-        if upstream is not None:
-            upstream.close()
-
-async def main():
-    server = await asyncio.start_server(relay, "127.0.0.1", port, backlog=32)
-    pathlib.Path(os.environ["CI_LOCAL_POSTGRES_READY"]).write_text("ready\n")
-    async with server:
-        await server.serve_forever()
-
-asyncio.run(main())
-PY
+relay_ready="$relay_state/ready"
+# The relay is this checkout's CI binary; it is built before the readiness wait
+# starts, then relays until the job container ends.
+cargo build --locked -q -p simplestchat-ci --bin simplestchat-ci
+cargo run --locked -q -p simplestchat-ci -- local-postgres-relay \
+  "$CI_LOCAL_POSTGRES_PORT" "$relay_ready" > "$relay_state/relay.log" 2>&1 < /dev/null &
 relay_pid=$!
 for ((attempt = 0; attempt < 100; attempt++)); do
-  if [[ -f "$CI_LOCAL_POSTGRES_READY" ]]; then
+  if [[ -f "$relay_ready" ]]; then
     printf 'Started the job-local PostgreSQL relay on port %s.\n' "$CI_LOCAL_POSTGRES_PORT"
     exit 0
   fi

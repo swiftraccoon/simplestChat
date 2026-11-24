@@ -71,11 +71,37 @@ test("failed download removes its private staging and leaves no install", async 
   assert.deepEqual(await readdir(directory), ["bin"]);
 });
 
+// The installation this installer leaves: its eight recorded files, the CMake
+// cache it read the options from, and its receipt in the installer's own form.
 async function receiptedPrefix(directory, installerDigest) {
   const prefix = join(directory, "prefix");
+  const options = {
+    CMAKE_BUILD_TYPE: "Release",
+    BUILD_SHARED_LIBS: "OFF",
+    BUILD_TESTING: "OFF",
+    BUILD_TOOL: "OFF",
+    BUILD_LIBSSL: "OFF",
+    ENABLE_SOURCE_MODIFICATION: "OFF",
+    BUILD_AWSLC_PROVIDER: "OFF",
+    ENABLE_CRYPTO_POLICIES: "OFF",
+    GENERATE_RUST_BINDINGS: "ON",
+    RUST_BINDINGS_TARGET_VERSION: "1.70",
+    BORINGSSL_PREFIX: "simplestchat_awslc_5_11_0",
+    CMAKE_POSITION_INDEPENDENT_CODE: "ON",
+    CMAKE_INSTALL_LIBDIR: "lib",
+  };
+  const cache = Object.entries(options)
+    .map(([name, value]) => `//${name} help\n${name}:STRING=${value}\n`)
+    .join("");
   const files = {
     "lib/libcrypto-awslc.a": "archive",
     "share/rust/aws_lc_bindings.rs": "bindings",
+    "include/openssl/base.h": "header",
+    "include/openssl/boringssl_prefix_symbols.h": "symbols header",
+    "share/simplestchat/aws-lc-source.tar.gz": "source",
+    "share/simplestchat/bindgen-cli.crate": "generator",
+    "share/simplestchat/CMakeCache.txt": `# CMake cache\n${cache}`,
+    "share/simplestchat/symbols.txt": "symbols",
   };
   const digests = {};
   for (const [name, contents] of Object.entries(files)) {
@@ -83,10 +109,15 @@ async function receiptedPrefix(directory, installerDigest) {
     await writeFile(join(prefix, name), contents);
     digests[name] = createHash("sha256").update(contents).digest("hex");
   }
-  await mkdir(join(prefix, "share/simplestchat"), { recursive: true });
+  const receipt = {
+    configure_options: options,
+    installer_sha256: installerDigest,
+    bindgen_sha256: "1".repeat(64),
+    files: digests,
+  };
   await writeFile(
     join(prefix, "share/simplestchat/build.json"),
-    JSON.stringify({ installer_sha256: installerDigest, files: digests }),
+    `${JSON.stringify(receipt, null, 2)}\n`,
   );
   return prefix;
 }

@@ -1,0 +1,1866 @@
+{
+ "program": {
+  "script": "build/ci-local-docker.sh",
+  "sha256": "344dc0b721ec3aa40bd8bb2f51a2bcfa8618539048d2e6ccda9b09f8e77146b0"
+ },
+ "revision": "3e08457f3bae3f3df77ca929bf5f94fa40d7b639",
+ "servers": [
+  {
+   "description": {
+    "name": "the selected release",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "74056fb726aa316b81323ebeb5fc1fca14cd08328a5c5a86108e237ac10d6b56",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 1.48",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.48",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "b4b6a739533e82642163631f15f7dc0e3ec3cc2c47787c7727a5522ddf7e04e8",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 1.100",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.100",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "91bfc1a02b8a8dc2ebe0cbee174a554af74e3e56c35987a10938fdbd8cbec396",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 2.0",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "2.0",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "09a28a18d9a651d15cbed03db6dbb154ca3003380af071349ead8ea82485f339",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 1.48.1",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.48.1",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "8bf62d038ee1b3eaa423cb7202c2ec8d45268e266468dbee5a16e0b42aa72199",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 1.048",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.048",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "95286751423753de53a84794bfcdfcbfbb353ea6f58c475e1c3fa2010a434f83",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 1.47",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.47",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "c894b0a039e8787bdb0349491ffa2e469475d10f912ee09c5cd482220218b963",
+   "ending": "refused",
+   "words": "Docker API 1.48 or newer is required"
+  },
+  {
+   "description": {
+    "name": "API 0.99",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "0.99",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "d4cf93e81f8d2e1d6528e3843ba534417e866bfb66c61faab40f82b1a449d28a",
+   "ending": "refused",
+   "words": "Docker API 1.48 or newer is required"
+  },
+  {
+   "description": {
+    "name": "API 1",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "a8e8886f81ba0f293fafd3c9cd5b709e1b9b4e8ce4df7d921489ee0d2fe95bec",
+   "ending": "refused",
+   "words": "Docker API 1.48 or newer is required"
+  },
+  {
+   "description": {
+    "name": "API 2",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "2",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "5fa2cb31df36dc19c11c071ca145fb3c65601fe2f4477728aca0f2475f845808",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API empty",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "286c2cfe17049e7b68307fb9b6654a25326648b797fa7b19f3d3e5b9e8bf606a",
+   "ending": "traceback",
+   "error": "ValueError"
+  },
+  {
+   "description": {
+    "name": "API missing",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "d019372f6e72bd9457fcac87a25fecfa101de98dac73e056260e83e4ed870fb4",
+   "ending": "traceback",
+   "error": "KeyError"
+  },
+  {
+   "description": {
+    "name": "API 1.x",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.x",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "676cee5d3b4cf99effc06f22b9ec18099b92c5903659a7c71e61816519877842",
+   "ending": "traceback",
+   "error": "ValueError"
+  },
+  {
+   "description": {
+    "name": "API with a leading space",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": " 1.48",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "8b4817b6d92c55c91ea25128e68b9de4c1fdb772e5d823e884cb6df7d0ab053c",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API with a sign",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "+1.48",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "fcd3a8e55ca9afddf8ec25859d830b67f857c5a677acb5cb3e8d622b7a1c0110",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API with an underscore",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.4_8",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "827e31a0b7f2fbf4f228dfbe6602cc2cb30721159edc453970d4c282766608f8",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API in Arabic-Indic digits",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "١.٤٨",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "189cb28db7589b7fe89013cfeff3cf23c05c5d68a60c350adc970a708d92392d",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "API 1..48",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1..48",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "6845ea9bf34b880424081651e5f5e144d711997460797c08b881e03011e8dfa1",
+   "ending": "traceback",
+   "error": "ValueError"
+  },
+  {
+   "description": {
+    "name": "another daemon version",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.7.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "28b8c3b1a271281435b797912512e7fce843df297170024173b4e7617f846eb2",
+   "ending": "refused",
+   "words": "The running Docker daemon differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "daemon version with a space",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2 ",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "db89f6c45bd0ef80f51bda8663fc68f1ab5b1ef0216b258f531add5b5d050588",
+   "ending": "refused",
+   "words": "The running Docker daemon differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "daemon version missing",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "1724988e29b3e9bfdf54bb6ffa7e02810269ab20d2533df7583c33ec86ae2f4c",
+   "ending": "refused",
+   "words": "The running Docker daemon differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "an empty answer",
+    "server": {}
+   },
+   "sha256": "337e64fa23e34cf94aa562e1c1d7126a7b9697cc293b452139d87cd8e488e4d4",
+   "ending": "refused",
+   "words": "The running Docker daemon differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd without its v",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "8befff779802d4814bc0366043b00ae9e35d5b5de9a3fe411bb9ea252a4c469b",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "containerd with two v",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "vv2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "81b6d3a5aa0cf314919a146fb214bdd759ce9602aa492dfc686991bd52b5edcd",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "an older containerd",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.3.6",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "d8be665693f5a0eeb9a49f62d16f1e11ca8d94bc7d07ff167122a7fecec3a8ad",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd twice",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "80a21e4cab2533eda9aba8c48ac89532f1b8118b004c490779283cd7d95d8f27",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd twice, one older",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.3.6",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "8058dceb27ce33c08d1a37f8090057032494c3c7043a6dcb2431130e54834f64",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd missing",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "a379d3a3c5dbf1e42301e76d77262bc44c4d29159f86568a9e543229d399268b",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd without a version",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd"
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "52aa99560aa05066c6c97bc561cd9d28d3ddcae7e7d418bafe016cb263786b82",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd named with a capital",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "Containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "ebfe05595760d8c3d735d3eb54ae5d7144a44922ad9c1ad96c3339130109f843",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "containerd named with a space",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd ",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "3175333167f8830388e5aa1cbdb5041b524f2a8b9b2ea957de37fad860c33256",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "runc with a v",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "v1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "9a43dee9dd19e9d02bcbce32514abf2863f426c7e7cf081b304bd0efc5127045",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "an older runc",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "fdef843a66ceedca6661aaa0d3043d4f0ed7b821335d2b4beb3cceb40d56721c",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "runc missing",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "9122c86dc6ae6c47eee68f34e32755def7753931cf00b9c61c0c6e66c8401b61",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "components in another order",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "59233b03aee013d34b63b75596e22c686d32e742c511f188b41be21d79865226",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "no components",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "d9da2ffe754077286b8a5d6703cce6f759ef05ebdbd7921065ba0174b7949cbe",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "null components",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64",
+     "Components": null
+    }
+   },
+   "sha256": "98c708962d59506d188d2d92e143233fd55bf597eefe6c5adbc093909bbdaa1f",
+   "ending": "traceback",
+   "error": "TypeError"
+  },
+  {
+   "description": {
+    "name": "a wrong version before a wrong component",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.7.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "69f04b021909c48a658229d392bdb08d73c65c1e1b42ea111e4fd7cf396666f2",
+   "ending": "refused",
+   "words": "The running Docker daemon differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "a wrong component before an old API",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": "29.8.2",
+     "ApiVersion": "1.40",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "2bb821783503a1fde00f0f023911aca34244e5d0f03b1be2dace54a734aff2aa",
+   "ending": "refused",
+   "words": "The running Docker component differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "a daemon version that is a number",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": [
+      {
+       "Name": "Engine",
+       "Version": "29.8.2",
+       "Details": {
+        "ApiVersion": "1.52"
+       }
+      },
+      {
+       "Name": "containerd",
+       "Version": "v2.4.1",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "runc",
+       "Version": "1.5.2",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      },
+      {
+       "Name": "docker-init",
+       "Version": "0.19.0",
+       "Details": {
+        "GitCommit": "fixture"
+       }
+      }
+     ],
+     "Version": 29.8,
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "4d38810e62b9f4e1391b9694e22ddd8a9b5ed398fc1bec427ed9f94725907bfb",
+   "ending": "refused",
+   "words": "The running Docker daemon differs from the selected version"
+  },
+  {
+   "description": {
+    "name": "components that are text",
+    "server": {
+     "Platform": {
+      "Name": "Docker Engine - Community"
+     },
+     "Components": "containerd",
+     "Version": "29.8.2",
+     "ApiVersion": "1.52",
+     "MinAPIVersion": "1.40",
+     "Os": "linux",
+     "Arch": "arm64"
+    }
+   },
+   "sha256": "6b69814ca086cc7ff2cda398dfe9971df39090c64d8a66f9017c7ee6023d3c33",
+   "ending": "traceback",
+   "error": "AttributeError"
+  },
+  {
+   "description": {
+    "name": "an answer that is a list",
+    "server": [
+     {
+      "Platform": {
+       "Name": "Docker Engine - Community"
+      },
+      "Components": [
+       {
+        "Name": "Engine",
+        "Version": "29.8.2",
+        "Details": {
+         "ApiVersion": "1.52"
+        }
+       },
+       {
+        "Name": "containerd",
+        "Version": "v2.4.1",
+        "Details": {
+         "GitCommit": "fixture"
+        }
+       },
+       {
+        "Name": "runc",
+        "Version": "1.5.2",
+        "Details": {
+         "GitCommit": "fixture"
+        }
+       },
+       {
+        "Name": "docker-init",
+        "Version": "0.19.0",
+        "Details": {
+         "GitCommit": "fixture"
+        }
+       }
+      ],
+      "Version": "29.8.2",
+      "ApiVersion": "1.52",
+      "MinAPIVersion": "1.40",
+      "Os": "linux",
+      "Arch": "arm64"
+     }
+    ]
+   },
+   "sha256": "44c75dacfee699fd6c9d796fcb882f296b45de5d46cea58993617f1e7c1f6b4d",
+   "ending": "traceback",
+   "error": "AttributeError"
+  }
+ ]
+}

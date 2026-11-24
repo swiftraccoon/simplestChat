@@ -1,0 +1,604 @@
+{
+ "program": {
+  "script": "build/ci-local-postgres.sh",
+  "sha256": "b6381f256aeacd8d7a033f2e8493017f935d2adfedea542bc92e625b66f60149",
+  "replacements": [
+   [
+    "socket.gethostbyname(\"host.docker.internal\")",
+    "socket.gethostbyname(os.environ[\"RECORDED_GATEWAY\"])"
+   ],
+   [
+    "asyncio.open_connection(gateway, port)",
+    "asyncio.open_connection(gateway, int(os.environ[\"RECORDED_UPSTREAM\"]))"
+   ],
+   [
+    "timeout=120",
+    "timeout=float(os.environ[\"RECORDED_IDLE\"])"
+   ],
+   [
+    "timeout=10",
+    "timeout=float(os.environ[\"RECORDED_CONNECT\"])"
+   ]
+  ]
+ },
+ "revision": "3e08457f3bae3f3df77ca929bf5f94fa40d7b639",
+ "gateways": [
+  {
+   "description": {
+    "address": "10.88.0.1"
+   },
+   "sha256": "f394eb9b53c48998357db65aebf599c0e0a9ce69d304653b776ed625481d9ed4",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "172.17.0.1"
+   },
+   "sha256": "4d56a3a7352bdd092562f47fb859eb57cb63f859e1037b5a6dd59a3d3c590dc0",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "172.31.255.254"
+   },
+   "sha256": "dadd37ae3e880537f27c463c32ff3aa54e4d33dd63b429824bb8eec9a3f08673",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "192.168.65.254"
+   },
+   "sha256": "52cf48fbc523b4ab946bbcc653b6906fc3bd3beba1e819f13eb23680a3ae0b61",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "127.0.0.1"
+   },
+   "sha256": "764095ecf0b9931560eab8417ac4b5392f1e7ab860e31c38e62258f55d4f4a4c",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "169.254.1.2"
+   },
+   "sha256": "ee948cfe8e0ebf376b4e4e8f8e704eb649cb254a3f01dd8a035e9dc6a16fe0b9",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "0.0.0.0"
+   },
+   "sha256": "509f430f8e2b083d9879bef6c22436e6f025928b2d6ce4d36fa75f064e1d2187",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "192.0.0.1"
+   },
+   "sha256": "4ac5e77b95899762fb378587aeefcfe9a1d67d269471f633f044eec88b2fe0c8",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "192.0.0.8"
+   },
+   "sha256": "7847972b6fe739ce785a0e6a32498b54cf043408384d14666cd35bd1b9f49417",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "192.0.0.9"
+   },
+   "sha256": "2adcba5a4b1024895ddbfd6e73ee36a53140602cbab91b65e3db1545dba7a54e",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "192.0.0.10"
+   },
+   "sha256": "3f5d6f741986f94431ef6cc85784128d559ffefed6a4e11ee1583d3a89fdcdd1",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "192.0.0.170"
+   },
+   "sha256": "b5bb061857b626bca0819eea8fffe62016e187f302647ec14d8dc57d8eb94631",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "192.0.2.1"
+   },
+   "sha256": "92773e3dab750393012865453a5a092d6698469abe9183d61d28848b3087c064",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "198.18.0.1"
+   },
+   "sha256": "00492fa77155e0971b89521efb15924b42d3fa868d53761550c7a98153618645",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "198.19.255.255"
+   },
+   "sha256": "bfa2f0f2da9e2b74065a88c5a425572ee63b1cfc05bf422469b0c259ffa30812",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "198.51.100.1"
+   },
+   "sha256": "ad2e467eb6b94dc8ffd711508b174c3f05df0f9f20ca30d3e1b3326a408c531c",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "203.0.113.1"
+   },
+   "sha256": "88d0e08672e7a1bd9f7665245155557c72f113f1ce20c65384477f468ec148df",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "240.0.0.1"
+   },
+   "sha256": "b4d6f94780448df9ca44a913a53f32979a5060d111afd70f5210463d7b279142",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "255.255.255.255"
+   },
+   "sha256": "9c49b59b7f4860c4c0f99b691a1fa8086015cec55cc1f5ea00b0ada9abfb3f45",
+   "ending": "listening"
+  },
+  {
+   "description": {
+    "address": "100.64.0.1"
+   },
+   "sha256": "69e7d9412fdec4bf6b5e9b5ca8ed7474913899bc6d139dd191229a0bf3193101",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "8.8.8.8"
+   },
+   "sha256": "2ca8f744bb776b780329b1c0b1a72684542d80cd5d4736d8e0a7cef194b40724",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "172.32.0.1"
+   },
+   "sha256": "e37259e0394ea835b00dda0a3e58e960eb62892391171880de39a6c1ef0a99a5",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "172.15.255.255"
+   },
+   "sha256": "0ec5acf01ad158a60e7f9e7ff34b04417317bbf1d3d975be8a77ed8a1f36918d",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "11.0.0.1"
+   },
+   "sha256": "45e368be928d437564a5d68f5c7bcccc67d6b499e679a1c0f272044b484955b0",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "192.169.0.1"
+   },
+   "sha256": "6ef30fcddc3ef0f6b6be1f7811758cc07a567bb87f44df43b712676e9dc409c9",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  },
+  {
+   "description": {
+    "address": "198.20.0.1"
+   },
+   "sha256": "d258f3123672a2a1c9b2f1838dc835494e00758bdc387904db76b8cfa14e8193",
+   "ending": "refused",
+   "words": "The CI service gateway must be private"
+  }
+ ],
+ "scenarios": [
+  {
+   "description": {
+    "name": "echo both ways",
+    "upstream": "listening",
+    "idle": 3.0,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "send",
+      "client",
+      "hello"
+     ],
+     [
+      "receive",
+      "upstream",
+      5
+     ],
+     [
+      "send",
+      "upstream",
+      "world"
+     ],
+     [
+      "receive",
+      "client",
+      5
+     ],
+     [
+      "shutdown",
+      "client"
+     ],
+     [
+      "end",
+      "upstream"
+     ],
+     [
+      "close",
+      "upstream"
+     ],
+     [
+      "end",
+      "client"
+     ]
+    ]
+   },
+   "sha256": "9aa8125ec750e3125aedf4a88f90e80c71b5797c063be6f1a4d8224a1c4b2842",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    "hello",
+    null,
+    "world",
+    null,
+    {
+     "text": "",
+     "ended": true
+    },
+    null,
+    {
+     "text": "",
+     "ended": true
+    }
+   ]
+  },
+  {
+   "description": {
+    "name": "a half-closed request still gets its answer",
+    "upstream": "listening",
+    "idle": 3.0,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "send",
+      "client",
+      "query"
+     ],
+     [
+      "shutdown",
+      "client"
+     ],
+     [
+      "end",
+      "upstream"
+     ],
+     [
+      "send",
+      "upstream",
+      "answer"
+     ],
+     [
+      "shutdown",
+      "upstream"
+     ],
+     [
+      "end",
+      "client"
+     ]
+    ]
+   },
+   "sha256": "15268cda448087b2c611941f8df25e69cdcfda69e9e7c0dfff224102ba77f5c7",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    null,
+    {
+     "text": "query",
+     "ended": true
+    },
+    null,
+    null,
+    {
+     "text": "answer",
+     "ended": true
+    }
+   ]
+  },
+  {
+   "description": {
+    "name": "the service closes first",
+    "upstream": "listening",
+    "idle": 3.0,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "send",
+      "upstream",
+      "bye"
+     ],
+     [
+      "close",
+      "upstream"
+     ],
+     [
+      "end",
+      "client"
+     ]
+    ]
+   },
+   "sha256": "f1b8c15c68d8680ac7277c011d3d5f92d6f73e2ddd5b7b43993b960c68d067ae",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    null,
+    {
+     "text": "bye",
+     "ended": true
+    }
+   ]
+  },
+  {
+   "description": {
+    "name": "the service ends its side and still hears the client",
+    "upstream": "listening",
+    "idle": 3.0,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "shutdown",
+      "upstream"
+     ],
+     [
+      "end",
+      "client"
+     ],
+     [
+      "send",
+      "client",
+      "late"
+     ],
+     [
+      "shutdown",
+      "client"
+     ],
+     [
+      "end",
+      "upstream"
+     ]
+    ]
+   },
+   "sha256": "9986af990c9381816430fdc7520198f62f78e02778491542823ac5689dbd6306",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    {
+     "text": "",
+     "ended": true
+    },
+    null,
+    null,
+    {
+     "text": "late",
+     "ended": true
+    }
+   ]
+  },
+  {
+   "description": {
+    "name": "no service listening",
+    "upstream": "absent",
+    "idle": 3.0,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "mark"
+     ],
+     [
+      "end",
+      "client"
+     ],
+     [
+      "since_mark_at_least",
+      1.5
+     ]
+    ]
+   },
+   "sha256": "387964a6561e0f30acc8de08a7b45a63201d137777731569b8fd03e6a24ece70",
+   "observed": [
+    null,
+    null,
+    {
+     "text": "",
+     "ended": true
+    },
+    false
+   ]
+  },
+  {
+   "description": {
+    "name": "both directions silent past the idle deadline",
+    "upstream": "listening",
+    "idle": 0.5,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "mark"
+     ],
+     [
+      "end",
+      "client"
+     ],
+     [
+      "since_mark_at_least",
+      0.4
+     ],
+     [
+      "end",
+      "upstream"
+     ]
+    ]
+   },
+   "sha256": "756097a0f8494626a2f55c1aaa632872394dd31c4026979499ad0f31896faa25",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    {
+     "text": "",
+     "ended": true
+    },
+    true,
+    {
+     "text": "",
+     "ended": true
+    }
+   ]
+  },
+  {
+   "description": {
+    "name": "a silent direction closes a busy one",
+    "upstream": "listening",
+    "idle": 0.5,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "stream",
+      "upstream",
+      30,
+      100,
+      "tick\n"
+     ],
+     [
+      "end_short",
+      "client",
+      150
+     ]
+    ]
+   },
+   "sha256": "d64695206e19abcc981be9f56955fa60f08420acde1eed8a35dd018adad843ff",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    {
+     "ended": true,
+     "short": true
+    }
+   ]
+  },
+  {
+   "description": {
+    "name": "a mebibyte each way",
+    "upstream": "listening",
+    "idle": 3.0,
+    "steps": [
+     [
+      "connect"
+     ],
+     [
+      "accept"
+     ],
+     [
+      "bulk",
+      "client",
+      1048576
+     ],
+     [
+      "bulk",
+      "upstream",
+      1048576
+     ],
+     [
+      "end_digest",
+      "upstream"
+     ],
+     [
+      "end_digest",
+      "client"
+     ]
+    ]
+   },
+   "sha256": "f6faa732518ac33a894ad401f84959e4702daaa8e666592c9bbcedb93edb4f8a",
+   "observed": [
+    null,
+    "accepted",
+    null,
+    null,
+    {
+     "bytes": 1048576,
+     "sha256": "631b84027d6b9e52b539c4e8373622d23032dfadc64d60af87339c9037e4f769",
+     "ended": true
+    },
+    {
+     "bytes": 1048576,
+     "sha256": "631b84027d6b9e52b539c4e8373622d23032dfadc64d60af87339c9037e4f769",
+     "ended": true
+    }
+   ]
+  }
+ ]
+}

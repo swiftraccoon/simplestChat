@@ -179,6 +179,14 @@ a rebuild, choose a new owned prefix. Both
 `lib/libcrypto-awslc.a` and `share/rust/aws_lc_bindings.rs` are required. Keep
 `AWS_LC_SYS_STATIC=1` and `AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0`; no bundled
 older AWS-LC or unchecked system library is used by the maintained setup.
+An existing prefix is retained only when its receipt is exactly the one this
+installer writes for it, every recorded file intact. The build stops when its
+CMake cache is not plain ASCII text (for example under a non-ASCII build path).
+
+Both installers are POSIX shell with `tar` and `gzip`. Before unpacking an
+authenticated archive they refuse any member other than an ordinary file or
+directory (links, devices, set-id or sticky modes, unusual permissions) and any
+absolute name or `..` component.
 
 The OpenSSL helper installs the checksum-pinned static build. Its download permits
 three transient-error retries with curl's default backoff, a 180-second retry

@@ -1027,10 +1027,12 @@ file and 64 MiB total. It refuses links, special files, invalid UTF-8 names/text
 and changing selected bytes or directory membership. Source files are stamped
 when read and revalidated after copying. These are optimistic identity/stamp
 checks, not an atomic source snapshot or an authenticated Cargo/runtime closure.
-Retained namespace walks permit at most 24 absolute path components. The original
-`build/check-native-dtls.sh` remains the unchanged reference helper; inert
-selection and command-policy tests pin the native controller's expected
-selections and commands, and ordinary checks do not compile the worker.
+Retained namespace walks permit at most 24 absolute path components.
+`build/check-native-dtls.sh` only starts this command. Inert tests replay the
+source selections and log assertions that the helper's retired programs recorded
+(`crates/ci/src/native_dtls/recorded_reference.json`, through the same bounded
+copy), command-policy tests pin the controller's commands, and ordinary checks do
+not compile the worker.
 
 Python, CC, CXX and pkg-config selection uses captured PATH/caller-directory
 semantics, including literal paths with spaces. Python executes through its
@@ -1053,7 +1055,7 @@ Output, cleanup, late interruption and entry-relative deadline failures cannot
 return 0. No process owner claims detached/session/privileged descendants.
 
 CI keeps its lookup-only `native-dtls-v2` namespace and existing 12-minute check
-and 25-minute job budgets. The expanded key includes vendored/reference/install
+and 25-minute job budgets. The expanded key includes vendored and install
 inputs plus the xtask and crates/ tool providers, workspace manifests, Cargo.lock, compiler
 configuration and the workflow itself. Unchanged UI bytes do not invalidate it.
 A cache miss installs the existing pinned Rust 1.99.0 toolchain and runs the
@@ -2014,8 +2016,10 @@ never mounted, and the production release fixture keeps its empty-engine and
 disposable-host checks.
 
 PostgreSQL services use distinct declared ports for the Rust and three browser
-groups. A local-only relay connects each job's loopback address to its published
-service; the existing loopback-only database checks remain active. The launcher
+groups. A local-only relay (`simplestchat-ci local-postgres-relay`, started by
+`build/ci-local-postgres.sh`) connects each job's loopback address to its published
+service on the private bridge gateway; a direction silent for 120 seconds closes
+the connection. The existing loopback-only database checks remain active. The launcher
 refuses pre-existing containers. It requests act cleanup and checks for leftover
 containers after execution; an interrupted setup can require inspection of the
 owned VM before another run.

@@ -8,6 +8,7 @@ mod act;
 mod engine;
 mod evidence;
 mod options;
+pub(super) mod postgres_relay;
 mod process;
 #[cfg(test)]
 #[path = "local/ci_local_tests.rs"]

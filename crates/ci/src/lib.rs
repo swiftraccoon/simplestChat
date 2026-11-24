@@ -134,6 +134,9 @@ Commands:
   local [all|JOB] [options]
                 Run all required local workflow jobs, or one explicitly partial job,
                 against only an owned disposable engine; see `local --help`.
+  local-postgres-relay PORT READY_FILE
+                Relay a disposable local job's loopback PostgreSQL port to its
+                private service gateway; build/ci-local-postgres.sh starts it.
   evidence record|complete|requirements [--id CHECK] [--root CHECKOUT]
                 Record or require complete executed local-CI matrix evidence.
   retention [--apply --run-id ID --revision SHA]
@@ -463,6 +466,12 @@ pub fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         .is_some_and(|argument| argument == "native-dtls")
     {
         return native_dtls::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "local-postgres-relay")
+    {
+        return local::postgres_relay::run(&arguments[1..]);
     }
     if arguments
         .first()

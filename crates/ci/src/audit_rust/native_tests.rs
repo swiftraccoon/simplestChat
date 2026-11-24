@@ -233,9 +233,14 @@ async fn missing_or_wrong_role_proof_and_prior_cancellation_create_no_child() {
         )
         .unwrap(),
     );
-    let mut command = Command::capture(Program::Python, &["--version"]);
+    // The scanner's selected executable is no proof for another program.
+    let mut command = Command::capture(Program::Cargo, &["--version"]);
     command.executable = Some(Arc::clone(&selected));
-    assert!(native.run(command).await.is_err());
+    let refused = native.run(command).await.unwrap_err();
+    assert_eq!(
+        refused.message,
+        "CI execution requires its validated executable role."
+    );
     Arc::try_unwrap(selected).unwrap().close().unwrap();
     let (reporter, cleanup) = owned.cleanup();
     cleanup.unwrap();

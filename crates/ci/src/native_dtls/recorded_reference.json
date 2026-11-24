@@ -1,0 +1,615 @@
+{
+ "programs": {
+  "dtls-selection": {
+   "script": "build/check-native-dtls.sh",
+   "sha256": "7841f8fed5cdad72f80e94bb7438f0548637ad95b4f3e9be6c5ded30ea3f0609"
+  },
+  "dtls-logs": {
+   "script": "build/check-native-dtls.sh",
+   "sha256": "2cb507e9c49b589739755222d73a40930101f481ba632b155f34b29131919f07"
+  }
+ },
+ "revision": "3e08457f3bae3f3df77ca929bf5f94fa40d7b639",
+ "selections": [
+  {
+   "description": {
+    "name": "the vendored layout",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "b9ed6670e0cefc8a2ef28c50cc5d53a79bcaa9c459e904d384afcf94aedcd160",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "every tag in one source",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/TestAll.cpp": "[dtls] [media-diagnostics] [bandwidth-constraints]\n"
+    }
+   },
+   "sha256": "41a56711b77c27dc68aaa16e701783b5a4aeadd2075e91dda54731222890de72",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestAll.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "a tag missing",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "c5625beb09cb5f26a4967d3362e20380cc2e4cd00ce2688a79a378041098b54a",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a tag only outside the tests",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "src/Bandwidth.cpp": "[bandwidth-constraints]\n"
+    }
+   },
+   "sha256": "dd008a2969a7aeb4242ccf2a4d84ec455b9e949f6aab7cd770eac224f99be2a1",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a tag only in a header",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/Bandwidth.hpp": "[bandwidth-constraints]\n"
+    }
+   },
+   "sha256": "e41fbd145f5efcd8f5a11d3cf78a30098680f0642ddc14a0df093addde5a85ea",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a longer tag is no tag",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "[dtls-close]\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "5769b143a37c60490b5709038cd9add2b921a9f7060731bfca4b45fd628e3171",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a tagged source with a space",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/Test Space.cpp": "[dtls]\n"
+    }
+   },
+   "sha256": "33cece43488d83a5da572ed3bf94512e0ef79278a250e039bfd813f42e9fdc7b",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a tagged source with a plus",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/Test+Plus.cpp": "[dtls]\n"
+    }
+   },
+   "sha256": "31d39dd1ac580c88723bf3e7b1c8e859c7d59ebafb57caa831944b1f9cb08a62",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a tagged source named with an accent",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/Testé.cpp": "[dtls]\n"
+    }
+   },
+   "sha256": "3aafd2df3260dd44c319314ec34b6e76efec8db6c814abef1191461b77cca1ab",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a tagged source named only .cpp",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/.cpp": "[dtls]\n"
+    }
+   },
+   "sha256": "330fffe42f04a92c6806b563cc081be3342f5fbaf872d7c7aa3c37129300e6db",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "a hidden tagged source",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/.hidden.cpp": "[dtls]\n"
+    }
+   },
+   "sha256": "84f4bf49a4a4bd4edd5809b9b7a456450590c0aa453a7f8984727a5aad11c939",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/.hidden.cpp',\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "an untagged source with a space",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/Un tagged.cpp": "// nothing\n"
+    }
+   },
+   "sha256": "98eddfae69427933c260c7283f7065c36eddcef7d63228dc1884562da278b657",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "deeply nested tagged source",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/a/b/c/Deep.cpp": "[media-diagnostics]\n"
+    }
+   },
+   "sha256": "7f5060fe08a2a398535636a4ade3e95cd3f5307e7a29e3d6edb78cd62cdd2dcc",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/a/b/c/Deep.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "sources sorted by code point",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/B.cpp": "[dtls]\n",
+     "test/src/a.cpp": "[dtls]\n"
+    }
+   },
+   "sha256": "c59f4a9ad74e407427ee65b1141b9bc4cd418b200a335fa4dab6bc55b07020b7",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/B.cpp',\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/a.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "the runner absent from disk",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "95d50a21c0939e13452355b1217c910bf826cd835edaba6e1b7dc00aacfa26a3",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "the anchor twice",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n# mediasoup_worker_test = executable(\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "e18079f9311b23338dabd605f159999fae075b0114f16b7cef50f6182c385d0c",
+   "ending": "refused",
+   "words": "Native regression build target changed; review its source selection"
+  },
+  {
+   "description": {
+    "name": "the anchor missing",
+    "files": {
+     "meson.build": "project('worker')\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "e2eb16cf17182f2fa8da919a7bccc723be283c1f9aaed58782f25e2d34632250",
+   "ending": "refused",
+   "words": "Native regression build target changed; review its source selection"
+  },
+  {
+   "description": {
+    "name": "a build file with CRLF line ends",
+    "files": {
+     "meson.build": "project('worker')\r\nmediasoup_worker_test = executable(\r\n  'mediasoup-worker-test',\r\n)\r\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "4821cd209b2524d0aa93e0cdf6f1dd3ab1d8ac7a8d8658405c5445e79fd255aa",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "a build file with CR line ends",
+    "files": {
+     "meson.build": "project('worker')\rmediasoup_worker_test = executable(\r  'mediasoup-worker-test',\r)\r",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "75e65468add446c2393232b5e69869f0f2c7ab88b194abeeadcf1f830335a163",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "a tagged source with CRLF line ends",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"c\", \"[dtls]\") {}\r\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "e74c328c98531545bba580f54938d3f5d7bc02c96e5ce2fd9690769e7cc76f36",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  },
+  {
+   "description": {
+    "name": "a tag split by a carriage return",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "[dt\rls]\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "372d87ad4cdee6734fafa11dd2ab3d55fd4439feaf3410c17e6e4e9df9e3f4a7",
+   "ending": "refused",
+   "words": "Native regression source selection is incomplete"
+  },
+  {
+   "description": {
+    "name": "an untagged source that is not UTF-8",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": {
+      "hex": "ff0a"
+     },
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "c7ce0ff9c638d0ee7af889c4d5e4610a00e37afe88bb8775a535f2818884a1f3",
+   "ending": "traceback",
+   "error": "UnicodeDecodeError"
+  },
+  {
+   "description": {
+    "name": "a build file that is not UTF-8",
+    "files": {
+     "meson.build": {
+      "hex": "70726f6a6563742827776f726b657227290a6d65646961736f75705f776f726b65725f74657374203d2065786563757461626c65280a2020276d65646961736f75702d776f726b65722d74657374272c0a290aff0a"
+     },
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n"
+    }
+   },
+   "sha256": "39de654ff5e2d22df79bca818c1a44f5892a08abf8df97b8582295e5674b204c",
+   "ending": "traceback",
+   "error": "UnicodeDecodeError"
+  },
+  {
+   "description": {
+    "name": "a directory named like a source",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/Folder.cpp": {
+      "directory": true
+     }
+    }
+   },
+   "sha256": "9e0f977a1747cd8544b8fae2646262ec209f3f8b2d82186eb5bedd165423b241",
+   "ending": "traceback",
+   "error": "IsADirectoryError"
+  },
+  {
+   "description": {
+    "name": "an empty tagged source list beside the tags",
+    "files": {
+     "meson.build": "project('worker')\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n",
+     "test/src/tests.cpp": "// runner\n",
+     "test/src/testHelpers.cpp": "// helpers\n",
+     "test/src/RTC/TestDtlsTransport.cpp": "TEST_CASE(\"close\", \"[dtls]\") {}\n",
+     "test/src/RTC/TestRtpInactivity.cpp": "TEST_CASE(\"idle\", \"[media-diagnostics]\") {}\n",
+     "test/src/RTC/TestBandwidth.cpp": "TEST_CASE(\"bound\", \"[bandwidth-constraints]\") {}\n",
+     "test/src/RTC/TestOther.cpp": "TEST_CASE(\"other\", \"[other]\") {}\n",
+     "src/Worker.cpp": "// [dtls] outside the tests\n",
+     "test/src/RTC/Extra.cpp": "[dtls][dtls]\n"
+    }
+   },
+   "sha256": "8b57b1e09b9eaaf67c392a63d7e704ea7e4ecaa5e32fb76bc0e56e7b5f8b8fd3",
+   "ending": "accepted",
+   "meson": "project('worker')\ntest_sources = [\n  'test/src/RTC/Extra.cpp',\n  'test/src/RTC/TestBandwidth.cpp',\n  'test/src/RTC/TestDtlsTransport.cpp',\n  'test/src/RTC/TestRtpInactivity.cpp',\n  'test/src/testHelpers.cpp',\n  'test/src/tests.cpp',\n]\n\nmediasoup_worker_test = executable(\n  'mediasoup-worker-test',\n)\n"
+  }
+ ],
+ "logs": [
+  {
+   "description": {
+    "name": "a quiet close and the full context",
+    "orderly": "[dtls-close] passed\n",
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "40def5d1d2a3a7f3e810d5d07b27e2c34c80368f62719a9e0360d9c151ee1e90",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "a close that logged a transport warning",
+    "orderly": "RTC::DtlsTransport::close() | warning\n",
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "ba8671eb6d356f88d175e0a5b82df8defb710d1512139f84f3e087967d5946e7",
+   "ending": "refused",
+   "words": "Orderly authenticated DTLS close unexpectedly logged a warning/error"
+  },
+  {
+   "description": {
+    "name": "a transport name without its scope",
+    "orderly": "RTC::DtlsTransport close\n",
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "8d272f0a8bcce437a7beecca848383692a539a305a4bf79c96f943a2b3b720b8",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "a warning after a carriage return",
+    "orderly": "ok\rRTC::DtlsTransport::x\n",
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "8aafb7d9c895d3a18e1450040558d4baa36cac562b8bea620d2c9b5e6aa33292",
+   "ending": "refused",
+   "words": "Orderly authenticated DTLS close unexpectedly logged a warning/error"
+  },
+  {
+   "description": {
+    "name": "the context with media unobserved",
+    "orderly": "[dtls-close] passed\n",
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:0, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "29e28f3a1a03f763c875e79d3e22f98e36a4a8b92dbbe89a24cd8ff33092e20f",
+   "ending": "refused",
+   "words": "Native RTP inactivity log lost its bounded stream/activity context"
+  },
+  {
+   "description": {
+    "name": "the context split by a carriage return",
+    "orderly": "[dtls-close] passed\n",
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio,\r encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "10b50a34cfc677fd2d57913c80d0976d8a45b05548c650a6a7f5b057a1e6da1c",
+   "ending": "refused",
+   "words": "Native RTP inactivity log lost its bounded stream/activity context"
+  },
+  {
+   "description": {
+    "name": "the context among CRLF lines",
+    "orderly": "[dtls-close] passed\n",
+    "dtls": "start\r\nRTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\r\nend\r\n"
+   },
+   "sha256": "cc607b71ffab46cb56d1ae9f543490c669693cbea22747f6ef8bdb1882b29bcf",
+   "ending": "accepted"
+  },
+  {
+   "description": {
+    "name": "no context",
+    "orderly": "[dtls-close] passed\n",
+    "dtls": "nothing here\n"
+   },
+   "sha256": "abcc9f00a0c40bc528959c585ba269938f9f30b5d582cc9295e5bf06859d910e",
+   "ending": "refused",
+   "words": "Native RTP inactivity log lost its bounded stream/activity context"
+  },
+  {
+   "description": {
+    "name": "empty logs",
+    "orderly": "",
+    "dtls": ""
+   },
+   "sha256": "6bd1cd0db604c4c171a9e24f001650be5c8f2d16b9046da4b76512f0613081f3",
+   "ending": "refused",
+   "words": "Native RTP inactivity log lost its bounded stream/activity context"
+  },
+  {
+   "description": {
+    "name": "both wrong",
+    "orderly": "RTC::DtlsTransport::x\n",
+    "dtls": ""
+   },
+   "sha256": "bf242aff2207daf35bf59c4bd2f615735f18cfa6f30db9a5a6b84182355b5f3c",
+   "ending": "refused",
+   "words": "Orderly authenticated DTLS close unexpectedly logged a warning/error"
+  },
+  {
+   "description": {
+    "name": "a close log that is not UTF-8",
+    "orderly": {
+     "hex": "ff0a"
+    },
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "5c3aa940964c4b72b28242297ed99b5ba089c0b1d206bed999e5f7e77aaa9007",
+   "ending": "traceback",
+   "error": "UnicodeDecodeError"
+  },
+  {
+   "description": {
+    "name": "a context log that is not UTF-8",
+    "orderly": "[dtls-close] passed\n",
+    "dtls": {
+     "hex": "5254433a3a50726f6475636572207761726e696e673a2070726f64756365723a31313131323233332d343435352d363637372d383839392d6161626263636464656566662c207472616e73706f72743a30303131323233332d343435352d363637372d383839392d6161626263636464656566662c206b696e643a617564696f2c20656e636f64696e674964783a322c20776f726b65724d733a323530302c2074696d656f75744d733a313530302c206d656469614f627365727665643a312c206c6173744d656469614d733a313030302c207061757365643a300aff"
+    }
+   },
+   "sha256": "50aecc528d857ad4462d01012da3e80cc4b952904cf0aed35eb907061ece4ccc",
+   "ending": "traceback",
+   "error": "UnicodeDecodeError"
+  },
+  {
+   "description": {
+    "name": "a warning in a close log that is not UTF-8",
+    "orderly": {
+     "hex": "5254433a3a44746c735472616e73706f72743a3a780aff"
+    },
+    "dtls": "RTC::Producer warning: producer:11112233-4455-6677-8899-aabbccddeeff, transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0\n"
+   },
+   "sha256": "8536ca7001f8edd4bae4400c10d136986b5794e1554a1c9df368ff952fef9c5a",
+   "ending": "traceback",
+   "error": "UnicodeDecodeError"
+  }
+ ]
+}

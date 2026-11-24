@@ -54,6 +54,30 @@ async function fixture(t, options = {}) {
     const [tool, ...args] = process.argv.slice(2);
     const settings = ${JSON.stringify(options)};
     fs.appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify({tool, args, env: process.env}) + '\\n');
+    // The Docker CLI decodes the daemon's answer into its Go types and prints
+    // the identity template's fields as Go JSON strings; an answer those types
+    // cannot hold makes the CLI fail. Only the helper's template is rendered.
+    function render(args, server) {
+      const template = '{{json .Server.Version}}{{"\\\\n"}}{{json .Server.APIVersion}}{{"\\\\n"}}' +
+        '{{range .Server.Components}}{{json .Name}} {{json .Version}}{{"\\\\n"}}{{end}}';
+      if (args[args.indexOf('--format') + 1] !== template) process.exit(94);
+      const text = value => {
+        if (value === undefined) return '';
+        if (typeof value !== 'string') process.exit(1);
+        return value;
+      };
+      const go = value => JSON.stringify(value).replace(/[<>&\\u2028\\u2029]/g,
+        character => '\\\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'));
+      if (!server || typeof server !== 'object' || Array.isArray(server)) process.exit(1);
+      let components = server.Components ?? [];
+      if (!Array.isArray(components)) process.exit(1);
+      let output = go(text(server.Version)) + '\\n' + go(text(server.ApiVersion)) + '\\n';
+      for (const component of components) {
+        if (!component || typeof component !== 'object' || Array.isArray(component)) process.exit(1);
+        output += go(text(component.Name)) + ' ' + go(text(component.Version)) + '\\n';
+      }
+      process.stdout.write(output);
+    }
     if (tool === 'uname') console.log(args[0] === '-m' ? 'aarch64' : 'Linux');
     else if (tool === 'dockerd') {
       if (args[0] === '--version') console.log(settings.wrongDocker ? 'wrong daemon' : 'Docker version 29.8.2, build 8af9fe3');
@@ -71,7 +95,7 @@ async function fixture(t, options = {}) {
           process.kill(Number(fs.readFileSync(${JSON.stringify(path.join(temporary, 'local-ci-docker/journald.pid'))}, 'utf8')), 'SIGTERM');
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
         }
-      } else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2', Components: [{Name: 'containerd', Version: settings.wrongComponent ? 'v2.3.6' : 'v2.4.1'}, {Name: 'runc', Version: '1.5.2'}]}));
+      } else if (args.includes('version')) render(args, settings.server ?? {ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2', Components: [{Name: 'containerd', Version: settings.wrongComponent ? 'v2.3.6' : 'v2.4.1'}, {Name: 'runc', Version: '1.5.2'}]});
       else process.exit(92);
     } else if (tool === 'curl') {
       const output = args[args.indexOf('--output') + 1];
@@ -224,4 +248,56 @@ test('an outdated active containerd cannot publish runtime readiness', async t =
   assert.notEqual(result.status, 0, result.output);
   assert.match(result.output, /running Docker component differs/);
   assert.equal(await readFile(f.githubEnv, 'utf8'), '');
+});
+
+// What the retired Python identity program answered for each recorded daemon
+// answer, bound to the SHA-256 of the case's canonical JSON. The helper must
+// accept exactly what it accepted, refuse with its words what it refused, and
+// refuse what it could not read; it refuses these spellings it accepted:
+const STRICTER = [
+  'API 2', // an API version needs at least a major and a minor number
+  'API with a leading space', // ASCII digits only, as Docker prints them
+  'API with a sign',
+  'API with an underscore',
+  'API in Arabic-Indic digits',
+];
+// Answers the Docker CLI cannot decode into its types: it fails before any
+// identity line, so any refusal is the program's.
+const UNREADABLE = ['a daemon version that is a number', 'components that are text', 'an answer that is a list'];
+const canonical = value => {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
+test('the running daemon identity is held exactly as the retired program held it, or more strictly', async t => {
+  const recording = JSON.parse(await readFile(path.join(root, 'build/tests/ci-local-docker-recorded.json'), 'utf8'));
+  const cases = recording.servers;
+  assert.equal(cases.length, 42);
+  for (const name of STRICTER) {
+    assert.equal(cases.find(each => each.description.name === name)?.ending, 'accepted', name);
+  }
+  let accepted = 0;
+  for (const each of cases) {
+    const { description } = each;
+    assert.equal(createHash('sha256').update(canonical(description)).digest('hex'), each.sha256, description.name);
+    const f = await fixture(t, { server: description.server });
+    const result = await f.run();
+    const published = await readFile(f.githubEnv, 'utf8');
+    if (each.ending === 'accepted' && !STRICTER.includes(description.name)) {
+      accepted += 1;
+      assert.equal(result.status, 0, `${description.name}: ${result.output}`);
+      assert.match(published, /DOCKER_HOST=unix:/, description.name);
+      continue;
+    }
+    assert.notEqual(result.status, 0, `${description.name}: ${result.output}`);
+    assert.equal(published, '', description.name);
+    if (each.ending === 'refused' && !UNREADABLE.includes(description.name)) {
+      assert.ok(result.output.includes(each.words), description.name);
+    }
+    if (STRICTER.includes(description.name)) assert.match(result.output, /Docker API 1\.48 or newer is required/);
+  }
+  assert.equal(accepted, 9);
 });

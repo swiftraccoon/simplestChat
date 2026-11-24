@@ -102,11 +102,13 @@ fn native_dtls_cache_miss_bootstrap_controller_and_source_closure() {
         ".github/workflows/ci.yml",
         "build/install-openssl.sh",
         "build/pip-constraints.txt",
-        "build/check-native-dtls.sh",
     ] {
         assert!(selects(path), "{path}");
     }
-    assert!(!selects("web/src/main.ts"));
+    // The local entry point only starts the same controller.
+    for path in ["web/src/main.ts", "build/check-native-dtls.sh"] {
+        assert!(!selects(path), "{path}");
+    }
 }
 
 /// From `test_aggregate_rejects_missing_skipped_and_failed_jobs`: every

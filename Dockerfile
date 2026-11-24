@@ -60,6 +60,7 @@ RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,tar
     git \
     glibc-static \
     golang \
+    gzip \
     libstdc++-static \
     make \
     meson \
@@ -69,6 +70,7 @@ RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,tar
     python3 \
     python3-devel \
     python3-pip \
+    tar \
     which \
     && dnf clean all
 
@@ -190,12 +192,11 @@ RUN target/release/simplestchat-security native --root /app \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
     --openssl-prefix /opt/openssl-4.1.0 --aws-lc-prefix /opt/aws-lc-5.11.0 \
     --output /app/native-components.build.json
-RUN python3 -c 'import pathlib, tarfile; \
-    archive = tarfile.open("/opt/aws-lc-5.11.0/share/simplestchat/aws-lc-source.tar.gz"); \
-    member = archive.extractfile("aws-lc-5.11.0/LICENSE"); \
-    content = member.read(); archive.close(); \
-    destination = pathlib.Path("/app/native-licenses/aws-lc.LICENSE"); \
-    destination.parent.mkdir(parents=True); destination.write_bytes(content)'
+# The licence comes from the receipted source archive that the native check
+# above authenticated, byte for byte.
+RUN mkdir /app/native-licenses \
+    && tar -xzOf /opt/aws-lc-5.11.0/share/simplestchat/aws-lc-source.tar.gz aws-lc-5.11.0/LICENSE \
+        > /app/native-licenses/aws-lc.LICENSE
 
 # The load tester has a separate target so its WebRTC client dependencies and
 # executable are absent from the default production image.

@@ -52,7 +52,31 @@ if [ "$actual_sha256" != "$openssl_sha256" ]; then
     exit 1
 fi
 
-python3 -m tarfile --filter data --extract "$archive" "$build_dir"
+# Every member must be a file its owner can read and write, executable by
+# others only if by its owner, or a directory everyone can read and search;
+# links, devices, FIFOs and set-id or sticky modes are refused, as are
+# absolute names and `..` components. No owner is restored, and modes are
+# limited by umask 022.
+LC_ALL=C tar -tvzf "$archive" > "$build_dir/archive-members"
+while IFS= read -r archive_member || [ -n "$archive_member" ]; do
+    case $archive_member in
+        -rwx??[-x]??[-x]* | -rw-??-??-* | drwxr?xr?x*) ;;
+        *)
+            echo "OpenSSL archive holds a member other than a plain file or directory" >&2
+            exit 1
+            ;;
+    esac
+done < "$build_dir/archive-members"
+LC_ALL=C tar -tPzf "$archive" > "$build_dir/archive-names"
+while IFS= read -r archive_name || [ -n "$archive_name" ]; do
+    case /$archive_name/ in
+        //* | */../*)
+            echo "OpenSSL archive names a path outside its directory" >&2
+            exit 1
+            ;;
+    esac
+done < "$build_dir/archive-names"
+(umask 022 && tar --no-same-owner --no-same-permissions -xzf "$archive" -C "$build_dir")
 cd "$build_dir/openssl-${openssl_version}"
 
 # A normalized lib directory makes OPENSSL_DIR and PKG_CONFIG_PATH identical

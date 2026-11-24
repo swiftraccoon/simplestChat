@@ -72,7 +72,7 @@
       "sha256": "50c17baf54cb008f6ce42d50deb4b28050a1aad711636cabd4b241c7e90cc2fd",
       "format": "tar.gz"
     },
-    "installer_sha256": "973dfbef2c575beefd7ca735a146562ea79ccf5d68557779550f9e6ba9341cba",
+    "installer_sha256": "fbd998d114e57faf8748beaaf11b1261314b0dfc4054c355da96a5978618137f",
     "license": "Apache-2.0",
     "configure_options": [
       "no-shared",
@@ -108,7 +108,7 @@
         "sha256": "5622e043625b6d1f32c84f53699690a44d1419e657879de26eb252699f5ebb7c",
         "format": "tar.gz"
       },
-      "installer_sha256": "f481a595fe52bd79c98e8db7555a2055f4771e9cf27357f7ba4b26ed921a85d8",
+      "installer_sha256": "47192bba4935fdfea8de1f178504ec61a27d207047d332b8968cd418cd4e2314",
       "symbol_prefix": "simplestchat_awslc_5_11_0",
       "configure_options": {
         "CMAKE_BUILD_TYPE": "Release",

@@ -22,6 +22,51 @@ done
 [[ -x /lib/systemd/systemd-journald ]] || {
   echo 'The pinned act image must supply systemd-journald.' >&2; exit 2;
 }
+docker_identity_template='{{json .Server.Version}}{{"\n"}}{{json .Server.APIVersion}}{{"\n"}}'
+docker_identity_template+='{{range .Server.Components}}{{json .Name}} {{json .Version}}{{"\n"}}{{end}}'
+# Hold the running daemon's identity lines in "$1" to the selected release:
+# version 29.8.2, exactly one containerd 2.4.1 and one runc 1.5.2 component
+# (each may be spelled with one leading `v`), and API 1.48 or newer.
+server_identity() {
+  local line index=0 version='' api='' containerd=0 containerd_selected=0 runc=0 runc_selected=0
+  local pattern='^"([0-9]{1,9})\.([0-9]{1,9})(\.[0-9]{1,9})*"$'
+  while IFS= read -r line; do
+    if ((index == 0)); then
+      version=$line
+    elif ((index == 1)); then
+      api=$line
+    else
+      case $line in
+        '"containerd" '*)
+          containerd=$((containerd + 1))
+          case ${line#'"containerd" '} in
+            '"2.4.1"' | '"v2.4.1"') containerd_selected=$((containerd_selected + 1)) ;;
+          esac
+          ;;
+        '"runc" '*)
+          runc=$((runc + 1))
+          case ${line#'"runc" '} in
+            '"1.5.2"' | '"v1.5.2"') runc_selected=$((runc_selected + 1)) ;;
+          esac
+          ;;
+      esac
+    fi
+    index=$((index + 1))
+  done < "$1"
+  if [[ "$version" != '"29.8.2"' ]]; then
+    echo 'The running Docker daemon differs from the selected version' >&2
+    return 1
+  fi
+  if ((containerd != 1 || containerd_selected != 1 || runc != 1 || runc_selected != 1)); then
+    echo 'The running Docker component differs from the selected version' >&2
+    return 1
+  fi
+  if [[ ! "$api" =~ $pattern ]] || ((10#${BASH_REMATCH[1]} < 1 ||
+    (10#${BASH_REMATCH[1]} == 1 && 10#${BASH_REMATCH[2]} < 48))); then
+    echo 'Docker API 1.48 or newer is required' >&2
+    return 1
+  fi
+}
 # The runner's embedded Moby build lags behind Docker's current release. Install
 # the authenticated official static bundle only after the disposable-job guards.
 # Runtime helpers are independently authenticated; never borrow a host daemon.
@@ -125,22 +170,12 @@ for ((attempt = 0; attempt < 30; attempt++)); do
       echo 'The job-owned journal exited during Docker startup.' >&2
       exit 1
     fi
-    timeout --signal=TERM --kill-after=2s 10s docker --host unix:///var/run/docker.sock version --format '{{json .Server}}' > "$docker_state/server.json"
-    python3 - "$docker_state/server.json" <<'PY'
-import json
-import sys
-with open(sys.argv[1]) as source:
-    server = json.load(source)
-if server.get("Version") != "29.8.2":
-    raise SystemExit("The running Docker daemon differs from the selected version")
-for name, expected in (("containerd", "2.4.1"), ("runc", "1.5.2")):
-    versions = [item.get("Version", "").removeprefix("v") for item in server.get("Components", [])
-                if item.get("Name") == name]
-    if versions != [expected]:
-        raise SystemExit("The running Docker component differs from the selected version")
-if tuple(map(int, server["ApiVersion"].split("."))) < (1, 48):
-    raise SystemExit("Docker API 1.48 or newer is required")
-PY
+    # Docker's own template engine prints each field as a JSON string, one
+    # per line: the version, the API version, then each component's name and
+    # version. Only exact spellings are compared below.
+    timeout --signal=TERM --kill-after=2s 10s docker --host unix:///var/run/docker.sock version \
+      --format "$docker_identity_template" > "$docker_state/server.txt"
+    server_identity "$docker_state/server.txt"
     printf '%s\n' 'DOCKER_HOST=unix:///var/run/docker.sock' 'DOCKER_CONTEXT=' >> "${GITHUB_ENV:?}"
     echo 'Started the job-owned Docker daemon; the outer engine is not mounted.'
     exit 0

@@ -3,7 +3,7 @@
 FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS native-base
 RUN dnf install -y --setopt=install_weak_deps=False \
     ca-certificates curl gcc gcc-c++ glibc-devel libstdc++-devel libstdc++-static \
-    make perl pkgconf-pkg-config python3 python3-pip tar xz zstd libxml2 zlib libzstd \
+    gzip make perl pkgconf-pkg-config python3 python3-pip tar xz zstd libxml2 zlib libzstd \
     && dnf clean all
 FROM native-base AS llvm-toolchain
 # A bounded, checksum-authenticated upstream LLVM archive supplies clang,
