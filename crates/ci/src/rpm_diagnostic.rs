@@ -95,7 +95,13 @@ impl Context {
         let output = PathBuf::from(&args[3]);
         let github_output = PathBuf::from(text(env, "GITHUB_OUTPUT")?);
         let revision = text(env, "GITHUB_SHA")?.to_string();
-        let certificate = text(env, "RPM_DIAGNOSTIC_RECIPIENT")?.as_bytes().to_vec();
+        let mut certificate = text(env, "RPM_DIAGNOSTIC_RECIPIENT")?.as_bytes().to_vec();
+        // A repository variable is stored without its final line break, and
+        // a canonical PEM certificate ends with one; any other difference
+        // from the canonical encoding is still refused below.
+        if !certificate.is_empty() && !certificate.ends_with(b"\n") {
+            certificate.push(b'\n');
+        }
         if !temporary.is_absolute()
             || !github_output.is_absolute()
             || root != temporary.join("production-security")

@@ -111,6 +111,18 @@ fn selectors_are_exact_hosted_opt_in_and_never_accept_untrusted_contexts() {
     let mut wrong = args.clone();
     wrong[1] = root.display().to_string();
     assert!(Context::new(&wrong, &environment(&root), "Linux").is_err());
+    // A repository variable arrives without the certificate's final line
+    // break; only that one byte is restored.
+    let stored = std::str::from_utf8(&PEM[..PEM.len() - 1]).unwrap();
+    let mut env = environment(&root);
+    env.insert("RPM_DIAGNOSTIC_RECIPIENT".into(), stored.into());
+    let restored = Context::new(&args, &env, "Linux").expect("a stored certificate");
+    assert_eq!(
+        restored.certificate,
+        b"-----BEGIN CERTIFICATE-----\nFIXTURE\n-----END CERTIFICATE-----\n"
+    );
+    let doubled = Context::new(&args, &environment(&root), "Linux").unwrap();
+    assert_eq!(doubled.certificate, restored.certificate);
 }
 #[derive(Default)]
 struct Fake {
