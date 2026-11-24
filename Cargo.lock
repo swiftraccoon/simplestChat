@@ -1905,6 +1905,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef9ac18847474e638e3702b76c65d4eb93428471a74778ef0f1be711717f89b5"
 
 [[package]]
+name = "lru"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9f71e3591c7ec44d3e563e87bf14ddc2bada8519dca046e5b0e560cd004e2d"
+
+[[package]]
 name = "lzma-rs"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1965,7 +1971,7 @@ dependencies = [
  "h264-profile-level-id",
  "hash_hasher",
  "log",
- "lru",
+ "lru 0.18.5",
  "mediasoup-sys",
  "mediasoup-types",
  "nohash-hasher",
@@ -3428,7 +3434,7 @@ dependencies = [
  "icu_casemap",
  "icu_normalizer",
  "icu_properties",
- "lru",
+ "lru 0.19.0",
  "mediasoup",
  "mediasoup-types",
  "num_cpus",
