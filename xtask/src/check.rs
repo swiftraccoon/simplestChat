@@ -193,7 +193,9 @@ fn matching(root: &Path, directory: &str, suffix: &str) -> tooling::Result<Vec<O
 // Keep standalone files self-building; serialize only this pool.
 const SHARED_EXECUTABLE_TESTS: &[&str] = &[
     "build/tests/ci-evidence.test.mjs",
+    "build/tests/ci-local.test.mjs",
     "build/tests/ci-verified.test.mjs",
+    "build/tests/native-dtls-entry.test.mjs",
     "build/tests/performance-thresholds.test.mjs",
     "build/tests/test-postgres.test.mjs",
     "build/tests/test-server.test.mjs",
