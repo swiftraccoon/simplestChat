@@ -1,5 +1,87 @@
 # Fedora RPM database secret findings
 
+## Seven database regions after the November 24 refresh — 2026-11-24
+
+An installer-script change missed the image layer cache in
+[CI run 45356620708](https://github.com/swiftraccoon/simplestChat/actions/runs/45356620708)
+(revision `f32e69905e5b224f60844503a6927e553057b38e`). Its rebuilt dnf-upgrade layer
+(`001/`, layer
+`sha256:b4021e52c6161bca1c0398c33644d3d2597d0d1ec8faebd6a85d953d60b75326`; the 48
+transaction packages carry install time 2026-11-24 08:32 UTC) failed the secret check
+with seven blocked regions, all in `001/usr/lib/sysimage/rpm/rpmdb.sqlite`.
+[CI run 45371262558](https://github.com/swiftraccoon/simplestChat/actions/runs/45371262558)
+(revision `d10ccb1319b155fbcc7fe050271d8cadc629cac1`, image
+`sha256:523055671bd1825ac3328cbf088b0f290082ce382da81cfff42c7d44fd114927`) reused that
+layer and blocked the same seven fingerprints. Twenty-two reviewed regions recurred and
+stayed waived: the 15 base-layer (`000/`) regions, the four tpm2-tss and `magic.mgc`
+regions in byte-identical files, and three of the nine database regions of 2026-11-11.
+The [new evidence](secret-evidence/fedora-rpm-2026-11-24.json) records the complete
+current layer-001 observation, 14 regions, and supports seven new exact records, one per
+complete region. The other six database regions of 2026-11-11 do not occur in this
+image; per the dormancy rule they are removed from the active ledger and stay historical
+in the tests. Owner `swiftraccoon` and expiry **2027-02-20** are unchanged.
+
+Against the 2026-11-11 canonical inventory, eight of the 148 runtime packages moved: the
+five dnf5 packages and `librepo`, which the 2026-11-15 refresh had already moved, and
+newly `libnghttp3` 1.19.0-1.fc44 and `tpm2-tss` 4.1.6-1.fc44. `fedora-gpg-keys` stays
+44-2; the changed package set reshaped the rpm `Basenames` index again. No licence
+record pins a moved package, and the run's licence check passed. The `tpm2-tss`
+4.1.6-1.fc44 header records SHA-256 digests for both FAPI profiles that equal the layer
+files, which are byte-identical to the files reviewed on 2026-11-08, so their regions
+keep their records.
+
+This review examines the canonical database directly. A temporary public-certificate
+repository variable let the opt-in Rust owner encrypt only that retained file in run
+45371262558 with OpenSSL CMS AES-256-GCM and RSA-OAEP with SHA-256. Its manifest joins the
+revision, run, public recipient, ciphertext and plaintext hashes. The ciphertext matches
+the manifest, and the decrypted database (9,904,128 bytes) equals the manifest and the
+file that the image tier hashed in the run's security artifact (`14910031403`, 1,818,996
+bytes, SHA-256 equal to GitHub's digest). The private key stayed outside GitHub; the
+temporary variable was removed and its absence confirmed. The regenerated projection
+equals the canonical one, and the pinned Gitleaks 8.30.1, run with the tier's exact
+arguments over it, reports exactly the run's ten database findings at the same
+coordinates; each complete region occurs once. No replay was built. The read-only
+integrity check of the database and the quick check of the immutable base database
+(`93e5a500…`, byte-identical to this image's own `000/` copy) are `ok`.
+
+**Structure of the seven regions.** Every byte lies in a leaf page of the
+`Basenames_key_idx` index (pages 1643, 1644, 1647 and 1648) and is accounted for as a
+live index record (payload size, record header, filename key, serialized row identifier)
+or as a freeblock (four header bytes and surviving content); no byte lies in a package
+header blob or a digest index. Every live record is a `fedora-gpg-keys` 44-2 key filename.
+The `/etc/pki/rpm-gpg/` records have the same filename and full path live under version
+44-1 in the base database; the `/usr/share/pki/rpm-gpg/` records have their filename live
+there under `/etc/pki/rpm-gpg/`, the only key directory 44-1 ships. A freeblock's content is
+the remainder of a deleted index record: its key and row-identifier bytes after the four
+bytes the freeblock header overwrote. Each remainder equals the key and row identifier of
+the base row that holds the live record's filename and full path, a 44-1 file the upgrade
+replaced.
+
+| Fingerprint | Bytes | Accounted structure |
+| --- | --- | --- |
+| `5d27b062…` | 59 | 26-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 26-byte key and its 1-byte row identifier |
+| `026de375…` | 57 | 25-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 25-byte key and its 1-byte row identifier |
+| `38bb7c7f…`, `529811dc…`, `7d0eca7a…` | 58 each | two adjacent live `/usr/share/pki/rpm-gpg/` records: 26-byte filename and 2 row-identifier bytes, then 1 payload-size byte, 3 record-header bytes, 24-byte filename and 2 row-identifier bytes |
+| `3440ea83…`, `966ccea4…` | 62 each | 28-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 28-byte key (its row identifier lies after the match) |
+
+In two of the seven regions (`3440ea83…`, `966ccea4…`) the detector's candidate is a
+filename. In the other five it is a filename followed by that record's row-identifier
+bytes, which are printable in the projection. These are public package filenames and
+SQLite index metadata, not issued credentials or private keys. Candidate text, filenames
+and raw matches stay private; only digests, lengths, coordinates and structure are
+committed.
+
+The three recurring database records (`2b514538…`, `bc90683a…`, `ad1c986e…`) and the
+four tpm2-tss and `magic.mgc` records are unchanged; the new evidence repeats their
+complete spans and, for the database regions, their structure in this database.
+
+**Limits.** The canonical image check **failed** and is not relabelled. The full
+canonical archive was not retained; the database comes from the encrypted diagnostic and
+binds to the scanned file by SHA-256 and size. Every finding outside these exact complete
+regions remains blocking: no path, package or rule exemption and no expiry renewal. A
+fresh canonical image gate is required before signing or deployment, and the Fedora
+repositories may move again before that build.
+
 ## Eight database regions after the November 11 refresh — 2026-11-11
 
 The rebuilt dnf-upgrade layer (`001/`, layer

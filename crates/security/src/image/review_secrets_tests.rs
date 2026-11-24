@@ -232,7 +232,8 @@ const EVIDENCE: &str = "fedora-rpm-2026-09-30-pr6.json";
 const HISTORICAL: &str = "fedora-rpm-2026-09-30.json";
 const REFRESH: &str = "fedora-rpm-2026-10-19.json";
 const DIRECT: &str = "fedora-rpm-2026-10-29.json";
-const CURRENT: &str = "fedora-rpm-2026-11-11.json";
+const CURRENT: &str = "fedora-rpm-2026-11-24.json";
+const REPLAYED: &str = "fedora-rpm-2026-11-11.json";
 const RETIRING: &str = "fedora-rpm-2026-11-08.json";
 const BASE: &str = "fedora-base-2026-09-30.json";
 const DATABASE: &str = "001/usr/lib/sysimage/rpm/rpmdb.sqlite";
@@ -279,10 +280,10 @@ fn observation(name: &str, replay: bool) -> (Vec<Document>, Document, Document) 
     (rows, paths, regions(field(&evidence, "matchFormat"), spans))
 }
 
-/// The 2026-11-11 observation of several files of layer 001, canonical or
-/// replayed.
-fn current_observation(replay: bool) -> (Vec<Document>, Document, Document) {
-    let evidence = evidence(CURRENT);
+/// The observation of several files of layer 001 that the evidence `name`
+/// holds, canonical or replayed.
+fn layer_observation(name: &str, replay: bool) -> (Vec<Document>, Document, Document) {
+    let evidence = evidence(name);
     let (mut paths, mut names) = (Vec::new(), Vec::new());
     for file in items(&evidence, "files") {
         let name = text(&file, "neutralName").to_owned();
@@ -321,7 +322,7 @@ fn current_observation(replay: bool) -> (Vec<Document>, Document, Document) {
     (rows, Document::Record(paths), regions(format, spans))
 }
 
-/// The thirteen current 2026-11-11 regions.
+/// The fourteen current 2026-11-24 regions.
 fn current_findings() -> Vec<Document> {
     items(&evidence(CURRENT), "findings")
 }
@@ -333,16 +334,16 @@ fn fingerprinted(span: &Document) -> String {
 
 #[test]
 fn each_current_region_requires_its_individual_review() {
-    let (rows, paths, spans) = current_observation(false);
+    let (rows, paths, spans) = layer_observation(CURRENT, false);
     let reviews = current();
-    assert_eq!(rows.len(), 13);
+    assert_eq!(rows.len(), 14);
     assert_eq!(
         items(&verdict(&rows, &[], &paths, &spans), "blocked").len(),
-        13
+        14
     );
     let result = verdict(&rows, &reviews, &paths, &spans);
     assert!(passed(&result));
-    assert_eq!(items(&result, "waived").len(), 13);
+    assert_eq!(items(&result, "waived").len(), 14);
     let observed: BTreeSet<String> = current_findings()
         .iter()
         .map(|finding| text(finding, "fingerprint").to_owned())
@@ -358,36 +359,35 @@ fn each_current_region_requires_its_individual_review() {
 #[test]
 fn a_changed_region_length_rule_or_path_cannot_inherit_review() {
     let reviews = current();
-    for (rows, paths, spans) in [current_observation(false), current_observation(true)] {
-        let format = field(&spans, "format");
-        for (finding, original) in rows.iter().zip(items(&spans, "findings")) {
-            let name = text(finding, "File");
-            let named = fingerprinted(&original);
-            let rule = if text(&original, "rule") == "private-key" {
-                "generic-api-key"
-            } else {
-                "private-key"
-            };
-            for (changed, value) in [
-                ("spanSha256", Document::from("a".repeat(64))),
-                ("spanBytes", Document::from(1_u64)),
-                ("rule", Document::from(rule)),
-                ("path", Document::from("002/etc/private.env")),
-            ] {
-                let mut changed_paths = paths.clone();
-                let mut changed_row = finding.clone();
-                let changed_span = with(&original, changed, value.clone());
-                if changed == "rule" {
-                    changed_row.put("RuleID", value.clone());
-                }
-                if changed == "path" {
-                    let identity = with(field(&paths, name), "path", value);
-                    changed_paths.put(name, identity);
-                }
-                let report = regions(format, vec![changed_span]);
-                let result = verdict(&[changed_row], &reviews, &changed_paths, &report);
-                assert!(!passed(&result), "{named} {changed}");
+    let (rows, paths, spans) = layer_observation(CURRENT, false);
+    let format = field(&spans, "format");
+    for (finding, original) in rows.iter().zip(items(&spans, "findings")) {
+        let name = text(finding, "File");
+        let named = fingerprinted(&original);
+        let rule = if text(&original, "rule") == "private-key" {
+            "generic-api-key"
+        } else {
+            "private-key"
+        };
+        for (changed, value) in [
+            ("spanSha256", Document::from("a".repeat(64))),
+            ("spanBytes", Document::from(1_u64)),
+            ("rule", Document::from(rule)),
+            ("path", Document::from("002/etc/private.env")),
+        ] {
+            let mut changed_paths = paths.clone();
+            let mut changed_row = finding.clone();
+            let changed_span = with(&original, changed, value.clone());
+            if changed == "rule" {
+                changed_row.put("RuleID", value.clone());
             }
+            if changed == "path" {
+                let identity = with(field(&paths, name), "path", value);
+                changed_paths.put(name, identity);
+            }
+            let report = regions(format, vec![changed_span]);
+            let result = verdict(&[changed_row], &reviews, &changed_paths, &report);
+            assert!(!passed(&result), "{named} {changed}");
         }
     }
 }
@@ -395,35 +395,44 @@ fn a_changed_region_length_rule_or_path_cannot_inherit_review() {
 #[test]
 fn replay_and_canonical_bind_the_same_regions_with_different_complete_files() {
     let reviews = current();
-    let results: Vec<Document> = [current_observation(false), current_observation(true)]
+    let results: Vec<Document> = [false, true]
+        .map(|replay| layer_observation(REPLAYED, replay))
         .iter()
         .map(|(rows, paths, spans)| verdict(rows, &reviews, paths, spans))
         .collect();
-    assert!(results.iter().all(passed));
+    // In both, the six regions the 2026-11-24 refresh retired block and the
+    // seven it saw again stay waived.
+    for result in &results {
+        assert!(!passed(result));
+        assert_eq!(fingerprints(result, "blocked"), dormant(CURRENT));
+        assert_eq!(fingerprints(result, "waived"), recurring(CURRENT));
+    }
     let mut moved = 0;
-    let (left, right) = (items(&results[0], "waived"), items(&results[1], "waived"));
-    assert_eq!(left.len(), right.len());
-    for (canonical, replay) in left.iter().zip(right) {
-        for name in [
-            "fingerprint",
-            "spanSha256",
-            "spanBytes",
-            "startColumn",
-            "endColumn",
-        ] {
-            assert_eq!(field(canonical, name), field(&replay, name), "{name}");
-        }
-        let database = text(canonical, "path") == DATABASE;
-        moved += usize::from(field(canonical, "startLine") != field(&replay, "startLine"));
-        for name in ["fileSha256", "projectionSha256", "startLine", "endLine"] {
-            if database && name.ends_with("Sha256") {
-                assert_ne!(field(canonical, name), field(&replay, name), "{name}");
-            } else if !database {
+    for list in ["waived", "blocked"] {
+        let (left, right) = (items(&results[0], list), items(&results[1], list));
+        assert_eq!(left.len(), right.len());
+        for (canonical, replay) in left.iter().zip(right) {
+            for name in [
+                "fingerprint",
+                "spanSha256",
+                "spanBytes",
+                "startColumn",
+                "endColumn",
+            ] {
                 assert_eq!(field(canonical, name), field(&replay, name), "{name}");
+            }
+            let database = text(canonical, "path") == DATABASE;
+            moved += usize::from(field(canonical, "startLine") != field(&replay, "startLine"));
+            for name in ["fileSha256", "projectionSha256", "startLine", "endLine"] {
+                if database && name.ends_with("Sha256") {
+                    assert_ne!(field(canonical, name), field(&replay, name), "{name}");
+                } else if !database {
+                    assert_eq!(field(canonical, name), field(&replay, name), "{name}");
+                }
             }
         }
     }
-    // Eight database regions keep their projection lines.
+    // Eight of its nine database regions keep their projection lines.
     assert_eq!(moved, 1);
     // Historical replays still bind the same identities, now uniformly inactive.
     for (name, same_coordinates) in [(EVIDENCE, true), (REFRESH, false)] {
@@ -494,19 +503,26 @@ fn superseded_fingerprints_are_historical_not_active_reviews() {
     assert_eq!(retired, expected);
     assert_eq!(retired.len(), 6);
     assert!(recurring(DIRECT).is_subset(&retired));
-    let newly = dormant(CURRENT);
-    let still: BTreeSet<&String> = retired
-        .union(&newly)
-        .filter(|item| active.contains(*item))
+    let (replayed, newly) = (dormant(REPLAYED), dormant(CURRENT));
+    let mut gone = retired;
+    gone.extend(replayed.iter().chain(&newly).cloned());
+    let still = gone.iter().filter(|item| active.contains(*item)).count();
+    assert_eq!((replayed.len(), newly.len(), still), (3, 6, 0));
+    assert_eq!(recurring(REPLAYED).len(), 5);
+    // The 2026-11-24 refresh retires six of the thirteen regions of 2026-11-11
+    // and sees the other seven again.
+    let before: BTreeSet<String> = items(&evidence(REPLAYED), "findings")
+        .iter()
+        .map(|finding| text(finding, "fingerprint").to_owned())
         .collect();
-    assert_eq!((newly.len(), still.len()), (3, 0));
-    let trigger = field(&evidence(CURRENT), "trigger").clone();
-    assert_eq!(items(&trigger, "recurringReviewedFingerprints").len(), 5);
+    let seen = recurring(CURRENT);
+    assert!(seen.is_disjoint(&newly));
+    assert_eq!(seen.union(&newly).cloned().collect::<BTreeSet<_>>(), before);
     let now: BTreeSet<String> = current_findings()
         .iter()
         .map(|finding| text(finding, "fingerprint").to_owned())
         .collect();
-    assert!(retired.is_disjoint(&now));
+    assert!(gone.is_disjoint(&now));
 }
 
 #[test]
@@ -606,21 +622,31 @@ fn refreshed_regions_have_bounded_structural_coverage() {
 #[test]
 fn current_database_regions_have_bounded_structural_coverage() {
     let evidence = evidence(CURRENT);
-    let replay = field(&evidence, "replay");
+    let direct = field(&evidence, "directDatabaseEvidence");
     for (name, value) in [
-        ("wholeDatabaseEqual", false),
-        ("wholeProjectionEqual", false),
-        ("detectorFingerprintsEqualCanonicalDatabaseRegions", true),
-        ("profileAndMagicFilesWholeFileEqual", true),
+        ("ciphertextSha256MatchesManifest", true),
+        ("plaintextSha256MatchesManifest", true),
+        ("plaintextEqualsCanonicalScannedFile", true),
+        ("temporaryPublicRecipientVariableRemoved", true),
+        ("completeProjectionTranslationVerified", true),
+        ("detectorCoordinatesEqualCanonicalDatabaseFindings", true),
+        ("allRegionsUniquelyResolved", true),
+        ("privateKeyUploaded", false),
     ] {
-        assert_eq!(field(replay, name), &Document::Bool(value), "{name}");
+        assert_eq!(field(direct, name), &Document::Bool(value), "{name}");
     }
+    let files = items(&evidence, "files");
+    let database = files.iter().find(|file| text(file, "path") == DATABASE);
+    let database = database.expect("the database");
+    let manifest = field(direct, "manifest");
+    assert_eq!(field(manifest, "inputSha256"), field(database, "sha256"));
     assert_eq!(
-        field(replay, "installedRuntimePackageIdentitiesEqual").whole(),
-        Some(148)
+        field(manifest, "inputBytes"),
+        field(database, "sourceBytes")
     );
-    assert_eq!(text(replay, "sqliteIntegrityCheck"), "ok");
-    assert_eq!(text(replay, "scannerVersion"), "8.30.1");
+    assert_eq!(field(direct, "detectorFindings").whole(), Some(10));
+    assert_eq!(text(direct, "sqliteIntegrityCheck"), "ok");
+    assert_eq!(text(direct, "scannerVersion"), "8.30.1");
     assert_eq!(
         field(&evidence, "canonicalImagePassed"),
         &Document::Bool(false)
@@ -629,7 +655,7 @@ fn current_database_regions_have_bounded_structural_coverage() {
         .into_iter()
         .filter(|finding| text(field(finding, "span"), "path") == DATABASE)
         .collect();
-    assert_eq!(found.len(), 9);
+    assert_eq!(found.len(), 10);
     let mut lengths: Vec<i128> = found
         .iter()
         .map(|region| {
@@ -639,7 +665,7 @@ fn current_database_regions_have_bounded_structural_coverage() {
         })
         .collect();
     lengths.sort_unstable();
-    assert_eq!(lengths, [57, 58, 58, 58, 58, 61, 62, 62, 65]);
+    assert_eq!(lengths, [57, 58, 58, 58, 58, 59, 62, 62, 62, 62]);
     let mut freeblocks = 0;
     for region in &found {
         let context = field(region, "context");
@@ -694,11 +720,15 @@ fn current_database_regions_have_bounded_structural_coverage() {
             ] {
                 assert_eq!(field(&block, name), &Document::Bool(true), "{named} {name}");
             }
+            // The freed record is the base's row of the live record's path.
+            let stale = field(field(&block, "baseRecord"), "canonicalPathSha256");
+            let live = |record: &Document| field(record, "canonicalPathSha256") == stale;
+            assert!(records.iter().any(live), "{named}");
         }
         let candidate = field(region, "candidateContext");
         assert!(digest(text(candidate, "candidateSha256")), "{named}");
     }
-    assert_eq!(freeblocks, 6);
+    assert_eq!(freeblocks, 7);
 }
 
 #[test]
@@ -714,7 +744,7 @@ fn refreshed_layer_copies_repeat_reviewed_base_bytes_at_their_own_path() {
         }
     }
     let reviews = current();
-    let (rows, paths, spans) = current_observation(false);
+    let (rows, paths, spans) = layer_observation(CURRENT, false);
     let copies: Vec<Document> = current_findings()
         .into_iter()
         .filter(|finding| text(field(finding, "span"), "path") != DATABASE)
@@ -723,8 +753,12 @@ fn refreshed_layer_copies_repeat_reviewed_base_bytes_at_their_own_path() {
     for finding in &copies {
         let span = field(finding, "span");
         let named = text(finding, "fingerprint");
-        let counterpart = field(field(finding, "context"), "reviewedBaseCounterpart");
+        let context = field(finding, "context");
+        let counterpart = field(context, "reviewedBaseCounterpart");
         let original = &reviewed[text(counterpart, "fingerprint")];
+        // The owning package's header records the digest of this very file.
+        let recorded = field(context, "rpmHeaderFileDigestSha256");
+        assert_eq!(recorded, field(span, "fileSha256"), "{named}");
         let path = text(span, "path");
         assert_eq!(
             text(original, "path"),
@@ -752,7 +786,7 @@ fn refreshed_layer_copies_repeat_reviewed_base_bytes_at_their_own_path() {
 
 #[test]
 fn an_additional_database_finding_is_not_covered() {
-    let (rows, paths, spans) = current_observation(false);
+    let (rows, paths, spans) = layer_observation(CURRENT, false);
     let spanned = items(&spans, "findings");
     let database = spanned
         .iter()
@@ -770,6 +804,6 @@ fn an_additional_database_finding_is_not_covered() {
         &regions(field(&spans, "format"), all),
     );
     assert!(!passed(&result));
-    assert_eq!(items(&result, "waived").len(), 13);
+    assert_eq!(items(&result, "waived").len(), 14);
     assert_eq!(items(&result, "blocked").len(), 1);
 }
