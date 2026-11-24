@@ -562,6 +562,16 @@ The check binds its wheel and metadata hashes, manifest, version and expression.
 It does not add GPL to the application/image license allowlist or authorize
 other packages, versions or artifacts.
 
+### Python lint tool locks retired (2026-11-23)
+
+No lock declares basedpyright 1.40.2 any more. `build/python-requirements.txt`,
+which pinned it beside Ruff and their stub and Node wheels, is removed with the
+repository's last Python, so the fast gate no longer audits that file and its
+exact metadata mapping leaves `REVIEWED` in
+`crates/security/src/licenses/metadata.rs`. The Meson 1.12.1 and certifi
+mappings stay. The recorded reference answers keep the retired mapping and lock,
+and their replays name both as removed.
+
 ### Python CodeQL identity review after dependency pins (2026-10-05)
 
 Run [37268650754](https://github.com/swiftraccoon/simplestChat/actions/runs/37268650754)

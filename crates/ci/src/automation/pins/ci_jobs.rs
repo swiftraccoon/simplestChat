@@ -1,27 +1,18 @@
-//! The Python checker policy and its CI wiring, carried over from the Python
-//! workflow tests: strict shared settings, pinned checker versions and the
-//! gate's place in the hosted jobs. The gate's discovery, tool selection and
-//! failure sequencing are exercised in `xtask/src/check/check_tests.rs`.
+//! The hosted jobs' own wiring that no other pin owns: the automation job's
+//! Ansible controller environment and its gate, the branch subject check,
+//! configuration validation and the guest smokes. The gate's discovery, tool
+//! selection and failure sequencing are exercised in
+//! `xtask/src/check/check_tests.rs` and `crates/ci/src/automation_tests.rs`.
 
-use super::{checkout_file, first, located, script, steps, workflow};
-use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use super::{checkout_file, first, located, script, steps, uses, workflow};
+use serde_json::json;
 
 const TOOLCHAIN_ACTION: &str = "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d";
 const TOOLCHAIN_STEP: &str = "Install the pinned Rust toolchain for CI receipts";
 const SUBJECT_STEP: &str = "Check the branch tip commit subject";
 const NOT_VERIFIED: &str = "steps.verified.outputs.cache-hit != 'true'";
-
-/// The parsed `pyproject.toml`.
-fn pyproject() -> Value {
-    toml::from_str(&checkout_file("pyproject.toml")).unwrap()
-}
-
-/// A list whose every item must be text.
-fn strings(value: &Value) -> Vec<&str> {
-    let items = value.as_array().unwrap().iter();
-    items.map(|item| item.as_str().unwrap()).collect()
-}
+/// The one lock the Ansible controller environment is installed from.
+const CONTROLLER_LOCK: &str = "ops/ansible/requirements.txt";
 
 /// From `test_guest_smokes_use_the_prebuilt_owner_after_the_guarded_workspace_build`:
 /// both complete operations run the same prebuilt binary under the build's
@@ -220,58 +211,42 @@ fn branch_subject_checks_the_head_before_any_cached_gate() {
     assert_eq!(subjects.count(), 1);
 }
 
-/// From `test_configuration_has_full_rules_and_no_machine_specific_environment`:
-/// strict rule sets, no blanket type suppression and no local venv binding.
-/// The checker reads exactly the three directories that hold maintained
-/// Python, and no stub directory, since none is tracked.
+/// The controller environment holds Ansible and its linter alone: it is
+/// installed from the Ansible lock, which carries its own wheel-only and
+/// hash policy because the install line passes none, and the selected
+/// Python's download cache is keyed by that lock alone.
 #[test]
-fn configuration_has_full_rules_and_no_machine_specific_environment() {
-    let config = pyproject();
-    let ruff = &config["tool"]["ruff"];
-    assert_eq!(strings(&ruff["lint"]["select"]), ["ALL"]);
-    let excluded = strings(&ruff["exclude"]);
-    assert!(!excluded.contains(&"build") && !excluded.contains(&"build/"));
-    let based = config["tool"]["basedpyright"].as_object().unwrap();
-    assert_eq!(based["typeCheckingMode"], "all");
-    for key in ["venvPath", "venv", "ignore", "stubPath"] {
-        assert!(!based.contains_key(key), "{key}");
-    }
-    let roots = ["build", "ops/ansible/files", "ops/ansible/tests"];
-    assert_eq!(strings(&based["include"]), roots);
-    assert_eq!(strings(&based["extraPaths"]), roots);
-    for (name, value) in based {
-        if name.starts_with("report") && name != "reportImplicitRelativeImport" {
-            assert!(*value != json!(false) && *value != "none", "{name}");
-        }
-    }
-}
-
-/// From `test_checker_requirements_pin_versions_and_share_controller_dependencies`:
-/// one pinned checker and controller environment, with no VPS tool additions.
-#[test]
-fn checker_requirements_pin_versions_and_share_controller_dependencies() {
-    let text = checkout_file("build/python-requirements.txt");
-    let lines = text
-        .lines()
-        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-        .map(|line| line.trim())
-        .map(|line| line.strip_suffix('\\').unwrap_or(line).trim())
-        .collect::<BTreeSet<_>>();
-    for line in [
-        "-r ../ops/ansible/requirements.txt",
-        "--require-hashes",
-        "--only-binary=:all:",
-    ] {
-        assert!(lines.contains(line), "{line}");
-    }
-    for name in ["ruff", "basedpyright", "types-pyyaml"] {
-        let pin = format!("{name}==");
-        let pins = lines.iter().filter(|line| line.starts_with(&pin));
-        assert_eq!(pins.count(), 1, "{name}");
-    }
-    let config = pyproject();
-    let required = config["tool"]["ruff"]["required-version"].as_str().unwrap();
-    assert!(lines.contains(format!("ruff{required}").as_str()));
+fn the_controller_environment_is_the_ansible_lock_alone() {
+    let ci = workflow("ci.yml");
+    let steps = steps(&ci, "automation");
+    let selected = steps
+        .iter()
+        .filter(|step| uses(step).starts_with("actions/setup-python@"))
+        .collect::<Vec<_>>();
+    let [python] = selected[..] else {
+        panic!("one selected Python: {selected:?}");
+    };
+    assert_eq!(
+        python["name"],
+        "Select the pinned Python of the Ansible controller"
+    );
+    assert_eq!(python["with"]["cache"], "pip");
+    assert_eq!(python["with"]["cache-dependency-path"], CONTROLLER_LOCK);
+    let installs = steps
+        .iter()
+        .flat_map(|step| script(step).lines())
+        .filter(|line| line.contains("pip\" install") || line.contains("pip install"))
+        .collect::<Vec<_>>();
+    let pip = "\"${RUNNER_TEMP}/ansible-controller/bin/pip\"";
+    let expected = format!("{pip} install -r {CONTROLLER_LOCK}");
+    assert_eq!(installs, [expected.as_str()]);
+    let lock = checkout_file(CONTROLLER_LOCK);
+    let options = lock.lines().filter(|line| line.starts_with("--"));
+    assert_eq!(
+        options.collect::<Vec<_>>(),
+        ["--require-hashes", "--only-binary=:all:"]
+    );
+    assert!(!lock.lines().any(|line| line.starts_with("-r ")));
 }
 
 /// From `test_ci_installs_and_runs_the_same_gate_before_offline_tests`: the
@@ -282,7 +257,7 @@ fn ci_installs_and_runs_the_same_gate_before_offline_tests() {
     let job = &ci["jobs"]["automation"];
     let steps = steps(&ci, "automation");
     let (installed, install) = located(steps, |step| {
-        script(step).contains("install -r build/python-requirements.txt")
+        script(step).contains("python3 -m venv \"${RUNNER_TEMP}/ansible-controller\"")
     });
     let (gated, gate) = located(steps, |step| {
         script(step).contains("simplestchat-ci -- automation")
@@ -300,7 +275,7 @@ fn ci_installs_and_runs_the_same_gate_before_offline_tests() {
             "python3 -m venv \"${RUNNER_TEMP}/ansible-controller\"",
             concat!(
                 "\"${RUNNER_TEMP}/ansible-controller/bin/pip\" install -r ",
-                "build/python-requirements.txt"
+                "ops/ansible/requirements.txt"
             ),
             "cargo run --locked -q -p simplestchat-ci -- controller-path",
         ]

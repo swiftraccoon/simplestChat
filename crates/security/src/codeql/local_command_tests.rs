@@ -19,6 +19,7 @@ use crate::{
             },
         },
         tests::{items, planted, recording, text},
+        tools::STORED_LANGUAGES as STORED,
     },
     context::{Context, Limits},
     document::Document,
@@ -31,7 +32,7 @@ use std::{
     io::Write,
     os::unix::fs::PermissionsExt as _,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, ExitCode},
 };
 
 const UNITS: &[u8] = include_bytes!("recorded_local.json");
@@ -87,8 +88,19 @@ fn a_first_party_run_of_every_language_covers_only_the_stored_languages() {
     // Python sources among them.
     let vendor = selected_languages(None, true, false, &STORED_LANGUAGES).unwrap();
     assert_eq!(vendor, LANGUAGES);
-    let named = selected_languages(Some("python"), false, false, &STORED_LANGUAGES).unwrap();
-    assert_eq!(named, ["python"]);
+    // A vendored language is analyzed only in a vendor scan.
+    for language in ["python", "c-cpp"] {
+        let refused = selected_languages(Some(language), false, false, &STORED_LANGUAGES);
+        assert_eq!(
+            refused,
+            Err(crate::Fault("codeql_vendor_opt_in_required")),
+            "{language}"
+        );
+        let named = selected_languages(Some(language), true, false, &STORED_LANGUAGES);
+        assert_eq!(named, Ok(vec![language.to_owned()]), "{language}");
+    }
+    let named = selected_languages(Some("rust"), false, false, &STORED_LANGUAGES);
+    assert_eq!(named, Ok(vec!["rust".to_owned()]));
 }
 
 #[test]
@@ -800,7 +812,8 @@ fn every_recorded_upload_readiness_of_the_workflow_answers_alike() {
             categories: vec!["security".to_owned(), "quality-advisory".to_owned()],
         };
         let (mut out, mut err) = (Vec::new(), Vec::new());
-        let status = upload(&place.join("root"), &asked, &mut out, &mut err);
+        let recorded = &super::super::tests::RECORDED_FIRST_PARTY;
+        let status = upload(&place.join("root"), &asked, recorded, &mut out, &mut err);
         assert_eq!(
             i128::from(status),
             case.get("status")
@@ -901,7 +914,7 @@ fn an_upload_readiness_command_tells_its_usage_and_refusals() {
     let usage = format!("{}\n", super::UPLOAD_USAGE);
     let (mut out, mut err) = (Vec::new(), Vec::new());
     assert_eq!(
-        super::upload_command(root, &line(&["--help"]), &mut out, &mut err),
+        super::upload_command(root, &line(&["--help"]), &STORED, &mut out, &mut err),
         0
     );
     assert_eq!(
@@ -910,7 +923,7 @@ fn an_upload_readiness_command_tells_its_usage_and_refusals() {
     );
     let (mut out, mut err) = (Vec::new(), Vec::new());
     assert_eq!(
-        super::upload_command(root, &line(&["--output"]), &mut out, &mut err),
+        super::upload_command(root, &line(&["--output"]), &STORED, &mut out, &mut err),
         2
     );
     assert_eq!(
@@ -919,31 +932,48 @@ fn an_upload_readiness_command_tells_its_usage_and_refusals() {
     );
     let scratch = Scratch::new("codeql-local-upload");
     let output = scratch.0.to_string_lossy().into_owned();
-    let asked = [
+    // Neither vendored language is ever uploaded.
+    for language in ["c-cpp", "python"] {
+        let asked = [
+            "--output",
+            &output,
+            "--revision",
+            "r",
+            "--language",
+            language,
+        ];
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        assert_eq!(
+            super::upload_command(root, &line(&asked), &STORED, &mut out, &mut err),
+            1,
+            "{language}"
+        );
+        let refusal = "CodeQL upload readiness failed: codeql_vendor_upload_forbidden\n";
+        assert_eq!(
+            (out, String::from_utf8(err).expect("text")),
+            (Vec::new(), refusal.to_owned()),
+            "{language}"
+        );
+    }
+    let asked = ["--output", &output, "--revision", "r", "--language", "rust"];
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    assert_eq!(
+        super::upload_command(root, &line(&asked), &STORED, &mut out, &mut err),
+        0
+    );
+    assert_eq!((out, err), (Vec::new(), Vec::new()));
+    // The command's own entry holds reports to the stored languages: a Python
+    // one is refused, and a Rust one without a validated report is not ready.
+    let python = [
         "--output",
         &output,
         "--revision",
         "r",
         "--language",
-        "c-cpp",
+        "python",
     ];
-    let (mut out, mut err) = (Vec::new(), Vec::new());
-    assert_eq!(
-        super::upload_command(root, &line(&asked), &mut out, &mut err),
-        1
-    );
-    let refusal = "CodeQL upload readiness failed: codeql_vendor_upload_forbidden\n";
-    assert_eq!(
-        (out, String::from_utf8(err).expect("text")),
-        (Vec::new(), refusal.to_owned())
-    );
-    let asked = ["--output", &output, "--revision", "r", "--language", "rust"];
-    let (mut out, mut err) = (Vec::new(), Vec::new());
-    assert_eq!(
-        super::upload_command(root, &line(&asked), &mut out, &mut err),
-        0
-    );
-    assert_eq!((out, err), (Vec::new(), Vec::new()));
+    assert_eq!(super::upload_run(root, &line(&python)), ExitCode::from(1));
+    assert_eq!(super::upload_run(root, &line(&asked)), ExitCode::SUCCESS);
 }
 
 #[test]
@@ -1302,7 +1332,13 @@ fn a_run_whose_line_cannot_be_told_ends_with_one_after_its_summary() {
     };
     let mut told = Vec::new();
     assert_eq!(
-        upload(&checkout.0.join("root"), &asked, &mut told, &mut Vec::new()),
+        upload(
+            &checkout.0.join("root"),
+            &asked,
+            &STORED,
+            &mut told,
+            &mut Vec::new()
+        ),
         0
     );
     assert_eq!(told, b"security=true\n");
@@ -1310,6 +1346,7 @@ fn a_run_whose_line_cannot_be_told_ends_with_one_after_its_summary() {
         upload(
             &checkout.0.join("root"),
             &asked,
+            &STORED,
             &mut Refusing,
             &mut Vec::new()
         ),

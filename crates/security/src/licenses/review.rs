@@ -93,6 +93,9 @@ pub struct Review<'a> {
     pub base: Option<&'a str>,
     /// Whether locks below `vendor/` are held to the audit rule too.
     pub include_vendor: bool,
+    /// The hash-locked requirement files that are read beside the npm locks:
+    /// the gate's own [`PYTHON_LOCKS`](super::PYTHON_LOCKS).
+    pub python_locks: &'a [&'a str],
     /// The bounds of the registry session.
     pub bounds: Bounds,
     /// The licences reviewed for wheels that declare none as an expression.
@@ -198,9 +201,10 @@ fn changed(
         }
         Ok(Some(files::bounded(&target, MAX_LOCK, false)?))
     };
-    require_audited_locks(&names, &current, &previous, review.include_vendor)?;
-    let declared = dependencies(&current)?;
-    let known = dependencies(&previous)?;
+    let locks = review.python_locks;
+    require_audited_locks(&names, &current, &previous, review.include_vendor, locks)?;
+    let declared = dependencies(&current, locks)?;
+    let known = dependencies(&previous, locks)?;
     let new = declared.difference(&known).cloned().collect();
     Ok((resolved.to_owned(), new))
 }
@@ -215,7 +219,7 @@ fn judged(
     receipt: &mut Map<String, Value>,
 ) -> Outcome<(usize, usize)> {
     let allowed = allowed_licenses(review.snapshot)?;
-    require_wheel_only(review.snapshot)?;
+    require_wheel_only(review.snapshot, review.python_locks)?;
     let (resolved, new) = changed(context, programs, review)?;
     receipt.insert("baseRevision".to_owned(), resolved.into());
     receipt.insert("allowedLicenses".to_owned(), json!(allowed));

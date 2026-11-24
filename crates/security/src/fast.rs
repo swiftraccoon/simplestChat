@@ -31,17 +31,17 @@ const FOUND: i32 = 10;
 /// How long an audit that reads an advisory database or an index may take.
 const AUDIT: Duration = Duration::from_secs(300);
 /// The requirement files whose pinned Python packages are audited, each
-/// under the name of its check.
-const REQUIREMENTS: [(&str, &str); 5] = [
-    ("pip-audit-0", "build/python-requirements.txt"),
-    ("pip-audit-1", "ops/ansible/requirements.txt"),
-    ("pip-audit-2", "security/requirements.txt"),
+/// under the name of its check: the Ansible controller, the scanners and
+/// the vendored worker build.
+const REQUIREMENTS: [(&str, &str); 4] = [
+    ("pip-audit-0", "ops/ansible/requirements.txt"),
+    ("pip-audit-1", "security/requirements.txt"),
     (
-        "pip-audit-3",
+        "pip-audit-2",
         "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
     ),
     (
-        "pip-audit-4",
+        "pip-audit-3",
         "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
     ),
 ];
@@ -391,13 +391,26 @@ fn reported(report: &[u8]) -> Result<Value> {
 /// its advisories needs a review, and its status for a finding is an answer
 /// only beside reviewed findings. cargo-deny holds bans, licenses and
 /// sources; Cargo's own metadata is held to the budget of duplicated
-/// packages. No pinned Python package and no npm package of either lock may
-/// have an advisory at all. `now` is the time since the epoch.
+/// packages. No pinned Python package of the audited requirement files and
+/// no npm package of either lock may have an advisory at all. `now` is the
+/// time since the epoch.
 pub fn dependencies(
     context: &mut Context,
     programs: &dyn Programs,
     reviews: &[Exception],
     now: Duration,
+) -> Outcome<()> {
+    audited(context, programs, reviews, now, &REQUIREMENTS)
+}
+
+/// [`dependencies`], with the Python requirement files `requirements`, each
+/// under the name of its check.
+fn audited(
+    context: &mut Context,
+    programs: &dyn Programs,
+    reviews: &[Exception],
+    now: Duration,
+    requirements: &[(&'static str, &str)],
 ) -> Outcome<()> {
     let auditor = programs.program("cargo-audit")?;
     let lock = context.root().join("Cargo.lock");
@@ -451,7 +464,7 @@ pub fn dependencies(
     let (_, metadata) = context.run("cargo-metadata", &command(&cargo, &asked), &slow)?;
     let budget = context.root().join("security/dependency-budget.json");
     findings::dependency_budget(&metadata, &budget)?;
-    for (name, requirements) in REQUIREMENTS {
+    for (name, requirements) in requirements.iter().copied() {
         let python = programs.python()?;
         let audit = [
             "-m",

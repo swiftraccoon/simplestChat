@@ -219,9 +219,9 @@ fn languages(language: Option<&str>, include_vendor: bool, first_party: &[&str])
 }
 
 /// The languages a run analyzes, once a vendor scan is proved local where
-/// `automated` says automation runs, and the native language is asked for
-/// only in a vendor scan; a first-party run of every language covers the
-/// `first_party` ones.
+/// `automated` says automation runs, and a language outside `first_party`,
+/// whose sources are only vendored, is asked for only in a vendor scan; a
+/// first-party run of every language covers the `first_party` ones.
 pub fn selected_languages(
     language: Option<&str>,
     include_vendor: bool,
@@ -229,8 +229,9 @@ pub fn selected_languages(
     first_party: &[&str],
 ) -> Result<Vec<String>> {
     require_local_vendor(include_vendor, automated)?;
+    let named = language.filter(|language| !language.is_empty());
     require(
-        language != Some("c-cpp") || include_vendor,
+        include_vendor || named.is_none_or(|language| first_party.contains(&language)),
         "codeql_vendor_opt_in_required",
     )?;
     Ok(languages(language, include_vendor, first_party))
@@ -579,10 +580,17 @@ pub fn upload_parsed(arguments: &[String]) -> Line<Upload> {
 }
 
 /// The exit status of `codeql upload-ready` for `asked` against the
-/// checkout `root`: a `<category>=true` line on `out` for each category
-/// whose report may be uploaded, nothing for one that may not, and a
-/// refusal on `err` that ends the run with 1 after the lines before it.
-pub fn upload(root: &Path, asked: &Upload, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+/// checkout `root`, whose reports may be of the `first_party` languages: a
+/// `<category>=true` line on `out` for each category whose report may be
+/// uploaded, nothing for one that may not, and a refusal on `err` that ends
+/// the run with 1 after the lines before it.
+pub fn upload(
+    root: &Path,
+    asked: &Upload,
+    first_party: &[&str],
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
     for category in &asked.categories {
         let ready = upload_ready(
             root,
@@ -590,6 +598,7 @@ pub fn upload(root: &Path, asked: &Upload, out: &mut dyn Write, err: &mut dyn Wr
             &asked.revision,
             category,
             &asked.language,
+            first_party,
         );
         match ready {
             Ok(true) => {
@@ -608,15 +617,17 @@ pub fn upload(root: &Path, asked: &Upload, out: &mut dyn Write, err: &mut dyn Wr
 }
 
 /// The exit status of the command line `arguments` of `codeql
-/// upload-ready` against the checkout `root`.
+/// upload-ready` against the checkout `root`, whose reports may be of the
+/// `first_party` languages.
 pub fn upload_command(
     root: &Path,
     arguments: &[String],
+    first_party: &[&str],
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
     match upload_parsed(arguments) {
-        Line::Asked(asked) => upload(root, &asked, out, err),
+        Line::Asked(asked) => upload(root, &asked, first_party, out, err),
         Line::Help => {
             let _ = writeln!(out, "{UPLOAD_USAGE}");
             0
@@ -629,10 +640,11 @@ pub fn upload_command(
 }
 
 /// Run the command line `arguments` of `codeql upload-ready` against the
-/// checkout `root`.
+/// checkout `root`, whose reports may be of the stored languages.
 pub fn upload_run(root: &Path, arguments: &[String]) -> ExitCode {
     let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-    ExitCode::from(upload_command(root, arguments, &mut out, &mut err))
+    let status = upload_command(root, arguments, &STORED_LANGUAGES, &mut out, &mut err);
+    ExitCode::from(status)
 }
 
 #[cfg(test)]

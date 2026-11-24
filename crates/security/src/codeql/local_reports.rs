@@ -10,7 +10,7 @@ use crate::{
     Fault, Result,
     codeql::{
         alike,
-        tools::{self, AUTOMATED_LANGUAGES, FIRST_PARTY_CONFIG, Field},
+        tools::{self, FIRST_PARTY_CONFIG, Field},
         triage::{
             MAX_REPORT, NO_FIELDS, NO_ITEMS, among, array, bounded_file, decode, field, get,
             get_or, integer, object, raised_by, same, sarif::first_party_report, string, truthy,
@@ -225,18 +225,20 @@ pub fn complete_health(reports: &[Document], languages: &[&str], suite: &str) ->
 
 /// Whether the report of `language`'s suite `category` below `output` is a
 /// fresh, complete, first-party report of `revision` that may be uploaded
-/// whatever its findings: one of an automated language, validated by this
-/// run's analysis and unchanged since. A report that was never validated is
-/// not; one whose marker is of another report, revision or scope is refused.
+/// whatever its findings: one of a language of `first_party`, validated by
+/// this run's analysis and unchanged since. A report that was never
+/// validated is not; one whose marker is of another report, revision or
+/// scope is refused, and so is one of any other language.
 pub fn upload_ready(
     root: &Path,
     output: &Path,
     revision: &str,
     category: &str,
     language: &str,
+    first_party: &[&str],
 ) -> Outcome<bool> {
     require(
-        AUTOMATED_LANGUAGES.contains(&language),
+        first_party.contains(&language),
         "codeql_vendor_upload_forbidden",
     )?;
     let report = output.join(format!("{language}-{category}.sarif"));
@@ -275,11 +277,16 @@ pub fn extraction_options(source: &Path, language: &str, include_vendor: bool) -
 }
 
 /// Refuse a report at `report` of `language` that is not of the scope it
-/// was asked for: the native language only in a vendor scan, and no
-/// vendored result in a first-party one.
-pub fn validate_report_scope(report: &Path, language: &str, include_vendor: bool) -> Result<()> {
+/// was asked for: a language outside `first_party` only in a vendor scan,
+/// and no vendored result in a first-party one.
+pub fn validate_report_scope(
+    report: &Path,
+    language: &str,
+    include_vendor: bool,
+    first_party: &[&str],
+) -> Result<()> {
     require(
-        include_vendor || AUTOMATED_LANGUAGES.contains(&language),
+        include_vendor || first_party.contains(&language),
         "codeql_vendor_scope",
     )?;
     if !include_vendor {

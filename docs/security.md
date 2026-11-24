@@ -132,7 +132,7 @@ available.
 | Cargo audit | Current RustSec database and all reported advisories | Reviewed exact dependency-health warnings are counted. |
 | OpenSSL freshness | The pin must match the vendor's latest stable release across all series | Complements advisory databases; does not establish coverage of other native libraries. |
 | Cargo deny | Approved licenses, crates.io origins, banned crates and dependency constraints | A separate exact duplicate budget covers the all-feature graph. |
-| Pip audit | All five hashed build, deployment, scanner and native Python requirement sets | Uses current package advisory service responses. |
+| Pip audit | All four hashed Python requirement sets: the Ansible controller's, the scanners' and the native worker build's two | Uses current package advisory service responses. |
 | Npm audit | Both web and browser-harness lockfiles | Lockfile audit remains necessary for bundled JavaScript. |
 | Changed dependency licenses | Authenticated npm release metadata and every hash-locked Python wheel use the existing license allowlist | Changed unsupported locks or unknown declarations fail; unchanged dependencies are not reclassified. |
 | Changed GitHub Actions | Exact-ref licenses and current reviewed/malware advisory feeds, with release versions bound to immutable action pins | Unresolved affected versions or incomplete metadata fail; no workflow code is downloaded or executed by this check. |
@@ -238,8 +238,8 @@ identifies the original evaluation revision and query reuse. Current finding
 policy runs every time. A miss performs real extraction and query evaluation;
 an invalid restored entry fails. See the [cache contract](testing.md#run-ci-locally).
 
-The [complete local CI runner](testing.md#run-ci-locally) uses the same four
-automated languages, pinned analyzer/query packs, source scope and original-SARIF
+The [complete local CI runner](testing.md#run-ci-locally) uses the same three
+first-party languages, pinned analyzer/query packs, source scope and original-SARIF
 policy. `security/codeql-toolchain.json` authenticates the
 platform bundles. For a focused component on a clean committed tree:
 
@@ -249,15 +249,18 @@ cargo run --locked -q -p simplestchat-security -- codeql local --revision "$(git
 ```
 
 Use a fresh output directory. Omitting `--language` runs the three first-party
-languages the checkout has sources of (Actions, JavaScript/TypeScript and Rust);
-`--suite all` also runs advisory queries on the same extracted
+languages the checkout has sources of (Actions, JavaScript/TypeScript and Rust),
+the only languages `--language` may name and `codeql upload-ready` may accept
+without a vendor scan; `--suite all` also runs advisory queries on the same extracted
 databases. Local health requires real rule coverage and complete reports. GitHub's stored-analysis
 ingestion check and OIDC signing remain hosted publication steps, not local
 security checks or locally fabricated receipts.
 
 For optional local vendor analysis, add `--include-vendor`. Without `--language`
-this selects all five supported languages; native C/C++ requires the flag and
-a Linux environment with the pinned OpenSSL prefix:
+this selects all five supported languages. Python and native C/C++ have sources
+only in the vendored worker, so both require the flag, and that is why the pin
+in `security/codeql-toolchain.json` keeps their extractors and query packs;
+native C/C++ also needs a Linux environment with the pinned OpenSSL prefix:
 
 ```sh
 cargo run --locked -q -p simplestchat-security -- codeql local --revision "$(git rev-parse HEAD)" \
@@ -284,7 +287,7 @@ when the parent is unchanged. Unsupported dynamic includes, root escapes,
 symlinks, cycles and exceeded traversal limits fail closed.
 
 The required aggregate also runs `simplestchat-security codeql triage health` against
-GitHub's stored analysis records. For each of the four automated security categories, the
+GitHub's stored analysis records. For each of the three stored security categories, the
 newest record must match the caller's exact ref and commit, contain executed
 queries, and have no error or warning. A successful upload or green analysis job
 does not establish successful ingestion. The check reads the current ref before

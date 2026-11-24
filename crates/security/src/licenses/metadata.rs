@@ -31,20 +31,13 @@ pub struct Reviewed<'a> {
 
 /// The reviews recorded in `security/reviews.md`. Other metadata or another
 /// wheel of the same version needs a review of its own.
-pub const REVIEWED: [Reviewed<'static>; 3] = [
+pub const REVIEWED: [Reviewed<'static>; 2] = [
     Reviewed {
         name: "certifi",
         version: "2026.10.19",
         metadata: "a5c0be3a42daeef0edfaf58e6ea5b7550f3e4e8eb35420f72e902df9bcf00f5c",
         wheel: "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b",
         license: "MPL-2.0",
-    },
-    Reviewed {
-        name: "basedpyright",
-        version: "1.40.2",
-        metadata: "913fdc12587d87d82fb487ecc3e5a209dabab7be28982168f86d04c8518b7b8c",
-        wheel: "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690",
-        license: "MIT",
     },
     Reviewed {
         name: "meson",

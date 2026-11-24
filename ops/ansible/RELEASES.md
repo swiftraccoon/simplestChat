@@ -232,9 +232,9 @@ stdout can also precede a runtime, mask or signal-unregistration failure. Requir
 the actual CLI exit zero as well as the complete successful summary; earlier
 positive output cannot replace that result.
 
-The frozen Python frontend retains its explicit force app-only role. The Rust
-`simplestchat-release deploy` operation does not accept force, maintenance or
-chat-posting options; those operations keep their separate entry points.
+The same Rust `simplestchat-release deploy` operation takes the
+[explicit force app-only route](#explicit-force-deployment) with `--force`. It
+accepts no maintenance option; maintenance keeps its separate entry point.
 Source, parser and inert process checks do not themselves establish a new
 authenticated production run. The preceding frontend at `66219eaa` was qualified
 before the native verification caller change. The new application-verification

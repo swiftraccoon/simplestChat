@@ -38,9 +38,9 @@ use std::{collections::BTreeSet, path::Path};
 
 /// The npm locks that are audited and reviewed.
 pub const NPM_LOCKS: [&str; 2] = ["web/package-lock.json", "web/e2e/package-lock.json"];
-/// The hash-locked requirement files that are audited and reviewed.
-pub const PYTHON_LOCKS: [&str; 5] = [
-    "build/python-requirements.txt",
+/// The hash-locked requirement files that are audited and reviewed: the
+/// Ansible controller's, the scanners' and the vendored worker build's.
+pub const PYTHON_LOCKS: [&str; 4] = [
     "ops/ansible/requirements.txt",
     "security/requirements.txt",
     "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
@@ -276,15 +276,16 @@ fn python_dependencies(
     Ok(())
 }
 
-/// Every declaration of the maintained locks of one tree.
-pub fn dependencies(load: Load<'_>) -> Outcome<BTreeSet<Dependency>> {
+/// Every declaration of the maintained locks of one tree: the npm locks and
+/// the hash-locked requirement files `python_locks`.
+pub fn dependencies(load: Load<'_>, python_locks: &[&str]) -> Outcome<BTreeSet<Dependency>> {
     let mut found = BTreeSet::new();
     for path in NPM_LOCKS {
         if let Some(content) = load(path)? {
             found.extend(npm_dependencies(path, &content)?);
         }
     }
-    for path in PYTHON_LOCKS {
+    for path in python_locks {
         python_dependencies(path, load, 0, &mut found)?;
     }
     require(found.len() <= MAX_ENTRIES, "dependency_count")?;
@@ -312,13 +313,13 @@ pub fn allowed_licenses(snapshot: &Path) -> Result<BTreeSet<String>> {
     Ok(allowed)
 }
 
-/// Every Python lock that is there installs wheels alone: the option is a
-/// line of the lock. The scanners' lock is installed only by this gate's
-/// own environment build, with the option on its command line
-/// (`environment::INSTALL`), which the environment's replay holds to the
-/// reference's.
-pub fn require_wheel_only(snapshot: &Path) -> Result<()> {
-    for path in PYTHON_LOCKS {
+/// Every Python lock of `python_locks` that is there installs wheels alone:
+/// the option is a line of the lock. The scanners' lock is installed only
+/// by this gate's own environment build, with the option on its command
+/// line (`environment::INSTALL`), which the environment's replay holds to
+/// the reference's.
+pub fn require_wheel_only(snapshot: &Path, python_locks: &[&str]) -> Result<()> {
+    for &path in python_locks {
         let target = snapshot.join(path);
         if path == SCANNERS || !target.exists() {
             continue;
@@ -330,18 +331,19 @@ pub fn require_wheel_only(snapshot: &Path) -> Result<()> {
     Ok(())
 }
 
-/// No lock of another tool, and no requirement file outside the maintained
-/// ones, differs from the base: a new graph of dependencies needs the audits
-/// to read it first. `names` are the files of both trees.
+/// No lock of another tool, and no requirement file outside the npm locks
+/// and `python_locks`, differs from the base: a new graph of dependencies
+/// needs the audits to read it first. `names` are the files of both trees.
 pub fn require_audited_locks(
     names: &BTreeSet<String>,
     current: Load<'_>,
     previous: Load<'_>,
     include_vendor: bool,
+    python_locks: &[&str],
 ) -> Outcome<()> {
     for path in names {
         let maintained =
-            NPM_LOCKS.contains(&path.as_str()) || PYTHON_LOCKS.contains(&path.as_str());
+            NPM_LOCKS.contains(&path.as_str()) || python_locks.contains(&path.as_str());
         // Installed requirement files are audited even below vendor/; unused
         // upstream development locks follow the optional source scan.
         if maintained || !scope::selected(path, include_vendor) {

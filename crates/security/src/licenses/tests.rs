@@ -16,9 +16,40 @@ use super::{
 pub(super) use crate::scratch::content;
 use crate::{Fault, Result, policy::space, scratch::Scratch};
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::Path};
 
 const RECORDED: &str = include_str!("recorded_locks.json");
+
+/// The hash-locked requirement files of the reference, with which every
+/// recorded graph, tree and review is replayed.
+pub(super) const RECORDED_PYTHON_LOCKS: [&str; 5] = [
+    "build/python-requirements.txt",
+    "ops/ansible/requirements.txt",
+    "security/requirements.txt",
+    "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+    "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+];
+/// The locks of the reference that this gate does not read: the Python lint
+/// tools' pins, removed with the repository's last Python.
+const REMOVED_SINCE_RECORDING: [&str; 1] = ["build/python-requirements.txt"];
+
+/// The gate reads the reference's locks but the removed one, in the same
+/// order, and each is a file of the checkout; the removed one is not.
+#[test]
+fn the_read_locks_are_the_recorded_ones_but_the_removed() {
+    let kept: Vec<&str> = RECORDED_PYTHON_LOCKS
+        .into_iter()
+        .filter(|path| !REMOVED_SINCE_RECORDING.contains(path))
+        .collect();
+    assert_eq!(kept, PYTHON_LOCKS);
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for path in PYTHON_LOCKS {
+        assert!(checkout.join(path).is_file(), "{path}");
+    }
+    for path in REMOVED_SINCE_RECORDING {
+        assert!(!checkout.join(path).exists(), "{path}");
+    }
+}
 
 /// A requirement is a plain pin; a lock's version is the number three; a
 /// lock entry holds no fraction, which has no one spelling; a lock is UTF-8
@@ -207,7 +238,7 @@ fn every_recorded_graph_of_locks_is_read_alike() {
     for case in list(&recording["graphs"]) {
         let files = case["files"].as_object().expect("files");
         let load = |path: &str| Ok(files.get(path).map(|file| text(file).as_bytes().to_vec()));
-        let judged = dependencies(&load).map(|found| listed(&found));
+        let judged = dependencies(&load, &RECORDED_PYTHON_LOCKS).map(|found| listed(&found));
         settle(
             "graphs",
             text(&case["name"]),
@@ -234,7 +265,8 @@ fn every_recorded_tree_is_held_to_wheels_alike() {
             std::fs::create_dir_all(target.parent().expect("a parent")).expect("directories");
             std::fs::write(target, text(written)).expect("a file");
         }
-        let judged = require_wheel_only(&root).map(|()| json!({"held": true}));
+        let judged = require_wheel_only(&root, &RECORDED_PYTHON_LOCKS);
+        let judged = judged.map(|()| json!({"held": true}));
         settle(
             "wheels",
             text(&case["name"]),
@@ -263,11 +295,12 @@ fn the_scanners_lock_is_installed_by_the_gates_own_command() {
         "pip install --requirement security/requirements.txt\n",
     )
     .expect("an installer");
-    assert_eq!(require_wheel_only(root), Ok(()));
-    let other = root.join("build/python-requirements.txt");
-    std::fs::write(&other, "ruff==0.15.0 \\\n    --hash=sha256:00\n").expect("a lock");
+    assert_eq!(require_wheel_only(root, &PYTHON_LOCKS), Ok(()));
+    let other = root.join("ops/ansible/requirements.txt");
+    std::fs::create_dir_all(other.parent().expect("a parent")).expect("directories");
+    std::fs::write(&other, "ansible-core==2.21.4 \\\n    --hash=sha256:00\n").expect("a lock");
     assert_eq!(
-        require_wheel_only(root),
+        require_wheel_only(root, &PYTHON_LOCKS),
         Err(Fault("dependency_python_wheel_only_policy"))
     );
 }
@@ -289,7 +322,9 @@ fn every_recorded_unaudited_lock_is_judged_alike() {
             }
         };
         let vendored = case["includeVendor"] == true;
-        let judged = require_audited_locks(&names, &tree("current"), &tree("previous"), vendored);
+        let (current, previous) = (tree("current"), tree("previous"));
+        let locks = &RECORDED_PYTHON_LOCKS;
+        let judged = require_audited_locks(&names, &current, &previous, vendored, locks);
         let judged = judged.map(|()| json!({"held": true}));
         settle(
             "audited",
@@ -353,7 +388,8 @@ fn what_is_read_is_what_pip_reads() {
         if OTHERWISE_THAN_PIP.contains(&name) {
             assert_ne!(read, pip, "{name}");
             let load = |path: &str| Ok((path == PYTHON_LOCKS[0]).then(|| bytes.clone()));
-            let refused = dependencies(&load).err().map(|failure| failure.to_string());
+            let refused = dependencies(&load, &PYTHON_LOCKS).err();
+            let refused = refused.map(|failure| failure.to_string());
             assert_eq!(refused.as_deref(), Some("dependency_python_hash"), "{name}");
             otherwise += 1;
         } else {
@@ -394,9 +430,9 @@ fn a_lock_and_a_tree_declare_at_most_ten_thousand_dependencies() {
             })
         }
     };
-    let found = dependencies(&tree(5_000, 5_000));
+    let found = dependencies(&tree(5_000, 5_000), &PYTHON_LOCKS);
     assert_eq!(found.map(|found| found.len()), Ok(10_000));
-    let refused = dependencies(&tree(5_000, 5_001));
+    let refused = dependencies(&tree(5_000, 5_001), &PYTHON_LOCKS);
     let refused = refused.err().map(|failure| failure.to_string());
     assert_eq!(refused.as_deref(), Some("dependency_count"));
 }

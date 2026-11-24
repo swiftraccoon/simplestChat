@@ -337,6 +337,7 @@ fn fast(
         snapshot: &snapshot,
         base,
         include_vendor: vendor,
+        python_locks: &licenses::PYTHON_LOCKS,
         bounds: licenses::Bounds::REVIEWED,
         reviewed: &licenses::REVIEWED,
         controller: licenses::CONTROLLER,
@@ -354,6 +355,7 @@ fn fast(
         version: &version,
         lock: &|| host.engine().map(|(_, lock)| lock),
         languages: &semgrep::LANGUAGES,
+        prefixes: &semgrep::PREFIXES,
     };
     semgrep::gate(context, &engine, git, vendor)?;
     let new = findings::new_migrations(context.root())?;

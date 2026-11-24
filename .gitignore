@@ -47,7 +47,6 @@ CLAUDE.local.md
 /.cargo/
 /.claude/
 
-# Local Python check caches and bytecode; maintained sources remain visible.
-.ruff_cache/
+# Bytecode of the Python that Ansible and the vendored worker build run.
 __pycache__/
 *.pyc

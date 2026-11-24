@@ -1,6 +1,5 @@
-//! Assertions moved from the deleted Python tests of the CI cache
-//! reference's workflow wiring: each reads the same workflow, selects the
-//! same steps the same way and compares the same text.
+//! The CI cache's workflow wiring: each test reads the workflow, selects its
+//! steps and compares their text.
 
 use super::{checkout_file, first, lacks, located, run, script, steps, uses, workflow};
 use serde_json::{Value, json};
@@ -154,13 +153,25 @@ fn automation_checks_keep_their_ceiling_and_exact_gate() {
     );
 }
 
-/// From `test_rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds`:
-/// the pinned Python is selected once, unconditionally, before every step
-/// whose result its Unicode database could change.
+/// The pinned Python is selected once, unconditionally, and named for what
+/// runs on it, before every step that installs into it or runs it: in
+/// rust-test the Ansible the playbook pins call, the native build (the
+/// OpenSSL and AWS-LC installers and the worker build's pip) and the tests'
+/// interpreter fixtures; in automation the Ansible controller environment.
+/// It also precedes the fingerprint and the cache restore.
 #[test]
-fn rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds() {
+fn the_pinned_python_precedes_fingerprints_cache_and_its_consumers() {
     let ci = workflow("ci.yml");
-    for name in ["rust-test", "automation"] {
+    for (name, purpose) in [
+        (
+            "rust-test",
+            "Select the pinned Python of Ansible, the native build and test fixtures",
+        ),
+        (
+            "automation",
+            "Select the pinned Python of the Ansible controller",
+        ),
+    ] {
         let steps = steps(&ci, name);
         let selected = steps
             .iter()
@@ -169,6 +180,7 @@ fn rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds() {
         let [python] = selected[..] else {
             panic!("{name}: one Python: {selected:?}");
         };
+        assert_eq!(python["name"], purpose, "{name}");
         assert_eq!(
             python["uses"],
             "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"

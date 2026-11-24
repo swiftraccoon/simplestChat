@@ -214,7 +214,8 @@ fn workflow_contract(value: &Value) -> Check<()> {
         .ok_or("python")?;
     require(
         python["uses"] == "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
-            && python["with"]["python-version"] == "3.14.8",
+            && python["with"]["python-version"] == "3.14.8"
+            && python["name"] == "Select the pinned Python of the Ansible controller",
         "keeper-python-pin",
     )?;
     let (_, upload) = named(steps, UPLOAD)?;

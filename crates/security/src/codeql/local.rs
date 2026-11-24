@@ -55,8 +55,9 @@ pub const RUST_EXTRACTION_STATISTICS: [&str; 13] = [
 ];
 /// The two suites, in the order they are analyzed.
 pub const CATEGORIES: [&str; 2] = ["security", "quality-advisory"];
-/// The checks that extract each automated language, in the order of
-/// [`AUTOMATED_LANGUAGES`](super::tools::AUTOMATED_LANGUAGES).
+/// The checks that create each language's database by extraction, in the
+/// order of [`LANGUAGES`]: every one but the native language, the last,
+/// whose database is traced from its build instead.
 const CREATE: [&str; 4] = [
     "codeql-create-actions",
     "codeql-create-javascript-typescript",
@@ -138,9 +139,9 @@ fn named<T: Copy>(names: &[&str], table: &[T], name: &str) -> Outcome<T> {
     at.and_then(|at| table.get(at).copied()).ok_or(UNNAMED)
 }
 
-/// The check that extracts the automated language `language`.
+/// The check that creates the database of `language` by extraction.
 fn create_check(language: &str) -> Outcome<&'static str> {
-    named(&super::tools::AUTOMATED_LANGUAGES, &CREATE, language)
+    named(&LANGUAGES, &CREATE, language)
 }
 
 /// The check that analyzes `language`'s suite `category`.
@@ -250,9 +251,9 @@ pub struct Host<'a> {
     pub private: &'a dyn Fn(),
     /// Told of each command a check of the run's own runs, before it runs.
     pub witness: &'a dyn Fn(&'static str, &[&OsStr], &Run<'_>),
-    /// The languages a first-party run covers when it names none: those the
-    /// checkout has sources of, which
-    /// [`STORED_LANGUAGES`](super::tools::STORED_LANGUAGES) lists.
+    /// The languages a run without a vendor scan covers when it names none,
+    /// may name and may upload reports of: those the checkout has sources
+    /// of, which [`STORED_LANGUAGES`](super::tools::STORED_LANGUAGES) lists.
     pub first_party: &'a [&'a str],
 }
 

@@ -39,6 +39,22 @@ pub(super) const RECORDED_LANGUAGES: [(&str, &str); 4] = [
 /// The endings the reference scanned and this gate does not: the repository
 /// has tracked no Python since the recording.
 const REMOVED_SINCE_RECORDING: [&str; 1] = [".py"];
+/// The reference's directories of maintained sources, with which every
+/// recorded case is replayed.
+pub(super) const RECORDED_PREFIXES: [&str; 5] = [
+    "src/",
+    "build/",
+    "ops/ansible/files/",
+    "ops/ansible/callback_plugins/",
+    "web/src/",
+];
+/// The directories the reference scanned and this gate does not: they held
+/// only Python, and no file of a scanned language.
+const PREFIXES_REMOVED_SINCE_RECORDING: [&str; 3] = [
+    "build/",
+    "ops/ansible/files/",
+    "ops/ansible/callback_plugins/",
+];
 
 /// Documents the reference read and that are refused here: a pack and a
 /// report are JSON in UTF-8 without a byte order mark.
@@ -214,7 +230,12 @@ fn every_recorded_scope_is_chosen_alike() {
         std::fs::create_dir_all(&root).expect("a root");
         tree(&root, &case["files"]);
         let include_vendor = case["includeVendor"] == true;
-        let read = scope(&root, include_vendor, &RECORDED_LANGUAGES);
+        let read = scope(
+            &root,
+            include_vendor,
+            &RECORDED_LANGUAGES,
+            &RECORDED_PREFIXES,
+        );
         let read = read.map(|paths| json!({"paths": paths}));
         settle(text(&case["name"]), read, &case["result"], &mut tally);
     }
@@ -292,6 +313,7 @@ fn every_recorded_check_is_made_alike() {
             version: text(&lock["version"]),
             lock: &digest,
             languages: &RECORDED_LANGUAGES,
+            prefixes: &RECORDED_PREFIXES,
         };
         let include_vendor = case["includeVendor"] == true;
         let output = place.join(text(&case["output"]));
@@ -384,7 +406,13 @@ fn the_bounds_are_the_ones_the_reference_keeps() {
         .filter(|(ending, _)| !REMOVED_SINCE_RECORDING.contains(ending))
         .collect();
     assert_eq!(kept, LANGUAGES);
-    assert_eq!(json!(super::PREFIXES), recording["prefixes"]);
+    assert_eq!(json!(RECORDED_PREFIXES), recording["prefixes"]);
+    // And below the reference's directories but the removed ones.
+    let kept: Vec<_> = RECORDED_PREFIXES
+        .into_iter()
+        .filter(|prefix| !PREFIXES_REMOVED_SINCE_RECORDING.contains(prefix))
+        .collect();
+    assert_eq!(kept, super::PREFIXES);
 }
 
 #[test]
@@ -418,6 +446,8 @@ fn the_maintained_pack_holds_no_python_rule_and_every_rule_has_both_fixtures() {
     assert!(!positive.is_empty() && !negative.is_empty());
 }
 
+/// A Python rule is refused and a Python source is never scanned; neither
+/// is a source of a scanned language outside the maintained directories.
 #[test]
 fn the_gate_refuses_a_python_rule_and_scans_no_python_source() {
     let scratch = Scratch::new("sy");
@@ -441,13 +471,20 @@ fn the_gate_refuses_a_python_rule_and_scans_no_python_source() {
         Err(Fault("semgrep_target_path"))
     );
     let root = scratch.0.join("root");
-    for name in ["src/example.py", "src/example.rs", "build/example.py"] {
+    let names = [
+        "src/example.py",
+        "src/example.rs",
+        "build/example.py",
+        "build/example.rs",
+        "ops/ansible/files/example.js",
+    ];
+    for name in names {
         let path = root.join(name);
         std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
         std::fs::write(path, "example\n").expect("a source");
     }
     assert_eq!(
-        scope(&root, false, &LANGUAGES),
+        scope(&root, false, &LANGUAGES, &super::PREFIXES),
         Ok(vec!["src/example.rs".to_owned()])
     );
 }

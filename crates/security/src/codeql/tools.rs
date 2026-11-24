@@ -24,7 +24,8 @@ use std::{
 pub const PIN: &str = "security/codeql-toolchain.json";
 /// The workflow whose action revisions the pin names.
 const WORKFLOW: &str = ".github/workflows/codeql.yml";
-/// Every language the pin covers.
+/// Every language the pin covers. Python and the native C/C++ have sources
+/// only below `vendor/`, so only a local vendor scan analyzes them.
 pub const LANGUAGES: [&str; 5] = [
     "actions",
     "javascript-typescript",
@@ -32,14 +33,11 @@ pub const LANGUAGES: [&str; 5] = [
     "rust",
     "c-cpp",
 ];
-/// The first-party languages the local runner may analyze without a vendor
-/// scan, and whose reports it may upload: every one but the vendored native
-/// sources.
-pub const AUTOMATED_LANGUAGES: [&str; 4] = ["actions", "javascript-typescript", "python", "rust"];
-/// The languages the checkout has sources of: those whose security analysis
-/// the CodeQL workflow stores for every revision, which the health and triage
-/// gates require, and which a first-party local run covers when it names no
-/// language. The checkout tracks no Python, and the CodeQL extractor refuses a
+/// The first-party languages, which the checkout has sources of: those whose
+/// security analysis the CodeQL workflow stores for every revision, which the
+/// health and triage gates require, and which a local run without a vendor
+/// scan covers when it names no language, may name, and may upload reports
+/// of. The checkout tracks no Python, and the CodeQL extractor refuses a
 /// language with no source.
 pub const STORED_LANGUAGES: [&str; 3] = ["actions", "javascript-typescript", "rust"];
 /// The configuration of a first-party analysis, below the checkout.

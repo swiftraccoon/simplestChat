@@ -16,7 +16,7 @@ use crate::{
     Fault, Result,
     codeql::{
         tests::{items, planted, recording, text},
-        tools::{AUTOMATED_LANGUAGES, STORED_LANGUAGES},
+        tools::{self, STORED_LANGUAGES},
     },
     document::Document,
     policy::{self, Date, permitted},
@@ -355,21 +355,20 @@ fn a_failed_write_is_not_retried_and_pacing_never_outlives_the_deadline() {
     assert_eq!(clock.sleeps(), Document::List(Vec::new()));
 }
 
+/// The vendored languages, native and Python, are pinned for a local vendor
+/// scan and never stored; the stored analyses every revision needs are the
+/// CodeQL workflow's own matrix, each a language the pin covers.
 #[test]
 fn native_code_is_analyzed_locally_but_never_automated() {
-    assert!(LANGUAGES.contains(&"c-cpp"));
-    assert!(!AUTOMATED_LANGUAGES.contains(&"c-cpp"));
-    assert!(
-        AUTOMATED_LANGUAGES
-            .iter()
-            .all(|language| LANGUAGES.contains(language))
-    );
-    // The stored analyses every revision needs are the CodeQL workflow's own
-    // matrix: each a language the local runner analyzes and the pin covers.
+    for vendored in ["c-cpp", "python"] {
+        assert!(tools::LANGUAGES.contains(&vendored), "{vendored}");
+        assert!(LANGUAGES.contains(&vendored), "{vendored}");
+        assert!(!STORED_LANGUAGES.contains(&vendored), "{vendored}");
+    }
     assert!(
         STORED_LANGUAGES
             .iter()
-            .all(|language| AUTOMATED_LANGUAGES.contains(language))
+            .all(|language| tools::LANGUAGES.contains(language))
     );
     assert_eq!(
         super::expected(),

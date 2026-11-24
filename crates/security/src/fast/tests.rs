@@ -9,7 +9,8 @@
 //! interpreter, `named` gives the code here.
 
 use super::{
-    AUDIT, Installed, Programs, Scan, canary, dependencies, locked, secret_scan, workflows,
+    AUDIT, Installed, Programs, REQUIREMENTS, Scan, audited, canary, dependencies, locked,
+    secret_scan, workflows,
 };
 use crate::{
     context::{Context, Failure, Limits, Outcome, Snapshot, executable},
@@ -618,6 +619,115 @@ const STRICTER: [(&str, &str); 3] = [
     ("a lock that is empty", "tool_file_size"),
 ];
 
+/// The requirement files the reference audited, each under the name of its
+/// check, with which every recorded dependency check is replayed.
+const RECORDED_REQUIREMENTS: [(&str, &str); 5] = [
+    ("pip-audit-0", "build/python-requirements.txt"),
+    ("pip-audit-1", "ops/ansible/requirements.txt"),
+    ("pip-audit-2", "security/requirements.txt"),
+    (
+        "pip-audit-3",
+        "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+    ),
+    (
+        "pip-audit-4",
+        "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+    ),
+];
+/// The requirement files the reference audited and this gate does not: the
+/// Python lint tools' pins, removed with the repository's last Python.
+const REMOVED_SINCE_RECORDING: [&str; 1] = ["build/python-requirements.txt"];
+
+/// The gate audits what the reference did but the removed files, in the
+/// same order, each under the name of its place, and every one is a file of
+/// the checkout: an audit of a missing file would fail the gate.
+#[test]
+fn the_audited_requirements_are_the_recorded_ones_but_the_removed() {
+    let recording: Value = serde_json::from_str(DEPENDENCIES).expect("the recording is JSON");
+    let recorded: Vec<&str> = RECORDED_REQUIREMENTS
+        .iter()
+        .map(|(_, path)| *path)
+        .collect();
+    assert_eq!(json!(recorded), recording["requirements"]);
+    for (at, (name, _)) in RECORDED_REQUIREMENTS.iter().enumerate() {
+        assert_eq!(*name, format!("pip-audit-{at}"));
+    }
+    let kept: Vec<&str> = recorded
+        .into_iter()
+        .filter(|path| !REMOVED_SINCE_RECORDING.contains(path))
+        .collect();
+    let audited: Vec<&str> = REQUIREMENTS.iter().map(|(_, path)| *path).collect();
+    assert_eq!(audited, kept);
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for (at, (name, path)) in REQUIREMENTS.iter().enumerate() {
+        assert_eq!(*name, format!("pip-audit-{at}"));
+        assert!(checkout.join(path).is_file(), "{path}");
+    }
+    for path in REMOVED_SINCE_RECORDING {
+        assert!(!checkout.join(path).exists(), "{path}");
+    }
+}
+
+/// The gate's own entry audits each of its own requirement files once, in
+/// order and under its own name, with the scripted scanners of the first
+/// recorded case, which finds nothing.
+#[test]
+fn the_gate_audits_each_of_its_own_requirement_files() {
+    let recording: Value = serde_json::from_str(DEPENDENCIES).expect("the recording is JSON");
+    let case = &list(&recording["dependencies"])[0];
+    assert_eq!(case["result"], json!({"held": true}));
+    let scratch = Scratch::new("fo");
+    let [root, output, tools] = ["root", "output", "tools"].map(|part| scratch.0.join(part));
+    for directory in [
+        &root.join("web/e2e"),
+        &root.join("security"),
+        &output,
+        &tools,
+    ] {
+        std::fs::create_dir_all(directory).expect("a directory");
+    }
+    std::fs::write(root.join("Cargo.lock"), text(&case["lock"])).expect("a lock");
+    let budget = serde_json::to_string(&case["budget"]).expect("a budget");
+    std::fs::write(root.join("security/dependency-budget.json"), budget).expect("a budget");
+    let usual = recording["usual"]
+        .as_object()
+        .expect("the usual behaviours");
+    let behaviours: Vec<(&'static str, &Value)> = usual
+        .iter()
+        .map(|(kind, said)| (fixed(kind), said))
+        .collect();
+    let log = scratch.0.join("log");
+    let scripted = programs(&tools, &log, &behaviours);
+    let ambient = caller(Some("/usr/bin:/bin".into()));
+    let mut context = Context::new(&root, &output, Limits::REVIEWED, &ambient).expect("a context");
+    let now = Duration::from_secs(recording["now"].as_u64().expect("the recorded time"));
+    let reviewed = reviews(&recording, case);
+    assert_eq!(
+        dependencies(&mut context, &scripted, &reviewed, now),
+        Ok(())
+    );
+    let named = |check: &Vec<(&str, Value)>| {
+        let name = check.iter().find(|(field, _)| *field == "name");
+        name.and_then(|(_, value)| value.as_str().map(str::to_owned))
+    };
+    let audits: Vec<String> = context
+        .checks()
+        .iter()
+        .filter_map(named)
+        .filter(|name| name.starts_with("pip-audit-"))
+        .collect();
+    let expected: Vec<&str> = REQUIREMENTS.iter().map(|(name, _)| *name).collect();
+    assert_eq!(audits, expected);
+    let records = logged(&log, &[], &json!([]));
+    let read: Vec<&Value> = list(&records)
+        .iter()
+        .filter(|record| text(&record["program"]).starts_with("python-"))
+        .map(|record| &record["argv"][5])
+        .collect();
+    let paths: Vec<&str> = REQUIREMENTS.iter().map(|(_, path)| *path).collect();
+    assert_eq!(json!(read), json!(paths));
+}
+
 #[test]
 fn every_recorded_dependency_check_is_made_alike() {
     let recording: Value = serde_json::from_str(DEPENDENCIES).expect("the recording is JSON");
@@ -677,7 +787,14 @@ fn every_recorded_dependency_check_is_made_alike() {
         let ambient = caller(Some("/usr/bin:/bin".into()));
         let mut context =
             Context::new(&root, &output, Limits::REVIEWED, &ambient).expect("a context");
-        let judged = dependencies(&mut context, &scripted, &reviews(&recording, case), now);
+        let reviewed = reviews(&recording, case);
+        let judged = audited(
+            &mut context,
+            &scripted,
+            &reviewed,
+            now,
+            &RECORDED_REQUIREMENTS,
+        );
         let replacements = [
             (&root, "<root>"),
             (&output, "<output>"),

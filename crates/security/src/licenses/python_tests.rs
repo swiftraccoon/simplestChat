@@ -9,7 +9,7 @@
 //! and is refused here.
 
 use super::{
-    Dependency,
+    Dependency, PYTHON_LOCKS,
     artifact::{sdist, wheel},
     metadata::{REVIEWED, Reviewed, metadata_license},
     python::python_licenses,
@@ -273,6 +273,12 @@ fn every_recorded_page_of_the_index_is_judged_alike() {
     assert_eq!((held, refused, stricter), (21, 55, 2));
 }
 
+/// The reviewed wheels the reference held and this gate does not: no lock
+/// declares the Python type checker since the repository's last Python went.
+const REMOVED_SINCE_RECORDING: [&str; 1] = ["basedpyright"];
+
+/// The reviews are the recorded ones but those of the removed packages, and
+/// every package kept is still declared by a maintained lock.
 #[test]
 fn the_reviewed_licences_and_bounds_are_the_recorded_ones() {
     let recording = recorded();
@@ -292,8 +298,26 @@ fn the_reviewed_licences_and_bounds_are_the_recorded_ones() {
         .iter()
         .map(|entry| list(entry).iter().map(text).collect())
         .collect();
-    assert_eq!(reviews, recorded);
+    let removed = |entry: &Vec<&str>| REMOVED_SINCE_RECORDING.contains(&entry[0]);
+    assert_eq!(recorded.iter().filter(|entry| removed(entry)).count(), 1);
+    let kept: BTreeSet<Vec<&str>> = recorded
+        .into_iter()
+        .filter(|entry| !removed(entry))
+        .collect();
+    assert_eq!(reviews, kept);
     assert_eq!(reviews.len(), REVIEWED.len());
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let declared = |name: &str, version: &str| {
+        let pin = format!("{name}=={version} ");
+        PYTHON_LOCKS.iter().any(|lock| {
+            let text = std::fs::read_to_string(checkout.join(lock)).expect("a lock");
+            text.lines().any(|line| line.starts_with(&pin))
+        })
+    };
+    for review in REVIEWED {
+        assert!(declared(review.name, review.version), "{}", review.name);
+    }
+    assert!(!declared("basedpyright", "1.40.2"));
     assert_eq!(
         json!(Bounds::REVIEWED.files),
         recording["reviewed"]["MAX_INDEX_FILES"]

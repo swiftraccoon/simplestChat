@@ -25,13 +25,9 @@ The gate's shared context (`Context::snapshot` in
 `crates/security/src/context.rs`) takes a bounded copy of Git-tracked and
 nonignored source files. It rejects symbolic links and special files and records
 each copied file's SHA-256. This pack selects `.rs`, `.ts` and `.js` files under
-these maintained production paths (today `build/`, `ops/ansible/files/` and
-`ops/ansible/callback_plugins/` hold none):
+these maintained production paths (`PREFIXES` in `crates/security/src/semgrep.rs`):
 
 - `src/`
-- `build/`
-- `ops/ansible/files/`
-- `ops/ansible/callback_plugins/`
 - `web/src/`
 
 Rust tests embedded in these modules are included. Standalone browser test suites

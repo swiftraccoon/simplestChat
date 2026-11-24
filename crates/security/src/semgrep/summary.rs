@@ -9,7 +9,7 @@
 //! ones the scan itself knew. No message of the engine, no name of a
 //! function and no matched text is ever copied.
 
-use super::{MAX_FILES, MAX_LINE, PREFIXES, RULES, language, rules};
+use super::{MAX_FILES, MAX_LINE, RULES, language, rules};
 use crate::{
     Fault, Result,
     context::Note,
@@ -83,16 +83,16 @@ const FIELDS: [&str; 10] = [
 ];
 
 /// The maintained sources of the scan's private inventory in `directory`,
-/// each of one of `languages`: the only paths that may be said. An inventory
-/// that cannot be read names none.
-fn inventory(directory: &Path, languages: &[(&str, &str)]) -> BTreeSet<String> {
+/// each of one of `languages` below a directory of `prefixes`: the only
+/// paths that may be said. An inventory that cannot be read names none.
+fn inventory(directory: &Path, languages: &[(&str, &str)], prefixes: &[&str]) -> BTreeSet<String> {
     let read = || -> Result<BTreeSet<String>> {
         let content = files::bounded(&directory.join("source-manifest.json"), MANIFEST, true)?;
         let manifest = record::strict(&content)?;
         let manifest = manifest.as_object().ok_or(INVALID)?;
         require(manifest.len() <= MAX_FILES, INVALID.0)?;
         let maintained = |name: &&String| {
-            let placed = PREFIXES.iter().any(|prefix| name.starts_with(prefix));
+            let placed = prefixes.iter().any(|prefix| name.starts_with(prefix));
             safe_name(name) && language(languages, name).is_some() && placed
         };
         Ok(manifest.keys().filter(maintained).cloned().collect())
@@ -303,18 +303,19 @@ fn failure(
 
 /// What the line `data` of a scan that ended with `status` may say, with
 /// the scan's evidence in `directory`, the rule pack below `root` and the
-/// scan's `languages`.
+/// scan's `languages` and `prefixes`.
 fn judged(
     root: &Path,
     status: i32,
     data: &[u8],
     directory: &Path,
     languages: &[(&str, &str)],
+    prefixes: &[&str],
 ) -> Result<Note> {
     require(data.len() as u64 <= MAX_REPORT, INVALID.0)?;
     let raw = record::strict(data)?;
     let raw = raw.as_object().ok_or(INVALID)?;
-    let paths = inventory(directory, languages);
+    let paths = inventory(directory, languages, prefixes);
     if let Some(code) = raw.get("error") {
         let failed = raw.get("passed") == Some(&Value::Bool(false));
         require(raw.len() == 2 && failed && status == 1, INVALID.0)?;
@@ -349,18 +350,20 @@ fn judged(
     ])
 }
 
-/// What the gate records of a scan of `languages` that ended with `status`
-/// and printed `data`: its verdict and its findings, or its failure and what
-/// the engine's reports in `directory` tell of it. A line or evidence in no
-/// reviewed form, and a line that disagrees with the status, is an invalid
-/// result and never a pass.
+/// What the gate records of a scan of `languages` below `prefixes` that
+/// ended with `status` and printed `data`: its verdict and its findings, or
+/// its failure and what the engine's reports in `directory` tell of it. A
+/// line or evidence in no reviewed form, and a line that disagrees with the
+/// status, is an invalid result and never a pass.
 pub fn diagnosis(
     root: &Path,
     status: i32,
     data: &[u8],
     directory: &Path,
     languages: &[(&str, &str)],
+    prefixes: &[&str],
 ) -> Note {
     let invalid = || vec![("passed", false.into()), ("error", INVALID.0.into())];
-    judged(root, status, data, directory, languages).unwrap_or_else(|_| invalid())
+    let judged = judged(root, status, data, directory, languages, prefixes);
+    judged.unwrap_or_else(|_| invalid())
 }

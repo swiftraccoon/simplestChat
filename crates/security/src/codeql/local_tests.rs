@@ -12,7 +12,7 @@ use crate::{
     budget::Budget,
     codeql::{
         tests::{encoded, items, planted, text},
-        tools::{AUTOMATED_LANGUAGES, LANGUAGES},
+        tools::LANGUAGES,
     },
     context::{Failure, Outcome, Run},
     document::Document,
@@ -347,8 +347,9 @@ pub(crate) fn statuses(context: &crate::context::Context) -> Document {
 }
 
 /// The first-party languages a run of every language covered when the runs
-/// were recorded: every recorded run is replayed with them. The checkout has
-/// tracked no Python since.
+/// were recorded, and which a run without a vendor scan could name and
+/// upload: every recorded run is replayed with them. The checkout has tracked
+/// no Python since.
 pub(crate) const RECORDED_FIRST_PARTY: [&str; 4] =
     ["actions", "javascript-typescript", "python", "rust"];
 
@@ -422,10 +423,13 @@ pub(crate) fn words<'a>(value: &'a Document, name: &str) -> Vec<&'a str> {
 
 #[test]
 fn every_check_is_named_as_the_reference_named_it() {
-    for (at, language) in AUTOMATED_LANGUAGES.iter().enumerate() {
+    // Every language but the traced native one, the last, is extracted.
+    assert_eq!(CREATE.len(), LANGUAGES.len() - 1);
+    for (at, language) in LANGUAGES[..CREATE.len()].iter().enumerate() {
         assert_eq!(create_check(language), Ok(CREATE[at]));
         assert_eq!(CREATE[at], format!("codeql-create-{language}"));
     }
+    assert_eq!(LANGUAGES.last(), Some(&"c-cpp"));
     assert_eq!(
         create_check("c-cpp"),
         Err(Failure::Fixed("invalid_scanner_check_name"))

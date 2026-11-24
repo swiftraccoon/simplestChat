@@ -11,7 +11,7 @@ use super::{
     summary::{
         ERRORS, KINDS, MAX_DEPTH, MAX_ENGINE_REPORTS, MAX_ITEMS, MAX_NODES, MAX_REPORT, diagnosis,
     },
-    tests::{RECORDED_LANGUAGES, compared, list, strings, text, tree},
+    tests::{RECORDED_LANGUAGES, RECORDED_PREFIXES, compared, list, strings, text, tree},
 };
 use crate::{
     context::{Context, Limits, Note},
@@ -90,7 +90,8 @@ fn every_recorded_diagnosis_is_made_alike() {
         }
         let status = i32::try_from(case["status"].as_i64().expect("a status")).expect("small");
         let said = content(&case["said"]);
-        let note = diagnosis(&root, status, &said, &directory, &RECORDED_LANGUAGES);
+        let (languages, prefixes) = (&RECORDED_LANGUAGES, &RECORDED_PREFIXES);
+        let note = diagnosis(&root, status, &said, &directory, languages, prefixes);
         let (said, order) = kept_as(&note);
         if let Some((_, expected)) = OTHERWISE.iter().find(|(named, _)| *named == name) {
             let expected: Value = serde_json::from_str(expected).expect("an expectation");
@@ -159,6 +160,7 @@ fn every_recorded_step_of_the_gate_is_made_alike() {
             version: text(&lock["version"]),
             lock: &digest,
             languages: &RECORDED_LANGUAGES,
+            prefixes: &RECORDED_PREFIXES,
         };
         let ambient = |variable: &str| -> Option<OsString> {
             match variable {

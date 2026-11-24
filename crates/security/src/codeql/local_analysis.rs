@@ -563,7 +563,7 @@ pub fn analyze_language(
         let name = analyze_check(language, category)?;
         checked(context, host, name, &argv, &within(EXTRACTION))?;
         let mut identity = report_health(&root, &report, language, category)?;
-        validate_report_scope(&report, language, options.include_vendor)?;
+        validate_report_scope(&report, language, options.include_vendor, host.first_party)?;
         let marker = Document::record([
             ("revision", options.revision.as_str().into()),
             ("sarifSha256", field(&identity, "sarifSha256")?.clone()),

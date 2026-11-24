@@ -53,14 +53,9 @@ pub const LANGUAGES: [(&str, &str); 3] = [
     (".ts", "typescript"),
     (".js", "typescript"),
 ];
-/// Where the maintained sources are.
-const PREFIXES: [&str; 5] = [
-    "src/",
-    "build/",
-    "ops/ansible/files/",
-    "ops/ansible/callback_plugins/",
-    "web/src/",
-];
+/// Where the maintained sources of the scanned languages are: the server's
+/// Rust and the browser's TypeScript.
+pub const PREFIXES: [&str; 2] = ["src/", "web/src/"];
 /// What no rule of the pack may do: run code, or change a file.
 const FORBIDDEN: [&str; 4] = [
     "pattern-where-python",
@@ -373,11 +368,16 @@ fn expectations(
 }
 
 /// The maintained sources of the snapshot that are scanned, in the order
-/// of their names: files of `languages` below the maintained directories,
-/// and below the vendored tree only when that is asked for.
-fn scope(snapshot: &Path, include_vendor: bool, languages: &[(&str, &str)]) -> Result<Vec<String>> {
+/// of their names: files of `languages` below the directories of
+/// `prefixes`, and below the vendored tree only when that is asked for.
+fn scope(
+    snapshot: &Path,
+    include_vendor: bool,
+    languages: &[(&str, &str)],
+    prefixes: &[&str],
+) -> Result<Vec<String>> {
     let maintained = |name: &String| {
-        let placed = PREFIXES.iter().any(|prefix| name.starts_with(prefix));
+        let placed = prefixes.iter().any(|prefix| name.starts_with(prefix));
         language(languages, name).is_some() && (placed || (include_vendor && vendor_path(name)))
     };
     let mut paths: Vec<String> = listed(snapshot)?.into_iter().filter(maintained).collect();
@@ -417,6 +417,9 @@ pub struct Engine<'a> {
     /// The endings of the files it scans, each with its language: the gate's
     /// own [`LANGUAGES`].
     pub languages: &'a [(&'a str, &'a str)],
+    /// The directories of the maintained sources it scans: the gate's own
+    /// [`PREFIXES`].
+    pub prefixes: &'a [&'a str],
 }
 
 /// Run the engine as the check `name` over `paths` below `root`, with the
@@ -531,7 +534,7 @@ pub fn check(
     let locked = (engine.lock)()?;
     let snapshot = context.snapshot(Snapshot::Source, git)?;
     let assertions = golden(context, engine, &snapshot)?;
-    let paths = scope(&snapshot, include_vendor, engine.languages)?;
+    let paths = scope(&snapshot, include_vendor, engine.languages, engine.prefixes)?;
     let pack = snapshot.join(RULES);
     let actual = scanned(context, engine, &pack, &snapshot, &paths, "source-engine")?;
     require((engine.lock)()? == locked, "semgrep_tool_lock_changed")?;
@@ -614,7 +617,15 @@ pub fn gate(
         answered(&scanned)
     })?;
     let directory = context.output().join("semgrep");
-    let said = summary::diagnosis(context.root(), status, &line, &directory, engine.languages);
+    let (languages, prefixes) = (engine.languages, engine.prefixes);
+    let said = summary::diagnosis(
+        context.root(),
+        status,
+        &line,
+        &directory,
+        languages,
+        prefixes,
+    );
     let passed = said.first() == Some(&("passed", Value::Bool(true)));
     let mut note: Note = vec![
         ("name", "semgrep-diagnosis".into()),

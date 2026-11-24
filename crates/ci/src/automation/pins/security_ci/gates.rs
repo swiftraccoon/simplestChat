@@ -527,7 +527,8 @@ fn dependency_reviews_are_shared_by_direct_main_and_local_source_checks() {
 }
 
 /// The fast tier runs every one of its checks, in the reviewed order, over
-/// one copy of the sources, and ends by proving that nothing moved.
+/// one copy of the sources, with the gate's own lock, language and source
+/// tables, and ends by proving that nothing moved.
 #[test]
 fn the_fast_tier_keeps_every_check_in_its_order() {
     let tier = checkout_file("crates/security/src/tier.rs");
@@ -542,8 +543,11 @@ fn the_fast_tier_keeps_every_check_in_its_order() {
         "fast::workflows(context, programs, &reviews)?;",
         "fast::secret_scan(context, programs, &scan)?;",
         "fast::dependencies(context, programs, &reviews, since)?;",
+        "python_locks: &licenses::PYTHON_LOCKS,",
         "licenses::check(context, programs, &review)?;",
         "actions::check(context, programs, &review)?;",
+        "languages: &semgrep::LANGUAGES,",
+        "prefixes: &semgrep::PREFIXES,",
         "semgrep::gate(context, &engine, git, vendor)?;",
         "findings::new_migrations(context.root())?;",
         "migrations::lint(context, programs, &new)?;",

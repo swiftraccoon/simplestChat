@@ -17,14 +17,15 @@ will receive a separate retroactive review.
 - ShellCheck for the helper-script quality gate (`brew install shellcheck` on
   macOS, or your Linux package manager).
 - `jq` for container benchmark validation tests (`brew install jq` on macOS).
-- Python 3.12+ with the pinned checking environment for Python quality gates:
+- Python 3.12+ with the pinned Ansible controller environment, which the
+  automation checks and the Ansible-rendering tests run:
 
   ```sh
   python3 -m venv ops/ansible/.venv
-  ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
+  ops/ansible/.venv/bin/pip install -r ops/ansible/requirements.txt
   ```
 
-  These controller/checking dependencies are not installed on the chat server.
+  These controller dependencies are not installed on the chat server.
   The requirements enforce wheel-only, hash-verified installation, including
   transitive dependencies. Refresh versions and accepted wheel hashes together,
   review the resulting artifacts, and verify resolution on Linux/Python 3.12 and

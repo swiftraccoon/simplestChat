@@ -45,8 +45,8 @@ updates:
       default-days: 7
     open-pull-requests-limit: 3
   - package-ecosystem: pip
-    # Keep root tooling and aggregate requirement snapshots current too.
-    directories: [/, /build]
+    # The vendored worker build's pip constraints.
+    directory: /build
     schedule:
       interval: weekly
     cooldown:

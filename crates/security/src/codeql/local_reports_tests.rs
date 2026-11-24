@@ -10,9 +10,9 @@ use super::{
 };
 use crate::{
     codeql::{
-        local::tests::{Tally, came, number, placed, words},
+        local::tests::{RECORDED_FIRST_PARTY, Tally, came, number, placed, words},
         tests::{items, recording, text},
-        tools::{AUTOMATED_LANGUAGES, LANGUAGES},
+        tools::{LANGUAGES, STORED_LANGUAGES},
         triage::integer,
     },
     context::Failure,
@@ -184,6 +184,7 @@ fn every_recorded_report_is_ready_for_upload_alike() {
             text(case, "revision"),
             text(case, "category"),
             text(case, "language"),
+            &RECORDED_FIRST_PARTY,
         );
         tally.judge(case, came(ready, Document::Bool), &[], &[]);
     }
@@ -228,6 +229,7 @@ fn every_recorded_extraction_is_scoped_alike() {
             &scratch.0.join("report.sarif"),
             text(case, "language"),
             case.get("includeVendor") == Some(&Document::Bool(true)),
+            &RECORDED_FIRST_PARTY,
         );
         tally.judge(case, faulted(judged, |()| Document::Null), &[], &[]);
     }
@@ -298,11 +300,31 @@ fn a_complete_inventory_needs_every_language_and_the_suites_asked_for() {
     }
 }
 
+/// A report of a vendored language, Python or native, is of a vendor scan
+/// alone: it is refused before it is read in a first-party one.
+#[test]
+fn a_report_of_a_vendored_language_belongs_only_to_a_vendor_scan() {
+    let report = Path::new("/nonexistent/report.sarif");
+    for language in ["python", "c-cpp"] {
+        let first_party = validate_report_scope(report, language, false, &STORED_LANGUAGES);
+        assert_eq!(
+            first_party,
+            Err(crate::Fault("codeql_vendor_scope")),
+            "{language}"
+        );
+        let vendored = validate_report_scope(report, language, true, &STORED_LANGUAGES);
+        assert_eq!(vendored, Ok(()), "{language}");
+    }
+    // A first-party language goes on to read its report, which is not there.
+    let read = validate_report_scope(report, "rust", false, &STORED_LANGUAGES);
+    assert!(read.is_err_and(|fault| fault != crate::Fault("codeql_vendor_scope")));
+}
+
 #[test]
 fn a_first_party_extraction_excludes_the_vendored_tree_and_a_vendor_scan_does_not() {
     let source = Path::new("/x/out/source");
     let configuration = "--codescanning-config=/x/out/source/security/codeql/first-party.yml";
-    for language in AUTOMATED_LANGUAGES {
+    for language in STORED_LANGUAGES {
         let options = extraction_options(source, language, false);
         assert_eq!(options[0], configuration, "{language}");
         let dependencies = "--extractor-option=extract_dependencies_as_source=false";

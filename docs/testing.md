@@ -108,10 +108,12 @@ Operations automation runs the standalone Ops library suite with its default
 dependency profile. On Linux this includes the host, process and archive cases.
 This exercises the distributed capacity runtime profile early; the workspace
 suite also checks the combined feature profile. Both jobs select CPython 3.14.8
-before fingerprinting or creating the controller environment. The Ops suite
-itself starts no interpreter: its comparisons with the retired Python helpers
-replay answers recorded beside the tests (`recorded_*.json` under `ops/src`),
-so the manifest checks no longer depend on that interpreter's Unicode database.
+before fingerprinting: the automation job builds the Ansible controller
+environment on it, and the workspace job installs Ansible into it for the
+playbook pins and runs the native build (the OpenSSL and AWS-LC installers and
+the vendored worker build's pip) and the tests' fake-tool fixtures on it. The Ops suite itself starts no interpreter: its comparisons with
+the retired Python helpers replay answers recorded beside the tests
+(`recorded_*.json` under `ops/src`).
 Ignored subprocess workers do their work only when their owning tests launch
 them.
 
@@ -386,11 +388,11 @@ Local Git commits continue using the bootstrap-free POSIX
 hook. Byte-oracle and inert Git-process fixtures check these boundaries without
 installing tools or contacting a host.
 
-Use Python 3.12 or newer and the pinned controller/checking environment:
+Use Python 3.12 or newer and the pinned Ansible controller environment:
 
 ```sh
 python3 -m venv ops/ansible/.venv
-ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
+ops/ansible/.venv/bin/pip install -r ops/ansible/requirements.txt
 cargo run --locked -q -p xtask -- check --python
 PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
   cargo run --locked -q -p simplestchat-ci -- automation --checks
@@ -1632,9 +1634,9 @@ The direct typed playbook remains available. Rust mutation contracts cover its
 stage-only default, exact explicit deploy inputs, shared authenticated Ops
 delivery, canonical native invocation and failure propagation. Deploying a
 retained image does not rerun the full suite; it checks artifact integrity,
-runtime compatibility and readiness. The frozen Python frontend retains the
-separate explicit `--force` app-only route for an exact-revision unsigned build,
-with its runtime safeguards and recorded override. The optional public protocol
+runtime compatibility and readiness. The same Rust frontend takes the separate
+explicit `--force` app-only route for an exact-revision unsigned build, with its
+runtime safeguards and recorded override. The optional public protocol
 smoke creates guests and writes a public message; it requires that write's
 authorization. Neither is part of the Rust signed routine command.
 
@@ -2162,8 +2164,9 @@ rejected even where an older Python ZIP reader truncated them. Archives are
 limited to 100,000 members and four GiB of expanded data, with sixteen MiB per
 keyed source file. Save uses private staging and the existing exact receipt
 format; restore verifies the bytes before the installed CodeQL CLI can unpack
-them. Tests use owned files and fake analyzer commands, including cross-language
-receipt interchange with the Python reference.
+them. Tests use owned files and fake analyzer commands, and replay the receipts
+and identities the retired Python reference recorded in
+`crates/ci/src/codeql_cache/recorded_reference.json`.
 On 2026-10-21, a fresh debug tooling target built in 11.33 seconds on the local
 macOS ARM64 workstation with Rust 1.99.0 and registry sources already downloaded.
 That measurement excludes toolchain installation and downloads; hosted cold
@@ -2179,12 +2182,12 @@ Unknown cache families and other refs remain untouched. Run
 are limited to cache IDs, with refreshed inventory before each deletion and
 limits of 100 deletions and 240 seconds.
 The hosted maintenance workflow builds the tool before exposing its scoped
-token. The Python implementation remains a reference for planner parity; unit
-tests exercise the Rust client with a fake `gh`, including incomplete inventory,
-changed cache identity, stale main revisions, output limits and cancellation.
-Canonical UTC GitHub timestamps are checked across supported Python versions;
-the separate oracle for noncanonical ISO extensions follows the maintained
-Python 3.14 reference and runs only on compatible interpreters.
+token. The planner and the command replay the answers the retired Python
+implementation gave, recorded with Python 3.14 in
+`crates/ci/src/retention/recorded_reference.json`, canonical UTC GitHub
+timestamps and noncanonical ISO extensions alike; unit tests exercise the Rust
+client with a fake `gh`, including incomplete inventory, changed cache identity,
+stale main revisions, output limits and cancellation.
 
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
 are additional tiers, not part of the required push gate. The daily
@@ -2223,8 +2226,8 @@ SHA-256 framing, scope/trust/runner identities and receipt schema; the tracked
 compiled tool and its Cargo/toolchain inputs are included in every source closure.
 `--root <checkout>` selects an owned canonical checkout for local verification;
 it defaults to this repository. `save` and `verify` require an absolute receipt
-directory. Python remains the parity reference and supplies the current security
-helpers' source-closure API; scanner drivers retain their existing implementation.
+directory. The keys the retired Python reference computed for its scopes are
+replayed from `crates/ci/src/recorded_fingerprint.json`.
 
 The four standard workflow fingerprint steps use
 `cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" --github-output`.
@@ -2238,28 +2241,24 @@ its key for local use. Cache namespaces, restore/save guards and success receipt
 retain their existing policy. Database-byte selectors use the separate image-cache
 publisher described below.
 
-`cargo run --locked -q -p simplestchat-ci -- automation` runs xtask's installed Python
-quality gate first, then offline Ansible lint, every maintained controller
+`cargo run --locked -q -p simplestchat-ci -- automation` runs xtask's Python
+line ratchet first, then offline Ansible lint, every maintained controller
 playbook's syntax check, ShellCheck and operations unit tests. Each command's
 arguments are explicit and the first failure stops the gate. It installs no
 tools and applies no playbook to a host.
 
 Hosted and local CI run that complete plan through `automation --checks`,
-which selects the same steps as the bare command: quality, syntax, ordinary
-Ops/CLI tests and full Python test discovery, under the job's ten-minute ceiling.
-The ordinary Ops gate also runs `release_backup_cli`.
+which selects the same steps as the bare command: the ratchet, lint, syntax and
+ordinary Ops/CLI tests, under the job's ten-minute ceiling. The ordinary Ops
+gate also runs `release_backup_cli`.
 
-The Python setup step caches pip download bytes, keyed by the checker and
-controller requirement files. The job still creates its own environment and
-installs the complete hash-pinned wheel requirements; a download-cache hit never
+The Python setup step caches pip download bytes, keyed by the Ansible controller
+lock, `ops/ansible/requirements.txt`. The job still creates its own environment
+and installs that complete hash-pinned wheel lock; a download-cache hit never
 skips installation or checks. This uses the pinned setup action's
 [dependency cache](https://github.com/actions/setup-python/blob/ece7cb06caefa5fff74198d8649806c4678c61a1/docs/advanced-usage.md#caching-packages).
-In run `40803995276`, downloading the 61.1 MB Node wheel took 199–217 seconds,
-versus 0.607 seconds in run `40799322008`. Setup consumed most of the ten-minute
-automation limit and the job was cancelled during its checks; a cancellation is a
-failure to complete, not a pass. Download reuse reduces repeated network work; a
-cold cache remains dependent on the package service and does not establish a
-runtime guarantee. Job and workload limits are unchanged.
+Download reuse reduces repeated network work; a cold cache remains dependent on
+the package service and does not establish a runtime guarantee.
 
 The existing automation receipt proves the checks job, with workflow and tool
 changes invalidating prior keys. Tracked workflow, `xtask`, `crates/` and native changes
@@ -2325,25 +2324,27 @@ bounded file inventory and checked hashes; a malformed cache fails validation.
 No image scan verdict is cached. Local image checks can use the same path with
 `--image-database-cache <absolute-directory>`.
 
-The two CI jobs use `image-cache hint` to publish the same Python reference's
-prefix and optional metadata hint. Prefix failure remains fatal. A failed hint
+The two CI jobs use `image-cache hint` to publish the prefix and optional
+metadata hint of the security gate's own selector,
+`cargo run --locked -q -p simplestchat-security -- image cache`. Prefix failure
+remains fatal. A failed hint
 falls back to that exact prefix with the existing warning only after its owned
 CLI group is proven stopped/reaped; cancellation or uncertain cleanup fails.
 Malformed successful replies fail before publication. Trust must match the
 current main/pull-request boundary, and every scanner/generation digest must be
 64 lowercase hexadecimal characters. These keys select download bytes; the
-Python online updater and scanner remain unchanged.
+online updater and scanner still run on every scan.
 
 After successful preparation or production scanning, respectively,
 `image-cache status preparation` and `image-cache status production`
-resolve only the fixed status paths beneath `RUNNER_TEMP`, using the unchanged
-Python `--status` reference. Both key and prefix are validated before one fixed
+resolve only the fixed status paths beneath `RUNNER_TEMP`, using the same
+selector's `--status` form. Both key and prefix are validated before one fixed
 record is appended to the runner's existing absolute regular `GITHUB_OUTPUT`
 file. It never creates/truncates that file or follows a final symlink; its
 retained descriptor closes on success or failure. Received command output and
-paths are not printed. Every Python selector has a 30-second bound and
-five-second forced-stop grace, and only owned CLI-process-group cleanup is
-proven. A timed-out hint may fall back after successful cleanup; status failures
+paths are not printed. Every selector run, its build included, has a
+600-second bound and five-second forced-stop grace, and only owned
+CLI-process-group cleanup is proven. A timed-out hint may fall back after successful cleanup; status failures
 remain fatal. SIGINT/SIGTERM return 130/143 and cannot become a cache miss.
 
 The image-database compiler bootstrap now also runs on hosted CI, at the same
@@ -2686,8 +2687,8 @@ Docker/nsenter/curl tools, cgroup v2, and a trusted rootful Docker daemon on the
 prove that the daemon shares the controller's kernel. Reported Desktop, rootless,
 non-Linux and non-v2 profiles are refused. This source port has not established
 real host, namespace, engine, media, capacity or installed-service interoperability.
-The existing two Bash scripts, Ansible installation, Python callers, service
-launcher and ExecStopPost are unchanged; no installed path selects this owner.
+The existing two Bash scripts, Ansible installation, service launcher and
+ExecStopPost are unchanged; no installed path selects this owner.
 
 `run` takes the same nine flag pairs: required `--server-image`,
 `--generator-image`, `--output`; optional `--workers` (1–4, default 1), `--clients`
@@ -2864,8 +2865,8 @@ policy together without claiming cryptography. The shared preparation owner,
 file custody and late bindings keep their existing 17-native/4-CLI regression
 contract and must be rerun on the final combined source.
 
-Local Python quality results, default-stack process/CLI results, target checks
-and actual maintained-GH verification are separate evidence. Before any
+Default-stack process/CLI results, target checks and actual maintained-GH
+verification are separate evidence. Before any
 caller switch, record four fresh authenticated verifier results on exact original
 signed production inputs, repeat the operation, reject modified/certificate/run
 mismatches, measure the existing caller budget, and prove verification still
@@ -2887,10 +2888,9 @@ cargo test --locked -p simplestchat-ops --test release_fresh_verify_cli
 The routine deployment frontend now selects the same operation through the thin
 default `simplestchat-release verify` bridge. This dispatch is synchronous before Tokio;
 it adds neither nested Cargo nor another verification implementation. Ansible
-native mode uses N600/M60 inside its unchanged 660-second guard and runs before
-remote preflight, including check mode. Omission selects the frozen Python
-verifier; wrong boolean types refuse. Native failure stops the operation without
-fallback. Current Rust mutation contracts and offline Ansible cases must check
+native verification uses N600/M60 inside its 660-second guard and runs before
+remote preflight, including check mode; it has no other verifier. Native failure
+stops the operation without fallback. Current Rust mutation contracts and offline Ansible cases must check
 both branches, skipped-result isolation, exact arguments and failure ordering;
 their execution is separate from actual cryptographic and deployment proof.
 
@@ -2902,8 +2902,8 @@ cryptographic verification.
 
 The ordinary CLI target runs in the Ops gate. No separately ignored native
 signal worker is introduced. The native operation's boundary differences from
-the Python verifier include curl framing/platform trust, read-idle timing and
-UTF-8 output paths. Cached operation must still acquire fresh API metadata and
+the retired Python verifier's recorded behaviour include curl framing/platform
+trust, read-idle timing and UTF-8 output paths. Cached operation must still acquire fresh API metadata and
 perform four verifications while curl and token retrieval are unavailable.
 
 Keep this fixture evidence separate from actual authenticated acquisition.
@@ -2914,8 +2914,7 @@ bytes and resource finalization, and measure the full caller's remaining budget.
 Prove completion before constructing Receiver/SSH or contacting the deployment
 host. An API-shaped fixture, copied metadata, source-built binary or successful
 compiler check alone does not establish authenticated distribution or bootstrap
-on a different target. Existing Python callers remain available until that
-separate migration is complete. The native curl CA/framing profile and the
+on a different target. The native curl CA/framing profile and the
 read-idle timing difference below are accepted for the routine native caller;
 their documented resource/deadline bounds remain unchanged.
 
@@ -2942,8 +2941,8 @@ The corrected bridge was subsequently rebuilt before credentials and verified
 the same signed inputs with the selected GH and a separate `GH_CONFIG_DIR`:
 cached exit zero in 20.14 seconds without curl on `PATH`, fresh exit zero in
 138.39 seconds, both N600/M60 with all eleven original bytes and four-key results
-joined. Nineteen offline Ansible cases and all 2108 unique frozen Python test IDs
-completed with their expected results and existing skips. Actual current-head
+joined. Nineteen offline Ansible cases completed with their expected results
+and existing skips. Actual current-head
 deployment qualification remains pending; different signed Ops executable bytes
 require fresh authenticated component proof before a host caller switch.
 The preceding complete frontend qualified at `66219eaa` before this verifier
@@ -2972,8 +2971,7 @@ key admission and explicit-empty cached paths. Actual CLI signal tests and the
 runtime/umask fence run in owned subprocesses.
 
 Syntax errors and unknown flags return usage status 2. Parsed selector or key
-refusals return the Python controller's fixed three-field `invalid_options`
-result and status 1. Invalid native-only whole/finalization budgets are usage errors.
+refusals return the fixed three-field `invalid_options` result and status 1. Invalid native-only whole/finalization budgets are usage errors.
 The native path profile rejects an explicit-empty cached directory; it never
 turns that supplied value into a fresh download.
 
@@ -3008,8 +3006,7 @@ The command keeps fixed host paths and root admission, requires explicit
 `0 < finalization-seconds < timeout-seconds <= 300`, and does not change prepared
 callers or bootstrap installation. Its curl/OpenSSL/CA prerequisites, fixed
 User-Agent, parser bounds and socket-idle behavior are native-profile
-differences. These tests do not establish unrestricted Python compatibility or
-actual TLS behavior.
+differences. These tests do not establish actual TLS behavior.
 
 These inert checks are the receiver's only tests. They drive its refusals of a
 held workload lock (`filesystem_error`), an unfinished journal in the work
@@ -3109,8 +3106,7 @@ cargo test --locked -p simplestchat-ops --lib release::attestation::restore:: \
 cargo test --locked -p simplestchat-ops --test release_backup_cli
 ```
 
-The ordinary Ops gate runs `release_backup_cli`; full Python discovery retains
-the producer regressions.
+The ordinary Ops gate runs `release_backup_cli`.
 
 
 ## Optional maintenance prerequisite experiments
@@ -3208,8 +3204,8 @@ authentication never falls back to an older artifact.
 The fixed three-member transfer writer is tested through its production path at
 all twenty possible member offsets modulo a 10,240-byte TAR record. It keeps the
 library's 1,024-byte zero terminator and adds no whole-record padding. The former
-padding generated a 10,752-byte tail at offset 9,728, which the unchanged Rust and
-frozen Python readers reject. Tests retain the header/order/member-hash checks
+padding generated a 10,752-byte tail at offset 9,728, which the Rust readers
+reject. Tests retain the header/order/member-hash checks
 and separately reject wrong roles, short or nonzero terminators and over-limit
 padding; generated output must have the exact minimal tail.
 These are archive/custody checks, not fresh signature or VM execution proof.
@@ -3234,8 +3230,7 @@ node --test build/tests/container-inputs.test.mjs
 Native tests cover closed guest/native status and phase joins, real
 input/namespace mutations, full recap refusal, fixed work cleanup
 and actual isolated-child INT/TERM after runtime teardown. Exact reference
-catalog/source assertions and the existing unmodified Python suites remain
-separate evidence. They do not prove full cross-language controller equivalence
+catalog/source assertions remain separate evidence. They do not prove full cross-language controller equivalence
 or actual signed four-case PostgreSQL/Caddy/900-launcher runtime success.
 
 The source-import regression uses real local Git operations to cover its mutable
@@ -3336,8 +3331,7 @@ joins the backend, network device and SSH client to the same private forward.
 Disks, QMP, sandbox and resource limits are unchanged. Guest firewall,
 capture rules and the empty-capture requirement stay unchanged, including
 refusal of every other packet. This profile needs fresh hosted bootstrap and
-full-timeout evidence. Earlier generic IPv4 captures remain unexplained, and
-the frozen Python fixture retains its existing network profile.
+full-timeout evidence. Earlier generic IPv4 captures remain unexplained.
 
 The Rust controller prepares one guest disk in two serial VM instances. The first
 instance performs the existing authenticated installation and Ansible bootstrap,
@@ -3407,7 +3401,7 @@ firewall tests cover the new guest's finite contracts. The distributed producer
 selects the optional feature and its authenticated 70-archive
 patched-musl/OpenSSL 4.1.0 static kit.
 Inert producer tests do not establish its cold build, final signed static ELF or
-fresh guest execution. All Python remains frozen.
+fresh guest execution.
 
 The dev/test profile optimizes the pinned `sha2` dependency so full retained-input
 checks do not run unoptimized compression. Integrity checks and clocks are

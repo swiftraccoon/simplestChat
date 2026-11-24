@@ -522,7 +522,7 @@ workspace version and is not a CLI compatibility protocol. A future musl build
 must also control the existing global `/usr/lib64` RPATH flags. Distribution
 readiness remains incomplete until an actual controlled musl artifact, its
 separate authenticated attestation, harmless checks on an owned Debian 13 host,
-and installation/bootstrap ownership evidence exist. Python remains the runtime.
+and installation/bootstrap ownership evidence exist.
 
 ## Separate Ops artifact manifest and local pair
 
@@ -591,9 +591,8 @@ assertion. Failure is exit 1 and only
 All file reads keep the existing snapshot/close guarantees. This is not a lock
 against later writes: subsequent execution/installation must rebind its current
 bytes. No candidate is executed, fetched, unpacked, installed or transported.
-Python remains the supported runtime, and authenticated distribution readiness
-is still incomplete. Tests assert this new contract directly; no Python parity
-is claimed for a schema Python does not implement.
+Tests assert this contract directly; it has no recorded Python answers to
+replay.
 
 ## Nonexecuting Ops build plan
 
@@ -801,8 +800,8 @@ detect observed mutation; they are neither locks nor exclusion of later
 same-user changes. This measures only a caller-selected lock/archive/output
 relationship. Registry origin, Git/source authentication, target/feature graph,
 complete Cargo I/O closure, authenticated compiler/runtime and a ready builder
-kit remain separate obligations. Existing producer/source/server contracts and
-production Python callsites are unchanged.
+kit remain separate obligations. Existing producer/source/server contracts are
+unchanged.
 
 ## Selected local Git source export
 
@@ -919,7 +918,7 @@ signs or switches a production callsite. Ops remains
 process-free; the controller calls its existing inspector, retained-manifest pair validator
 and unsigned assembly library directly. The new first-party dependency adds Ops
 source to the native-DTLS cache inputs without changing the server ten-file release,
-required jobs, attestation policy or Python runtime.
+required jobs or attestation policy.
 
 The original UTF-8 request is at most 64 KiB, pinned by its lowercase SHA-256, and
 has exactly these fields:
@@ -1132,14 +1131,13 @@ not authenticate a signature or prove transport/process success or durable write
 Failure returns exit 1 with only
 `{"passed":false,"failure":"invalid_release_receipt"}`. Invalid arguments return
 exit 2. The reader enforces the same regular-file, size, symlink and change guards
-as manifest inspection. Python remains the release runtime.
+as manifest inspection.
 
 `release::trust` validates the current claim, proof and receiver envelope against
 explicit selected identities. The predicate has twelve exact fields and binds
 eight file digests; the proof binds the four existing verification subjects.
 These are schema and relationship checks. They never invoke `gh`, authenticate
-a signature, observe GitHub API identity, or authorize a host operation. Python
-remains the operational reference and transport.
+a signature, observe GitHub API identity, or authorize a host operation.
 
 `Document<T>` retains the exact original encoded bytes and SHA-256 separately
 from its typed projection. Unknown receipt fields remain private in those source
@@ -1234,8 +1232,8 @@ user to `10001:10001`, work directory to `/results`, Entrypoint to
 `SOURCE_REVISION=` environment entry must agree with the selected revision.
 Other private config/environment values are never returned or logged.
 
-The existing server `verify_archive`/CLI, signed release ten-file contract and
-Python policy are unchanged. This generator profile does not create a public
+The existing server `verify_archive`/CLI and signed release ten-file contract
+are unchanged. This generator profile does not create a public
 CLI or accept a server manifest as a substitute for a selected image identity.
 It returns only measured transfer SHA-256/byte count, observed image ID, config
 SHA-256, optional selected root digest, fixed format/platform/tag/revision and
@@ -1432,8 +1430,7 @@ gh verification, GitHub request, trust-root acquisition or candidate.
 
 Trusted `CI` pushes to `main` build a separate
 `simplestchat-ops-REVISION-x86_64-unknown-linux-musl` artifact. The server's
-ten-file release artifact and installed Python runtime retain their existing
-contracts. A pull request cannot request an Ops signature.
+ten-file release artifact retains its existing contract. A pull request cannot request an Ops signature.
 
 The hosted entry point is:
 
@@ -3198,9 +3195,8 @@ Ops delivery follows signed application staging, before the installed canonical
 `release deploy`. The routine caller defaults to quiet observation 600 seconds,
 configurable within `0..600`; native timeout 1800/finalization 60 and systemd
 runtime 1800/stop 240 remain unchanged. The native CLI's own quiet default remains
-zero. The frozen Python frontend retains its explicit force app-only role; its
-ordinary signed route cannot supply the current Ops inputs, and there is no
-fallback to it from the Rust frontend.
+zero. The same Rust frontend takes the explicit force app-only route with
+`--force`; that route delivers no Ops executable.
 
 Source checks alone do not prove Docker/DB/Caddy/TLS or signed-musl host
 execution. The corrected ordinary Ops suite passed 484 tests. The new VM fixture

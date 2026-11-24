@@ -13,7 +13,7 @@ use super::{
     Bounds, Dependency, Evidence, REVIEWED,
     registry_tests::curl,
     review::{CONTROLLER, Controller, Review, check},
-    tests::{content, list, text},
+    tests::{RECORDED_PYTHON_LOCKS, content, list, text},
 };
 use crate::{
     context::{Context, Failure, Limits, Outcome},
@@ -167,6 +167,7 @@ impl Staged {
             snapshot: &self.snapshot,
             base: self.base.as_deref(),
             include_vendor: vendored,
+            python_locks: &RECORDED_PYTHON_LOCKS,
             bounds: Bounds::REVIEWED,
             reviewed: &REVIEWED,
             controller,
