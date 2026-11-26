@@ -18,12 +18,12 @@ maintain-guest = ["dep:asn1-rs", "dep:openssl", "dep:x509-parser", "rustix/mount
 [dependencies]
 asn1-rs = { version = "=0.7.2", default-features = false, features = ["bigint"], optional = true }
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 getrandom = "=0.4.3"
 httparse = "=1.10.1"
 nix = { version = "0.31.3", default-features = false, features = ["fs", "process", "signal"] }
 object = { version = "=0.40.0", default-features = false, features = ["read_core", "elf", "std"] }
-openssl = { version = "=0.10.81", optional = true }
+openssl = { version = "=0.10.82", optional = true }
 rawzip = "=0.5.2"
 regex-syntax = "0.8.11"
 rustix = { version = "1.1.5", default-features = false, features = [
@@ -32,7 +32,7 @@ rustix = { version = "1.1.5", default-features = false, features = [
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 sha2 = "0.11.0"
-signal-hook = { version = "=0.4.5", default-features = false }
+signal-hook = { version = "=0.4.6", default-features = false }
 simplestchat-load-test = { path = "../load_tests", default-features = false, features = ["capacity-runtime"] }
 simplestchat-lobby-seed = { path = "../crates/lobby-seed" }
 tar = { version = "=0.4.46", default-features = false }
